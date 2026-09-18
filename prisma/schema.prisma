@@ -1,0 +1,242 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+
+model User {
+ passwordHash String?
+ id String @id @default(cuid())
+ email String @unique
+ name String?
+ memberships Membership[]
+ createdAt DateTime @default(now())
+}
+model Organization {
+ id String @id @default(cuid())
+ name String
+ slug String @unique
+ memberships Membership[]
+ brands Brand[]
+ subscription Subscription?
+ createdAt DateTime @default(now())
+}
+model Membership {
+ id String @id @default(cuid())
+ role String @default("owner")
+ userId String
+ organizationId String
+ user User @relation(fields:[userId],references:[id])
+ organization Organization @relation(fields:[organizationId],references:[id])
+ @@unique([userId,organizationId])
+}
+model Brand {
+ id String @id @default(cuid())
+ name String
+ voice String?
+ positioning String?
+ preferredWords String?
+ bannedWords String?
+ visualRules String?
+ organizationId String
+ organization Organization @relation(fields:[organizationId],references:[id])
+ products Product[]
+ campaigns Campaign[]
+ createdAt DateTime @default(now())
+}
+model Product {
+ id String @id @default(cuid())
+ name String
+ description String?
+ price Decimal? @db.Decimal(12,2)
+ currency String @default("USD")
+ sourceUrl String?
+ imageUrl String?
+ brandId String
+ brand Brand @relation(fields:[brandId],references:[id])
+ createdAt DateTime @default(now())
+}
+model Campaign {
+ id String @id @default(cuid())
+ title String
+ goal String
+ status String @default("draft")
+ brandId String
+ brand Brand @relation(fields:[brandId],references:[id])
+ items ContentItem[]
+ scheduledFor DateTime?
+ createdAt DateTime @default(now())
+}
+model ContentItem {
+ id String @id @default(cuid())
+ type String
+ platform String
+ headline String?
+ caption String?
+ mediaUrl String?
+ status String @default("draft")
+ campaignId String
+ campaign Campaign @relation(fields:[campaignId],references:[id])
+ scheduledFor DateTime?
+ createdAt DateTime @default(now())
+}
+model Subscription {
+ id String @id @default(cuid())
+ organizationId String @unique
+ organization Organization @relation(fields:[organizationId],references:[id])
+ stripeCustomerId String?
+ stripeSubscriptionId String?
+ plan String @default("starter")
+ status String @default("trialing")
+ credits Int @default(100)
+}
+model UsageEvent {
+ id String @id @default(cuid())
+ organizationId String
+ kind String
+ credits Int
+ createdAt DateTime @default(now())
+}
+
+model SocialConnection { id String @id @default(cuid()) organizationId String provider String accountName String? externalId String? status String @default("pending") encryptedToken String? createdAt DateTime @default(now()) }
+model Job { id String @id @default(cuid()) organizationId String type String status String @default("queued") progress Int @default(0) payload Json result Json? error String? attempts Int @default(0) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
+model CreditLedger { id String @id @default(cuid()) organizationId String delta Int balanceAfter Int reason String referenceId String? createdAt DateTime @default(now()) }
+
+model MediaAsset {
+ id String @id @default(cuid())
+ organizationId String
+ campaignId String?
+ contentItemId String?
+ kind String
+ provider String @default("internal")
+ status String @default("ready")
+ url String?
+ thumbnailUrl String?
+ prompt String?
+ metadata Json?
+ createdAt DateTime @default(now())
+}
+
+model PublishJob {
+ id String @id @default(cuid())
+ organizationId String
+ contentItemId String
+ socialConnectionId String
+ platform String
+ scheduledFor DateTime
+ status String @default("scheduled")
+ attempts Int @default(0)
+ idempotencyKey String @unique
+ externalPostId String?
+ lastError String?
+ publishedAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([status,scheduledFor])
+}
+model PublishAttempt {
+ id String @id @default(cuid())
+ publishJobId String
+ attempt Int
+ status String
+ responseCode Int?
+ externalId String?
+ error String?
+ createdAt DateTime @default(now())
+}
+
+model AuditLog {
+ id String @id @default(cuid())
+ organizationId String?
+ userId String?
+ action String
+ resource String?
+ resourceId String?
+ ipHash String?
+ metadata Json?
+ createdAt DateTime @default(now())
+ @@index([organizationId,createdAt])
+}
+model ApiRateBucket {
+ id String @id @default(cuid())
+ key String @unique
+ windowStart DateTime
+ count Int @default(0)
+ updatedAt DateTime @updatedAt
+}
+model Invitation {
+ id String @id @default(cuid())
+ organizationId String
+ email String
+ role String @default("member")
+ tokenHash String @unique
+ expiresAt DateTime
+ acceptedAt DateTime?
+ createdAt DateTime @default(now())
+}
+
+model ClientWorkspace {
+ id String @id @default(cuid())
+ agencyOrganizationId String
+ clientOrganizationId String
+ displayName String
+ status String @default("active")
+ whiteLabelName String?
+ whiteLabelLogoUrl String?
+ accentColor String?
+ createdAt DateTime @default(now())
+ @@unique([agencyOrganizationId,clientOrganizationId])
+}
+model ApprovalShare {
+ id String @id @default(cuid())
+ organizationId String
+ campaignId String
+ tokenHash String @unique
+ expiresAt DateTime
+ status String @default("pending")
+ allowComments Boolean @default(true)
+ allowEdits Boolean @default(false)
+ recipientEmail String?
+ createdByUserId String
+ createdAt DateTime @default(now())
+}
+model ApprovalDecision {
+ id String @id @default(cuid())
+ approvalShareId String
+ decision String
+ comment String?
+ reviewerName String?
+ createdAt DateTime @default(now())
+}
+
+model CreditGrant {
+ id String @id @default(cuid())
+ organizationId String
+ source String
+ credits Int
+ remaining Int
+ expiresAt DateTime?
+ externalRef String?
+ createdAt DateTime @default(now())
+ @@index([organizationId,expiresAt])
+}
+model BillingEvent {
+ id String @id @default(cuid())
+ organizationId String?
+ stripeEventId String @unique
+ type String
+ processed Boolean @default(false)
+ payload Json?
+ createdAt DateTime @default(now())
+}
+
+model OnboardingState {
+ id String @id @default(cuid())
+ userId String
+ organizationId String @unique
+ step Int @default(1)
+ completed Boolean @default(false)
+ businessType String?
+ website String?
+ goal String?
+ completedAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+}

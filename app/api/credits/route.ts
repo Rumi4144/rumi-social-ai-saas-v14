@@ -1,0 +1,1 @@
+import {NextResponse} from "next/server";export async function GET(){return NextResponse.json({plan:"business",balance:742,costs:{campaign:3,image:5,voice:4,videoScene:40,assembly:2}})}

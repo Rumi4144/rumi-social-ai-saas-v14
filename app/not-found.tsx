@@ -1,0 +1,1 @@
+import Link from "next/link";export default function NotFound(){return <main className="fatal"><div><span className="eyebrow">404</span><h1>That page isn't here.</h1><p>The link may have expired or the resource may have moved.</p><Link className="button" href="/dashboard">Return to dashboard</Link></div></main>}

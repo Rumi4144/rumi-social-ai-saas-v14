@@ -1,0 +1,11 @@
+import {NextResponse} from "next/server";import Stripe from "stripe";import {prisma} from "@/lib/prisma";import {grantMonthlyCredits} from "@/lib/billing/grants";import {TOPUPS} from "@/lib/billing/plans";
+export async function POST(req:Request){if(!process.env.STRIPE_SECRET_KEY||!process.env.STRIPE_WEBHOOK_SECRET)return NextResponse.json({error:"Stripe webhook not configured"},{status:503});const stripe=new Stripe(process.env.STRIPE_SECRET_KEY);const sig=req.headers.get("stripe-signature");if(!sig)return NextResponse.json({error:"Missing signature"},{status:400});let event:Stripe.Event;try{event=stripe.webhooks.constructEvent(await req.text(),sig,process.env.STRIPE_WEBHOOK_SECRET)}catch{return NextResponse.json({error:"Invalid signature"},{status:400})}
+ if(await prisma.billingEvent.findUnique({where:{stripeEventId:event.id}}))return NextResponse.json({received:true,duplicate:true});
+ await prisma.billingEvent.create({data:{stripeEventId:event.id,type:event.type,payload:event as any}});
+ try{
+  if(event.type==="customer.subscription.created"||event.type==="customer.subscription.updated"){const s=event.data.object as Stripe.Subscription;await prisma.subscription.updateMany({where:{stripeCustomerId:String(s.customer)},data:{stripeSubscriptionId:s.id,status:s.status}})}
+  if(event.type==="invoice.paid"){const inv=event.data.object as Stripe.Invoice;const sub=await prisma.subscription.findFirst({where:{stripeCustomerId:String(inv.customer)}});if(sub)await grantMonthlyCredits(sub.organizationId,sub.plan,`invoice:${inv.id}`)}
+  if(event.type==="checkout.session.completed"){const s=event.data.object as Stripe.Checkout.Session;if(s.mode==="payment"&&s.metadata?.organizationId&&s.metadata?.pack){const pack=TOPUPS[s.metadata.pack as keyof typeof TOPUPS];if(pack){const sub=await prisma.subscription.update({where:{organizationId:s.metadata.organizationId},data:{credits:{increment:pack.credits}}});await prisma.creditLedger.create({data:{organizationId:s.metadata.organizationId,delta:pack.credits,balanceAfter:sub.credits,reason:"credit_topup",referenceId:s.id}})}}
+  }
+  await prisma.billingEvent.update({where:{stripeEventId:event.id},data:{processed:true}});return NextResponse.json({received:true});
+ }catch{return NextResponse.json({received:true,processed:false},{status:500})}}

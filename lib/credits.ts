@@ -1,0 +1,1 @@
+export const CREDIT_COST={textCampaign:3,staticCreative:5,voiceover:4,videoScene:40,videoAssembly:2} as const;export function canSpend(balance:number,cost:number){return balance>=cost}

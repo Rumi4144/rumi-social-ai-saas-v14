@@ -1,0 +1,1 @@
+import {NextResponse} from "next/server";export function apiError(error:unknown,fallback="Request failed"){const m=error instanceof Error?error.message:fallback;const status=m==="UNAUTHENTICATED"?401:m==="FORBIDDEN"?403:m==="NO_WORKSPACE"?404:500;return NextResponse.json({error:status===500?fallback:m},{status})}

@@ -1,0 +1,1 @@
+import {prisma} from "@/lib/prisma";import {hashSensitive} from "./crypto";export async function audit(input:{organizationId?:string;userId?:string;action:string;resource?:string;resourceId?:string;ip?:string;metadata?:Record<string,unknown>}){return prisma.auditLog.create({data:{...input,ipHash:input.ip?hashSensitive(input.ip):undefined,ip:undefined} as any})}

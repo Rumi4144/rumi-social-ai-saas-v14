@@ -1,0 +1,1 @@
+export {auth as middleware} from "@/auth";export const config={matcher:["/dashboard/:path*","/create/:path*","/studio/:path*","/calendar/:path*","/library/:path*","/analytics/:path*","/publishing/:path*","/brand/:path*","/billing/:path*","/team/:path*","/settings/:path*","/workspaces/:path*"]};

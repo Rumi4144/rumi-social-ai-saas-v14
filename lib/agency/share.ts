@@ -1,0 +1,1 @@
+import {randomBytes,createHash} from "crypto";export function newShareToken(){const token=randomBytes(32).toString("base64url");return {token,hash:createHash("sha256").update(token).digest("hex")}}export function hashShareToken(token:string){return createHash("sha256").update(token).digest("hex")}

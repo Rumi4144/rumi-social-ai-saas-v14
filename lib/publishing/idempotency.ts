@@ -1,0 +1,1 @@
+import {createHash} from "crypto";export function publishKey(contentItemId:string,connectionId:string,scheduledFor:string){return createHash("sha256").update(`${contentItemId}|${connectionId}|${scheduledFor}`).digest("hex")}

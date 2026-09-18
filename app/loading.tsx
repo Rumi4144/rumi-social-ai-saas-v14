@@ -1,0 +1,1 @@
+export default function Loading(){return <div className="loading"><div className="spinner"/><span>Preparing your Creative OS…</span></div>}

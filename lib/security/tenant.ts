@@ -1,0 +1,3 @@
+import {prisma} from "@/lib/prisma";
+export async function requireMembership(userId:string,organizationId:string,roles?:string[]){const m=await prisma.membership.findUnique({where:{userId_organizationId:{userId,organizationId}}});if(!m||roles&& !roles.includes(m.role))throw new Error("FORBIDDEN");return m}
+export const ROLE={owner:"owner",admin:"admin",editor:"editor",member:"member",viewer:"viewer"} as const;

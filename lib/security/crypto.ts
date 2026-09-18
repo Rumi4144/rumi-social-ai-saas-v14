@@ -1,0 +1,5 @@
+import {createCipheriv,createDecipheriv,randomBytes,createHash} from "crypto";
+function key(){const raw=process.env.TOKEN_ENCRYPTION_KEY;if(!raw)throw new Error("TOKEN_ENCRYPTION_KEY_MISSING");return createHash("sha256").update(raw).digest()}
+export function encryptSecret(value:string){const iv=randomBytes(12),cipher=createCipheriv("aes-256-gcm",key(),iv);const data=Buffer.concat([cipher.update(value,"utf8"),cipher.final()]);const tag=cipher.getAuthTag();return [iv,tag,data].map(x=>x.toString("base64url")).join(".")}
+export function decryptSecret(value:string){const [a,b,c]=value.split(".");if(!a||!b||!c)throw new Error("INVALID_CIPHERTEXT");const d=createDecipheriv("aes-256-gcm",key(),Buffer.from(a,"base64url"));d.setAuthTag(Buffer.from(b,"base64url"));return Buffer.concat([d.update(Buffer.from(c,"base64url")),d.final()]).toString("utf8")}
+export function hashSensitive(v:string){return createHash("sha256").update(v).digest("hex")}

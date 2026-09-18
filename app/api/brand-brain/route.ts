@@ -1,0 +1,3 @@
+import {NextResponse} from "next/server";import {prisma} from "@/lib/prisma";import {z} from "zod";
+const S=z.object({brandId:z.string(),voice:z.string().optional(),positioning:z.string().optional(),preferredWords:z.string().optional(),bannedWords:z.string().optional(),visualRules:z.string().optional()});
+export async function POST(req:Request){const p=S.safeParse(await req.json());if(!p.success)return NextResponse.json({error:p.error.flatten()},{status:400});const {brandId,...data}=p.data;const b=await prisma.brand.update({where:{id:brandId},data});return NextResponse.json(b)}
