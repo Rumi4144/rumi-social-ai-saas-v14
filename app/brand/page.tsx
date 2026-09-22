@@ -66,7 +66,6 @@ export default function Brand() {
   }
 
   async function save() {
-    alert("Brand Brain Save clicked");
     setSaving(true);
     setStatus("Saving...");
 
