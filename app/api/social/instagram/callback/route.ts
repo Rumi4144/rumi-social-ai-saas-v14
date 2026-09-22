@@ -193,8 +193,24 @@ export async function GET(req: Request) {
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL || "/";
 
+    const message =
+      error instanceof Error ? error.message : "UNKNOWN_ERROR";
+
+    const safeError =
+      message.startsWith("INSTAGRAM_TOKEN_EXCHANGE_FAILED")
+        ? "token_exchange"
+        : message.startsWith("INSTAGRAM_LONG_TOKEN_FAILED")
+        ? "long_token"
+        : message.startsWith("INSTAGRAM_PROFILE_FAILED")
+        ? "profile"
+        : message.startsWith("INSTAGRAM_WORKSPACE_FORBIDDEN")
+        ? "workspace"
+        : message.includes("TOKEN_ENCRYPTION_KEY")
+        ? "encryption"
+        : "callback";
+
     return NextResponse.redirect(
-      `${appUrl}/settings?instagram=error`
+      `${appUrl}/settings?instagram=error&reason=${safeError}`
     );
   }
 }
