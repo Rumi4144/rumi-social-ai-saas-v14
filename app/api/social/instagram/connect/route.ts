@@ -24,7 +24,7 @@ export async function GET() {
     }
 
     const redirectUri =
-      `${appUrl}/api/social/instagram/callback`;
+      "https://rumi-social-ai-saas-v14.vercel.app/api/social/instagram/callback";
 
     const state = createInstagramOAuthState({
       userId: ctx.userId,

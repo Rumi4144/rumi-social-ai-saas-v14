@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     const state = verifyInstagramOAuthState(stateValue);
 
     const redirectUri =
-      `${appUrl}/api/social/instagram/callback`;
+      "https://rumi-social-ai-saas-v14.vercel.app/api/social/instagram/callback";
 
     // Exchange authorization code for short-lived token.
     const tokenBody = new URLSearchParams({
