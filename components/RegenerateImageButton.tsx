@@ -72,8 +72,35 @@ No people.
         );
       }
 
-      setStatus("✓ New image created");
-      window.location.reload();
+    setStatus("Updating branded creative...");
+
+    const renderRes = await fetch("/api/creative/render", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        campaignId,
+        contentItemId,
+        headline,
+        cta: "Discover More",
+        imageUrl: result.url,
+        format: "portrait",
+      }),
+    });
+
+    const renderResult = await renderRes.json();
+
+    if (!renderRes.ok) {
+      throw new Error(
+        typeof renderResult.error === "string"
+          ? renderResult.error
+          : JSON.stringify(renderResult.error)
+      );
+    }
+
+    setStatus("✓ Image and branded creative updated");
+    window.location.reload();
     } catch (error) {
       setStatus(
         error instanceof Error
