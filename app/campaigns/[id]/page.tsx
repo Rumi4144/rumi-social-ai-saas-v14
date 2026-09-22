@@ -101,7 +101,7 @@ export default async function Campaign({
               : layoutSequence[index % layoutSequence.length];
 
           const displayAsset =
-            brandedCreative || originalImage;
+            originalImage || brandedCreative;
 
           return (
             <article className="card" key={item.id}>
