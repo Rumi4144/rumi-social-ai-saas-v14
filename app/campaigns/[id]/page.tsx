@@ -57,18 +57,18 @@ export default async function Campaign({
                 new Date(a.createdAt).getTime()
             );
 
-          const originalImage =
-            itemAssets.find(
-              (asset) =>
-                asset.kind === "ai_image" &&
-                (asset.provider === "internal" ||
-                  asset.provider === "website")
-            ) ||
-            itemAssets.find(
-              (asset) =>
-                asset.kind === "ai_image" &&
-                asset.provider === "openai"
-            );
+      const originalImage =
+        itemAssets.find(
+          (asset) =>
+            asset.kind === "ai_image" &&
+            asset.provider === "openai"
+        ) ||
+        itemAssets.find(
+          (asset) =>
+            asset.kind === "ai_image" &&
+            (asset.provider === "internal" ||
+              asset.provider === "website")
+        );
 
           const brandedCreative = itemAssets.find(
             (asset) =>
