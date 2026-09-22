@@ -6,12 +6,12 @@ export async function GET() {
   try {
     const ctx = await tenantContext();
 
-    const appId = process.env.META_APP_ID;
+    const appId = process.env.INSTAGRAM_APP_ID || process.env.META_APP_ID;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
     if (!appId) {
       return NextResponse.json(
-        { error: "META_APP_ID_MISSING" },
+        { error: "INSTAGRAM_APP_ID_MISSING" },
         { status: 500 }
       );
     }

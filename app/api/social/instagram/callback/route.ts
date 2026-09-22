@@ -11,8 +11,8 @@ export async function GET(req: Request) {
     const stateValue = url.searchParams.get("state");
     const oauthError = url.searchParams.get("error");
 
-    const appId = process.env.META_APP_ID;
-    const appSecret = process.env.META_APP_SECRET;
+    const appId = process.env.INSTAGRAM_APP_ID || process.env.META_APP_ID;
+    const appSecret = process.env.INSTAGRAM_APP_SECRET || process.env.META_APP_SECRET;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
     if (oauthError) {
@@ -25,8 +25,8 @@ export async function GET(req: Request) {
       throw new Error("INSTAGRAM_OAUTH_RESPONSE_INVALID");
     }
 
-    if (!appId) throw new Error("META_APP_ID_MISSING");
-    if (!appSecret) throw new Error("META_APP_SECRET_MISSING");
+    if (!appId) throw new Error("INSTAGRAM_APP_ID_MISSING");
+    if (!appSecret) throw new Error("INSTAGRAM_APP_SECRET_MISSING");
     if (!appUrl) throw new Error("NEXT_PUBLIC_APP_URL_MISSING");
 
     const state = verifyInstagramOAuthState(stateValue);
