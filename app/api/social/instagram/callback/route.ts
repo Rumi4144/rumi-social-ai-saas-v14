@@ -11,8 +11,8 @@ export async function GET(req: Request) {
     const stateValue = url.searchParams.get("state");
     const oauthError = url.searchParams.get("error");
 
-    const appId = process.env.INSTAGRAM_APP_ID || process.env.META_APP_ID;
-    const appSecret = process.env.INSTAGRAM_APP_SECRET || process.env.META_APP_SECRET;
+    const appId = process.env.INSTAGRAM_APP_ID;
+    const appSecret = process.env.INSTAGRAM_APP_SECRET;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
     if (oauthError) {
@@ -205,8 +205,8 @@ export async function GET(req: Request) {
         ? "profile"
         : message.startsWith("INSTAGRAM_WORKSPACE_FORBIDDEN")
         ? "workspace"
-        : message.includes("TOKEN_ENCRYPTION_KEY")
-        ? "encryption"
+        : message.includes("TOKEN_ENCRYPTION_KEY_MISSING")
+        ? "encryption_key_missing"
         : "callback";
 
     return NextResponse.redirect(
