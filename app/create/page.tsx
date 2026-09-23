@@ -141,16 +141,7 @@ export default function Create() {
 
         const jobsData = await jobsRes.json();
 
-        console.log("CAMPAIGN_JOB_DEBUG", {
-          campaignId,
-          jobs: jobsData.jobs?.map((job: any) => ({
-            id: job.id,
-            type: job.type,
-            status: job.status,
-            progress: job.progress,
-            campaignId: job.payload?.campaignId,
-          })),
-        });
+
 
         if (!jobsRes.ok) {
           throw new Error(

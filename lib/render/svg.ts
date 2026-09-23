@@ -87,14 +87,14 @@ export function renderSocialSvg(input: SocialSvgInput) {
 
   const headlineMaxChars =
     input.textPosition === "top"
-      ? 38
+      ? 30
       : headlineFontSize >= 60
-        ? 17
+        ? 13
         : headlineFontSize >= 50
-          ? 20
+          ? 16
           : headlineFontSize >= 45
-            ? 23
-            : 27;
+            ? 19
+            : 22;
 
   const headlineLines = wrapText(
     input.headline,
