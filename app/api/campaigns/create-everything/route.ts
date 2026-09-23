@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const ctx = await tenantContext(p.data.organizationId);
+    const ctx = await tenantContext();
 
     let brand;
 
