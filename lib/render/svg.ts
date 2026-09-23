@@ -283,7 +283,7 @@ export function renderSocialSvg(input: SocialSvgInput) {
     }
 
     <rect
-      x="${textPosition === "top" || textPosition === "right" ? w - 360 : 90}"
+      x="${textPosition === "top" ? (w - 270) / 2 : textPosition === "right" ? w - 360 : 90}"
       y="${ctaY}"
       width="270"
       height="62"
@@ -292,7 +292,7 @@ export function renderSocialSvg(input: SocialSvgInput) {
     />
 
     <text
-      x="${textPosition === "top" || textPosition === "right" ? w - 225 : 225}"
+      x="${textPosition === "top" ? w / 2 : textPosition === "right" ? w - 225 : 225}"
       y="${ctaY + 41}"
     text-anchor="middle"
       fill="${esc(primary)}"
