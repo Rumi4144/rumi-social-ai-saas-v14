@@ -187,12 +187,20 @@ export function renderSocialSvg(input: SocialSvgInput) {
     Math.max(1, headlineLines.length) * headlineLineHeight +
     32;
 
+  const headlineBottom =
+    headlineY +
+    Math.max(1, headlineLines.length) * headlineLineHeight;
+
+  const subheadlineBottom =
+    subheadlineLines.length > 0
+      ? subheadlineY +
+        subheadlineLines.length * subheadlineLineHeight
+      : headlineBottom;
+
   const ctaY =
     textPosition === "top"
       ? h - 118
-      : subheadlineY +
-        Math.max(1, subheadlineLines.length) * subheadlineLineHeight +
-        48;
+      : subheadlineBottom + 48;
 
   return `<svg
     xmlns="http://www.w3.org/2000/svg"
