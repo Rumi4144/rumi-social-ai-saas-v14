@@ -133,7 +133,9 @@ export default function Create() {
           );
         }
 
-        const jobsRes = await fetch("/api/jobs", {
+        const jobsRes = await fetch(
+          `/api/jobs?campaignId=${encodeURIComponent(campaignId)}`,
+          {
           cache: "no-store",
         });
 
