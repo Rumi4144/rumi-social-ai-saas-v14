@@ -124,7 +124,7 @@ export function renderSocialSvg(input: SocialSvgInput) {
   const textPosition = input.textPosition || "left";
   const textX =
     textPosition === "right"
-      ? Math.round(w * 0.58)
+      ? w - 90
       : textPosition === "top"
         ? w / 2
         : 90;
@@ -132,12 +132,14 @@ export function renderSocialSvg(input: SocialSvgInput) {
   const textAnchor =
     textPosition === "top"
       ? "middle"
-      : "start";
+      : textPosition === "right"
+    ? "end"
+    : "start";
 
   const headlineSvg = headlineLines
     .map(
       (line, i) =>
-        `<tspan x="${textPosition === "top" ? 90 : textX}" dy="${i === 0 ? 0 : headlineLineHeight}">${esc(line)}</tspan>`
+        `<tspan x="${textPosition === "top" ? w / 2 : textX}" dy="${i === 0 ? 0 : headlineLineHeight}">${esc(line)}</tspan>`
     )
     .join("");
 
