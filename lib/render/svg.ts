@@ -178,7 +178,7 @@ export function renderSocialSvg(input: SocialSvgInput) {
   const headlineY =
     textPosition === "top"
       ? h - 88
-      : brandY + 105;
+      : brandY + 72;
 
   const subheadlineY =
     headlineY +
@@ -269,8 +269,9 @@ export function renderSocialSvg(input: SocialSvgInput) {
     ${
       subheadlineLines.length && textPosition !== "top"
         ? `<text
-            x="90"
+            x="${textX}"
             y="${subheadlineY}"
+        text-anchor="${textAnchor}"
             fill="${esc(secondary)}"
             font-size="${subheadlineFontSize}"
             font-family="${esc(bodyFont)}"
