@@ -102,9 +102,14 @@ export default function Create() {
       }
 
       const campaignId = created.campaignId;
+      const jobId = created.jobId;
 
       if (!campaignId) {
         throw new Error("CAMPAIGN_ID_MISSING");
+      }
+
+      if (!jobId) {
+        throw new Error("JOB_ID_MISSING");
       }
 
       setStatus("Writing campaign...");
@@ -112,6 +117,10 @@ export default function Create() {
       for (let cycle = 0; cycle < 20; cycle++) {
         const processRes = await fetch("/api/campaigns/process", {
           method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ jobId }),
         });
 
         const processResult = await processRes.json();

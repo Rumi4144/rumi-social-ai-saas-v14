@@ -4,7 +4,18 @@ import { tenantContext } from "@/lib/auth/context";
 export async function POST(req: Request) {
   try {
     // Require a valid logged-in tenant.
-    await tenantContext();
+    const ctx = await tenantContext();
+
+    const body = await req.json().catch(() => ({}));
+    const jobId =
+      typeof body?.jobId === "string" ? body.jobId.trim() : "";
+
+    if (!jobId) {
+      return NextResponse.json(
+        { error: "JOB_ID_REQUIRED" },
+        { status: 400 }
+      );
+    }
 
     if (!process.env.WORKER_SECRET) {
       return NextResponse.json(
@@ -18,8 +29,13 @@ export async function POST(req: Request) {
     const response = await fetch(workerUrl, {
       method: "POST",
       headers: {
+        "content-type": "application/json",
         "x-worker-secret": process.env.WORKER_SECRET,
       },
+      body: JSON.stringify({
+        jobId,
+        organizationId: ctx.organizationId,
+      }),
       cache: "no-store",
     });
 

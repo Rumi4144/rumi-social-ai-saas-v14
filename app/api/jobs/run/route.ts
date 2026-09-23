@@ -17,14 +17,34 @@ export async function POST(req: Request) {
     );
   }
 
+  const body = await req.json().catch(() => ({}));
+
+  const organizationId =
+    typeof body?.organizationId === "string"
+      ? body.organizationId.trim()
+      : "";
+
+  if (!organizationId) {
+    return NextResponse.json(
+      { error: "ORGANIZATION_ID_REQUIRED" },
+      { status: 400 }
+    );
+  }
+
+  // Process only the next queued job belonging to this organization.
+  // This safely handles CREATE_EVERYTHING first, followed by its
+  // GENERATE_IMAGE jobs, without touching another customer's queue.
   const job = await prisma.job.findFirst({
     where: {
+      organizationId,
       status: "queued",
       type: {
         in: ["CREATE_EVERYTHING", "GENERATE_IMAGE"],
       },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: {
+      createdAt: "asc",
+    },
   });
 
   if (!job) {
