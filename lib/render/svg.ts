@@ -170,27 +170,31 @@ export function renderSocialSvg(input: SocialSvgInput) {
        />`
     : "";
 
-  const brandY =
-    textPosition === "top"
-      ? h - 145
-      : input.logoUrl
-        ? 185
-        : 105;
-
-  const headlineY =
-    textPosition === "top"
-      ? h - 88
-      : brandY + 72;
-
-  const subheadlineY =
-    headlineY +
-    Math.max(1, headlineLines.length) * headlineLineHeight +
-    32;
-
   const ctaY =
     textPosition === "top"
       ? h - 118
       : h - 105;
+
+  // Reserve a protected area above the CTA.
+  const ctaSafeTop = ctaY - 55;
+
+  const headlineBlockHeight =
+    Math.max(1, headlineLines.length) * headlineLineHeight;
+
+  const brandY =
+    textPosition === "top"
+      ? h - 235
+      : Math.max(105, ctaSafeTop - headlineBlockHeight - 85);
+
+  const headlineY =
+    textPosition === "top"
+      ? h - 180
+      : brandY + 52;
+
+  const subheadlineY =
+    headlineY +
+    headlineBlockHeight +
+    24;
 
   return `<svg
     xmlns="http://www.w3.org/2000/svg"
