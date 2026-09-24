@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function AdminInviteUser({
   organizationId,
 }: {
   organizationId: string;
 }) {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [saving, setSaving] = useState(false);
@@ -43,6 +45,7 @@ export default function AdminInviteUser({
 
       setInviteUrl(data.inviteUrl);
       setMessage(`Invitation created for ${data.email}.`);
+      router.refresh();
     } catch {
       setMessage("Could not create invitation.");
     } finally {

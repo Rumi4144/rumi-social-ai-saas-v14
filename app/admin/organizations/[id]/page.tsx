@@ -5,6 +5,7 @@ import { superAdminContext } from "@/lib/admin/context";
 import AdminSubscriptionEditor from "@/components/AdminSubscriptionEditor";
 import AdminInviteUser from "@/components/AdminInviteUser";
 import AdminMemberManager from "@/components/AdminMemberManager";
+import AdminPendingInvitations from "@/components/AdminPendingInvitations";
 
 export default async function AdminOrganizationPage({
   params,
@@ -118,6 +119,17 @@ export default async function AdminOrganizationPage({
             </p>
 
             <AdminInviteUser organizationId={organization.id} />
+
+            <AdminPendingInvitations
+              organizationId={organization.id}
+              invitations={organization.invitations.map((invitation) => ({
+                id: invitation.id,
+                email: invitation.email,
+                role: invitation.role,
+                expiresAt: invitation.expiresAt.toISOString(),
+                createdAt: invitation.createdAt.toISOString(),
+              }))}
+            />
           </div>
 
           {organization.memberships.map((membership) => (
