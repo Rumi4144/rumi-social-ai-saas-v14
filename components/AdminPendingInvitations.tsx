@@ -21,6 +21,48 @@ export default function AdminPendingInvitations({
   const router = useRouter();
   const [workingId, setWorkingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [newInviteUrl, setNewInviteUrl] = useState("");
+  const [newInviteEmail, setNewInviteEmail] = useState("");
+
+  async function regenerateInvitation(invitation: Invitation) {
+    const confirmed = window.confirm(
+      `Generate a new invitation link for ${invitation.email}? The old link will stop working.`,
+    );
+
+    if (!confirmed) return;
+
+    setWorkingId(invitation.id);
+    setMessage("");
+    setNewInviteUrl("");
+    setNewInviteEmail("");
+
+    try {
+      const res = await fetch(
+        `/api/admin/organizations/${organizationId}/invitations/${invitation.id}`,
+        { method: "POST" },
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessage(
+          typeof data?.error === "string"
+            ? data.error
+            : "Could not regenerate invitation.",
+        );
+        return;
+      }
+
+      setNewInviteUrl(data.inviteUrl);
+      setNewInviteEmail(data.email);
+      setMessage(`New invitation created for ${data.email}.`);
+      router.refresh();
+    } catch {
+      setMessage("Could not regenerate invitation.");
+    } finally {
+      setWorkingId(null);
+    }
+  }
 
   async function cancelInvitation(invitation: Invitation) {
     const confirmed = window.confirm(
@@ -35,9 +77,7 @@ export default function AdminPendingInvitations({
     try {
       const res = await fetch(
         `/api/admin/organizations/${organizationId}/invitations/${invitation.id}`,
-        {
-          method: "DELETE",
-        },
+        { method: "DELETE" },
       );
 
       const data = await res.json();
@@ -52,6 +92,8 @@ export default function AdminPendingInvitations({
       }
 
       setMessage(`Invitation for ${invitation.email} canceled.`);
+      setNewInviteUrl("");
+      setNewInviteEmail("");
       router.refresh();
     } catch {
       setMessage("Could not cancel invitation.");
@@ -93,18 +135,70 @@ export default function AdminPendingInvitations({
               {expired ? "Expired" : "Expires"}: {expires.toLocaleString()}
             </p>
 
-            <button
-              type="button"
-              onClick={() => cancelInvitation(invitation)}
-              disabled={workingId === invitation.id}
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                marginTop: 10,
+              }}
             >
-              {workingId === invitation.id
-                ? "Canceling..."
-                : "Cancel Invitation"}
-            </button>
+              <button
+                type="button"
+                className="button"
+                onClick={() => regenerateInvitation(invitation)}
+                disabled={workingId === invitation.id}
+              >
+                {workingId === invitation.id ? "Working..." : "Regenerate Link"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => cancelInvitation(invitation)}
+                disabled={workingId === invitation.id}
+              >
+                Cancel Invitation
+              </button>
+            </div>
           </div>
         );
       })}
+
+      {newInviteUrl && (
+        <div
+          style={{
+            marginTop: 20,
+            padding: 16,
+            border: "1px solid rgba(0,0,0,.12)",
+            borderRadius: 14,
+          }}
+        >
+          <strong>New Invitation Link</strong>
+          <p>{newInviteEmail}</p>
+
+          <input
+            readOnly
+            value={newInviteUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            style={{
+              display: "block",
+              width: "100%",
+              marginTop: 8,
+            }}
+          />
+
+          <button
+            type="button"
+            style={{ marginTop: 10 }}
+            onClick={async () => {
+              await navigator.clipboard.writeText(newInviteUrl);
+              setMessage("Invitation link copied.");
+            }}
+          >
+            Copy Link
+          </button>
+        </div>
+      )}
 
       {message && (
         <small style={{ display: "block", marginTop: 12 }}>{message}</small>
