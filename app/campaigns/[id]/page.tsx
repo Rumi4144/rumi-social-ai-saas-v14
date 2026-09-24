@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { tenantContext } from "@/lib/auth/context";
 import { notFound } from "next/navigation";
 import RenderCreativeButton from "@/components/RenderCreativeButton";
 import RegenerateImageButton from "@/components/RegenerateImageButton";
@@ -10,10 +11,16 @@ export default async function Campaign({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const { organizationId } = await tenantContext();
 
   const [campaign, assets] = await Promise.all([
-    prisma.campaign.findUnique({
-      where: { id },
+    prisma.campaign.findFirst({
+      where: {
+        id,
+        brand: {
+          organizationId,
+        },
+      },
       include: {
         items: true,
         brand: true,
@@ -22,6 +29,7 @@ export default async function Campaign({
 
     prisma.mediaAsset.findMany({
       where: {
+        organizationId,
         campaignId: id,
         status: "ready",
       },

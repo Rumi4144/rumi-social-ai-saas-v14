@@ -1,8 +1,16 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { tenantContext } from "@/lib/auth/context";
 
 export default async function CampaignsPage() {
+  const { organizationId } = await tenantContext();
+
   const campaigns = await prisma.campaign.findMany({
+    where: {
+      brand: {
+        organizationId,
+      },
+    },
     orderBy: {
       createdAt: "desc",
     },
