@@ -8,6 +8,7 @@ datasource db {
 }
 
 model User {
+  isSuperAdmin Boolean      @default(false)
   passwordHash String?
   id           String       @id @default(cuid())
   email        String       @unique
@@ -45,13 +46,13 @@ model Brand {
   preferredWords String?
   bannedWords    String?
   visualRules    String?
-  logoUrl         String?
-  primaryColor    String?
-  secondaryColor  String?
-  accentColor     String?
-  headingFont     String?
-  bodyFont        String?
-  designStyle     String?
+  logoUrl        String?
+  primaryColor   String?
+  secondaryColor String?
+  accentColor    String?
+  headingFont    String?
+  bodyFont       String?
+  designStyle    String?
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   products       Product[]
