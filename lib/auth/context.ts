@@ -1,3 +1,86 @@
-import {auth} from "@/auth";import {prisma} from "@/lib/prisma";
-export async function currentUserId(){const s=await auth();const id=(s?.user as any)?.id;if(!id)throw new Error("UNAUTHENTICATED");return String(id)}
-export async function tenantContext(requestedOrg?:string){const userId=await currentUserId();const memberships=await prisma.membership.findMany({where:{userId},include:{organization:true}});if(!memberships.length)throw new Error("NO_WORKSPACE");const m=requestedOrg?memberships.find((x: any)=>x.organizationId===requestedOrg):memberships[0];if(!m)throw new Error("FORBIDDEN");return {userId,organizationId:m.organizationId,role:m.role,organization:m.organization,memberships}}
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { cookies } from "next/headers";
+
+export async function currentUserId() {
+  const session = await auth();
+  const id = (session?.user as any)?.id;
+
+  if (!id) {
+    throw new Error("UNAUTHENTICATED");
+  }
+
+  return String(id);
+}
+
+export async function tenantContext(requestedOrg?: string) {
+  const userId = await currentUserId();
+
+  if (!requestedOrg) {
+    const cookieStore = await cookies();
+    requestedOrg = cookieStore.get("adminWorkspace")?.value;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      isSuperAdmin: true,
+    },
+  });
+
+  if (!user) {
+    throw new Error("UNAUTHENTICATED");
+  }
+
+  const memberships = await prisma.membership.findMany({
+    where: { userId },
+    include: {
+      organization: true,
+    },
+  });
+
+  // SUPER ADMIN:
+  // May explicitly enter any organization.
+  if (user.isSuperAdmin && requestedOrg) {
+    const organization = await prisma.organization.findUnique({
+      where: { id: requestedOrg },
+    });
+
+    if (!organization) {
+      throw new Error("NO_WORKSPACE");
+    }
+
+    return {
+      userId,
+      organizationId: organization.id,
+      role: "superadmin",
+      organization,
+      memberships,
+      isSuperAdmin: true,
+    };
+  }
+
+  // Normal tenant behavior remains membership-based.
+  if (!memberships.length) {
+    throw new Error("NO_WORKSPACE");
+  }
+
+  const membership = requestedOrg
+    ? memberships.find(
+        (item) => item.organizationId === requestedOrg
+      )
+    : memberships[0];
+
+  if (!membership) {
+    throw new Error("FORBIDDEN");
+  }
+
+  return {
+    userId,
+    organizationId: membership.organizationId,
+    role: membership.role,
+    organization: membership.organization,
+    memberships,
+    isSuperAdmin: user.isSuperAdmin,
+  };
+}
