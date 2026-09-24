@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { superAdminContext } from "@/lib/admin/context";
+import AdminSubscriptionEditor from "@/components/AdminSubscriptionEditor";
+import AdminInviteUser from "@/components/AdminInviteUser";
+import AdminMemberManager from "@/components/AdminMemberManager";
 
 export default async function AdminOrganizationPage({
   params,
@@ -49,6 +52,14 @@ export default async function AdminOrganizationPage({
         },
       },
       subscription: true,
+      invitations: {
+        where: {
+          acceptedAt: null,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
     },
   });
 
@@ -93,28 +104,44 @@ export default async function AdminOrganizationPage({
         <section className="card">
           <h2>Users & Access</h2>
 
+          <div
+            style={{
+              padding: 18,
+              margin: "18px 0 22px",
+              border: "1px solid rgba(0,0,0,.12)",
+              borderRadius: 16,
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>Invite User</h3>
+            <p>
+              Add an owner, administrator, or team member to this organization.
+            </p>
+
+            <AdminInviteUser organizationId={organization.id} />
+          </div>
+
           {organization.memberships.map((membership) => (
-            <div
+            <AdminMemberManager
               key={membership.id}
-              style={{
-                padding: "14px 0",
-                borderBottom: "1px solid rgba(0,0,0,.1)",
-              }}
-            >
-              <strong>{membership.user.name || membership.user.email}</strong>
-
-              <p style={{ margin: "5px 0" }}>{membership.user.email}</p>
-
-              <small>
-                {membership.role}
-                {membership.user.isSuperAdmin ? " · SUPER ADMIN" : ""}
-              </small>
-            </div>
+              organizationId={organization.id}
+              membershipId={membership.id}
+              userName={membership.user.name || membership.user.email || "User"}
+              email={membership.user.email}
+              initialRole={membership.role}
+              isSuperAdmin={membership.user.isSuperAdmin}
+            />
           ))}
         </section>
 
         <section className="card">
           <h2>Plan & Usage</h2>
+
+          <AdminSubscriptionEditor
+            organizationId={organization.id}
+            initialPlan={organization.subscription?.plan || "starter"}
+            initialStatus={organization.subscription?.status || "trialing"}
+            initialCredits={organization.subscription?.credits ?? 0}
+          />
 
           {organization.subscription ? (
             <>

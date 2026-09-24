@@ -24,6 +24,7 @@ model Organization {
   memberships  Membership[]
   brands       Brand[]
   subscription Subscription?
+  invitations  Invitation[]
   createdAt    DateTime      @default(now())
 }
 
@@ -221,14 +222,15 @@ model ApiRateBucket {
 }
 
 model Invitation {
-  id             String    @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email          String
-  role           String    @default("member")
-  tokenHash      String    @unique
+  role           String       @default("member")
+  tokenHash      String       @unique
   expiresAt      DateTime
   acceptedAt     DateTime?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime     @default(now())
 }
 
 model ClientWorkspace {
