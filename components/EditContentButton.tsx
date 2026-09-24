@@ -8,16 +8,23 @@ export default function EditContentButton({
   headline,
   caption,
   imageUrl,
+  cta = "Discover More",
+  textPosition = "left",
 }: {
   contentItemId: string;
   campaignId: string;
   headline: string;
   caption?: string | null;
   imageUrl?: string;
+  cta?: string;
+  textPosition?: "left" | "right" | "top";
 }) {
   const [editing, setEditing] = useState(false);
   const [draftHeadline, setDraftHeadline] = useState(headline);
   const [draftCaption, setDraftCaption] = useState(caption || "");
+  const [draftCta, setDraftCta] = useState(cta);
+  const [draftTextPosition, setDraftTextPosition] =
+    useState<"left" | "right" | "top">(textPosition);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -69,9 +76,10 @@ export default function EditContentButton({
             contentItemId,
             headline: draftHeadline.trim(),
             subheadline: undefined,
-            cta: "Discover More",
+            cta: draftCta.trim() || "Discover More",
             imageUrl,
             format: "portrait",
+          textPosition: draftTextPosition,
           }),
         });
 
@@ -102,6 +110,8 @@ export default function EditContentButton({
   function cancel() {
     setDraftHeadline(headline);
     setDraftCaption(caption || "");
+    setDraftCta(cta);
+    setDraftTextPosition(textPosition);
     setError("");
     setEditing(false);
   }
@@ -157,13 +167,62 @@ export default function EditContentButton({
         }}
       />
 
+      <label
+        style={{
+          display: "block",
+          fontWeight: 700,
+          marginBottom: 6,
+        }}
+      >
+        Call to action
+      </label>
+
+      <input
+        value={draftCta}
+        onChange={(e) => setDraftCta(e.target.value)}
+        placeholder="Discover More"
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          marginBottom: 12,
+        }}
+      />
+
+      <label
+        style={{
+          display: "block",
+          fontWeight: 700,
+          marginBottom: 6,
+        }}
+      >
+        Text position
+      </label>
+
+      <select
+        value={draftTextPosition}
+        onChange={(e) =>
+          setDraftTextPosition(
+            e.target.value as "left" | "right" | "top"
+          )
+        }
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          marginBottom: 16,
+        }}
+      >
+        <option value="left">Left</option>
+        <option value="right">Right</option>
+        <option value="top">Top</option>
+      </select>
+
       <div style={{ display: "flex", gap: 8 }}>
         <button
           type="button"
           onClick={save}
           disabled={saving}
         >
-          {saving ? "Saving & updating creative..." : "Save"}
+          {saving ? "Updating creative..." : "Save & Update Creative"}
         </button>
 
         <button

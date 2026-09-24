@@ -148,7 +148,8 @@ export default async function Campaign({
                   headline={item.headline || "Creative"}
                   caption={item.caption}
                   imageUrl={originalImage?.url || undefined}
-                />
+            textPosition={textPosition}
+          />
                 <RegenerateImageButton
                   campaignId={campaign.id}
                   contentItemId={item.id}
