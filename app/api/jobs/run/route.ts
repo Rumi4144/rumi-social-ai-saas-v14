@@ -7,27 +7,19 @@ import { renderSocialSvg } from "@/lib/render/svg";
 export async function POST(req: Request) {
   const secret = req.headers.get("x-worker-secret");
 
-  if (
-    !process.env.WORKER_SECRET ||
-    secret !== process.env.WORKER_SECRET
-  ) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 }
-    );
+  if (!process.env.WORKER_SECRET || secret !== process.env.WORKER_SECRET) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const body = await req.json().catch(() => ({}));
 
   const organizationId =
-    typeof body?.organizationId === "string"
-      ? body.organizationId.trim()
-      : "";
+    typeof body?.organizationId === "string" ? body.organizationId.trim() : "";
 
   if (!organizationId) {
     return NextResponse.json(
       { error: "ORGANIZATION_ID_REQUIRED" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -73,7 +65,7 @@ export async function POST(req: Request) {
         format?: "square" | "portrait" | "story";
         sourceImageUrl?: string;
         photoSource?: "website" | "ai";
-    textPosition?: "left" | "right" | "top";
+        textPosition?: "left" | "right" | "top";
       };
 
       const format = p.format || "portrait";
@@ -82,41 +74,41 @@ export async function POST(req: Request) {
         format === "square" ? "1024x1024" : "1024x1536";
 
       let dataUrl: string;
-    let imageProvider: "website" | "openai";
+      let imageProvider: "website" | "openai";
 
-    if (p.sourceImageUrl) {
-      // Use the real product photograph selected from the website.
-      dataUrl = p.sourceImageUrl;
-      imageProvider = "website";
-    } else {
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OPENAI_API_KEY_MISSING");
+      if (p.sourceImageUrl) {
+        // Use the real product photograph selected from the website.
+        dataUrl = p.sourceImageUrl;
+        imageProvider = "website";
+      } else {
+        if (!process.env.OPENAI_API_KEY) {
+          throw new Error("OPENAI_API_KEY_MISSING");
+        }
+
+        const client = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+        });
+
+        const result = await client.images.generate({
+          model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
+          prompt: p.prompt,
+          size,
+          quality: "medium",
+          output_format: "png",
+          n: 1,
+        });
+
+        const base64 = result.data?.[0]?.b64_json;
+
+        if (!base64) {
+          throw new Error("IMAGE_GENERATION_EMPTY");
+        }
+
+        dataUrl = `data:image/png;base64,${base64}`;
+        imageProvider = "openai";
       }
 
-      const client = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
-
-      const result = await client.images.generate({
-        model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
-        prompt: p.prompt,
-        size,
-        quality: "medium",
-        output_format: "png",
-        n: 1,
-      });
-
-      const base64 = result.data?.[0]?.b64_json;
-
-      if (!base64) {
-        throw new Error("IMAGE_GENERATION_EMPTY");
-      }
-
-      dataUrl = `data:image/png;base64,${base64}`;
-      imageProvider = "openai";
-    }
-
-    const existingImage = await prisma.mediaAsset.findFirst({
+      const existingImage = await prisma.mediaAsset.findFirst({
         where: {
           organizationId: job.organizationId,
           contentItemId: p.contentItemId,
@@ -137,8 +129,7 @@ export async function POST(req: Request) {
         url: dataUrl,
         prompt: p.prompt,
         metadata: {
-          model:
-            process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
+          model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
           format,
           size,
         },
@@ -169,47 +160,39 @@ export async function POST(req: Request) {
         const brand = campaign.brand;
 
         // Remote website photos must be embedded before they are
-      // placed inside the SVG data URL.
-      let renderImageUrl: string | undefined =
-        asset.url || undefined;
+        // placed inside the SVG data URL.
+        let renderImageUrl: string | undefined = asset.url || undefined;
 
-      if (
-        renderImageUrl &&
-        /^https?:\/\//i.test(renderImageUrl)
-      ) {
-        const imageResponse = await fetch(renderImageUrl, {
-          cache: "no-store",
-          headers: {
-            "User-Agent": "Mozilla/5.0 RumiSocialAI/1.0",
-            Accept: "image/*",
-          },
-        });
+        if (renderImageUrl && /^https?:\/\//i.test(renderImageUrl)) {
+          const imageResponse = await fetch(renderImageUrl, {
+            cache: "no-store",
+            headers: {
+              "User-Agent": "Mozilla/5.0 RumiSocialAI/1.0",
+              Accept: "image/*",
+            },
+          });
 
-        if (!imageResponse.ok) {
-          throw new Error(
-            `SOURCE_IMAGE_FETCH_FAILED_${imageResponse.status}`
-          );
+          if (!imageResponse.ok) {
+            throw new Error(
+              `SOURCE_IMAGE_FETCH_FAILED_${imageResponse.status}`,
+            );
+          }
+
+          const contentType =
+            imageResponse.headers.get("content-type") || "image/jpeg";
+
+          const bytes = Buffer.from(await imageResponse.arrayBuffer());
+
+          renderImageUrl = `data:${contentType};base64,${bytes.toString("base64")}`;
         }
 
-        const contentType =
-          imageResponse.headers.get("content-type") || "image/jpeg";
-
-        const bytes = Buffer.from(
-          await imageResponse.arrayBuffer()
-        );
-
-        renderImageUrl =
-          `data:${contentType};base64,${bytes.toString("base64")}`;
-      }
-
-      const svg = renderSocialSvg({
-          headline:
-            contentItem.headline || "Campaign Creative",
+        const svg = renderSocialSvg({
+          headline: contentItem.headline || "Campaign Creative",
           cta: "Discover More",
           brand: brand.name,
           format,
           imageUrl: renderImageUrl,
-      textPosition: p.textPosition || "left",
+          textPosition: p.textPosition || "left",
           logoUrl: brand.logoUrl || undefined,
           primaryColor: brand.primaryColor || undefined,
           secondaryColor: brand.secondaryColor || undefined,
@@ -220,21 +203,19 @@ export async function POST(req: Request) {
         });
 
         const creativeUrl =
-          "data:image/svg+xml;base64," +
-          Buffer.from(svg).toString("base64");
+          "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
 
-        const existingCreative =
-          await prisma.mediaAsset.findFirst({
-            where: {
-              organizationId: job.organizationId,
-              contentItemId: p.contentItemId,
-              kind: "social_creative",
-              provider: "internal-svg",
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
-          });
+        const existingCreative = await prisma.mediaAsset.findFirst({
+          where: {
+            organizationId: job.organizationId,
+            contentItemId: p.contentItemId,
+            kind: "social_creative",
+            provider: "internal-svg",
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        });
 
         const creativeData = {
           organizationId: job.organizationId,
@@ -248,11 +229,7 @@ export async function POST(req: Request) {
             format,
             width: 1080,
             height:
-              format === "story"
-                ? 1920
-                : format === "portrait"
-                  ? 1350
-                  : 1080,
+              format === "story" ? 1920 : format === "portrait" ? 1350 : 1080,
             brandId: brand.id,
             designStyle: brand.designStyle,
           },
@@ -297,7 +274,15 @@ export async function POST(req: Request) {
       days: number;
       photoSource?: "website" | "ai";
       imageUrl?: string;
-    imageUrls?: string[];
+      imageUrls?: string[];
+      brandContext?: {
+        name: string;
+        voice?: string | null;
+        positioning?: string | null;
+        businessType?: string | null;
+        website?: string | null;
+        primaryGoal?: string | null;
+      };
     };
 
     const campaign = await prisma.campaign.findUnique({
@@ -314,6 +299,13 @@ export async function POST(req: Request) {
       goal: p.goal,
       days: p.days,
       brand: campaign.brand,
+      businessContext: p.brandContext
+        ? {
+            businessType: p.brandContext.businessType,
+            website: p.brandContext.website,
+            primaryGoal: p.brandContext.primaryGoal,
+          }
+        : undefined,
     });
 
     await prisma.$transaction(async (tx: any) => {
@@ -323,21 +315,20 @@ export async function POST(req: Request) {
 
       let imageJobsCreated = 0;
       let websitePhotoIndex = 0;
-    let creativeLayoutIndex = 0;
+      let creativeLayoutIndex = 0;
 
-    const creativeLayouts: Array<"left" | "right" | "top"> = [
-      "top",
-      "left",
-      "right",
-      "left",
-    ];
+      const creativeLayouts: Array<"left" | "right" | "top"> = [
+        "top",
+        "left",
+        "right",
+        "left",
+      ];
 
-      const websitePhotos =
-        p.imageUrls?.length
-          ? p.imageUrls
-          : p.imageUrl
-            ? [p.imageUrl]
-            : [];
+      const websitePhotos = p.imageUrls?.length
+        ? p.imageUrls
+        : p.imageUrl
+          ? [p.imageUrl]
+          : [];
 
       for (const x of pack.posts) {
         const item = await tx.contentItem.create({
@@ -352,13 +343,11 @@ export async function POST(req: Request) {
         });
 
         if (
-        x.visualDirection &&
-        (
-          p.photoSource === "website"
+          x.visualDirection &&
+          (p.photoSource === "website"
             ? imageJobsCreated < websitePhotos.length
-            : imageJobsCreated < 3
-        )
-      ) {
+            : imageJobsCreated < 3)
+        ) {
           await tx.job.create({
             data: {
               organizationId: job.organizationId,
@@ -367,18 +356,12 @@ export async function POST(req: Request) {
                 campaignId: campaign.id,
                 contentItemId: item.id,
                 sourceImageUrl:
-                  p.photoSource === "website" &&
-                  websitePhotos.length > 0
-                    ? websitePhotos[
-                        websitePhotoIndex %
-                          websitePhotos.length
-                      ]
+                  p.photoSource === "website" && websitePhotos.length > 0
+                    ? websitePhotos[websitePhotoIndex % websitePhotos.length]
                     : undefined,
                 photoSource: p.photoSource || "ai",
-              textPosition:
-                creativeLayouts[
-                  creativeLayoutIndex % creativeLayouts.length
-                ],
+                textPosition:
+                  creativeLayouts[creativeLayoutIndex % creativeLayouts.length],
                 prompt: `${x.visualDirection}
 
 Create premium social-media campaign photography for ${campaign.brand.name}.
@@ -402,10 +385,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
           imageJobsCreated++;
           creativeLayoutIndex++;
 
-          if (
-            p.photoSource === "website" &&
-            websitePhotos.length > 0
-          ) {
+          if (p.photoSource === "website" && websitePhotos.length > 0) {
             websitePhotoIndex++;
           }
         }
@@ -460,8 +440,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
       campaignId: campaign.id,
     });
   } catch (e) {
-    const msg =
-      e instanceof Error ? e.message : "Unknown worker error";
+    const msg = e instanceof Error ? e.message : "Unknown worker error";
 
     await prisma.job.update({
       where: { id: job.id },
@@ -478,7 +457,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
         jobId: job.id,
         error: msg,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

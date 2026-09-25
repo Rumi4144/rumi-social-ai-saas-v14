@@ -19,10 +19,7 @@ export async function POST(req: Request) {
   const p = S.safeParse(await req.json());
 
   if (!p.success) {
-    return NextResponse.json(
-      { error: p.error.flatten() },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: p.error.flatten() }, { status: 400 });
   }
 
   try {
@@ -51,9 +48,20 @@ export async function POST(req: Request) {
     if (!brand) {
       return NextResponse.json(
         { error: "No Brand Brain found for this workspace" },
-        { status: 404 }
+        { status: 404 },
       );
     }
+
+    const onboarding = await prisma.onboardingState.findUnique({
+      where: {
+        organizationId: ctx.organizationId,
+      },
+      select: {
+        businessType: true,
+        website: true,
+        goal: true,
+      },
+    });
 
     const campaign = await prisma.campaign.create({
       data: {
@@ -70,7 +78,7 @@ export async function POST(req: Request) {
       p.data.photoSource === "website"
         ? "campaign_generation_website_photo"
         : "campaign_generation",
-      campaign.id
+      campaign.id,
     );
 
     const job = await prisma.job.create({
@@ -82,9 +90,17 @@ export async function POST(req: Request) {
           brief: p.data.brief,
           goal: p.data.goal,
           days: p.data.days,
-        photoSource: p.data.photoSource,
-        imageUrl: p.data.imageUrl,
-        imageUrls: p.data.imageUrls,
+          photoSource: p.data.photoSource,
+          imageUrl: p.data.imageUrl,
+          imageUrls: p.data.imageUrls,
+          brandContext: {
+            name: brand.name,
+            voice: brand.voice,
+            positioning: brand.positioning,
+            businessType: onboarding?.businessType ?? null,
+            website: onboarding?.website ?? null,
+            primaryGoal: onboarding?.goal ?? null,
+          },
         },
       },
     });
@@ -96,7 +112,7 @@ export async function POST(req: Request) {
         brandId: brand.id,
         status: "queued",
       },
-      { status: 202 }
+      { status: 202 },
     );
   } catch (e) {
     const m = e instanceof Error ? e.message : "Unable to queue campaign";
@@ -104,13 +120,8 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: m },
       {
-        status:
-          m === "UNAUTHENTICATED"
-            ? 401
-            : m === "FORBIDDEN"
-              ? 403
-              : 402,
-      }
+        status: m === "UNAUTHENTICATED" ? 401 : m === "FORBIDDEN" ? 403 : 402,
+      },
     );
   }
 }
