@@ -28,7 +28,7 @@ export default async function PostLogin() {
   }
 
   if (user.isSuperAdmin) {
-    redirect("/admin");
+    redirect("/admin/exit");
   }
 
   if (!user.memberships.length) {
