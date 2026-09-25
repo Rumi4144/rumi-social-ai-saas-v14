@@ -21,7 +21,7 @@ export default function Login() {
       await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password,
-        callbackUrl: "/dashboard",
+        callbackUrl: "/post-login",
         redirect: true,
       });
     } catch {
