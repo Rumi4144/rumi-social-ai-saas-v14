@@ -66,13 +66,15 @@ export async function tenantContext(requestedOrg?: string) {
   }
 
   const membership = requestedOrg
-    ? memberships.find(
-        (item) => item.organizationId === requestedOrg
-      )
+    ? memberships.find((item) => item.organizationId === requestedOrg)
     : memberships[0];
 
   if (!membership) {
     throw new Error("FORBIDDEN");
+  }
+
+  if (!user.isSuperAdmin && membership.organization.status === "suspended") {
+    throw new Error("WORKSPACE_SUSPENDED");
   }
 
   return {

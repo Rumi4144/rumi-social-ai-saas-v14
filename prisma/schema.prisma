@@ -21,6 +21,7 @@ model Organization {
   id           String        @id @default(cuid())
   name         String
   slug         String        @unique
+  status       String        @default("active")
   memberships  Membership[]
   brands       Brand[]
   subscription Subscription?

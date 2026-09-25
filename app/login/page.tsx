@@ -18,23 +18,12 @@ export default function Login() {
     setMsg("Signing in...");
 
     try {
-      const result = await signIn("credentials", {
+      await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password,
-        redirect: false,
+        callbackUrl: "/dashboard",
+        redirect: true,
       });
-
-      if (!result || result.error) {
-        setMsg("Email or password is incorrect.");
-        setSigningIn(false);
-        return;
-      }
-
-      // Give the browser a moment to persist the session cookie,
-      // then perform a full navigation to the protected dashboard.
-      await new Promise((resolve) => setTimeout(resolve, 150));
-
-      window.location.assign("/dashboard");
     } catch {
       setMsg("Unable to sign in. Please try again.");
       setSigningIn(false);
@@ -78,11 +67,7 @@ export default function Login() {
           <a href="/forgot-password">Forgot password?</a>
         </div>
 
-        <button
-          type="submit"
-          className="button"
-          disabled={signingIn}
-        >
+        <button type="submit" className="button" disabled={signingIn}>
           {signingIn ? "Signing in..." : "Sign in"}
         </button>
 
