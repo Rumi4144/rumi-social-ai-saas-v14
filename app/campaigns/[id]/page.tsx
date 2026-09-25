@@ -6,6 +6,7 @@ import RegenerateImageButton from "@/components/RegenerateImageButton";
 import RegenerateCaptionButton from "@/components/RegenerateCaptionButton";
 import EditContentButton from "@/components/EditContentButton";
 import ApproveContentButton from "@/components/ApproveContentButton";
+import SchedulePostButton from "@/components/SchedulePostButton";
 
 export default async function Campaign({
   params,
@@ -144,6 +145,11 @@ export default async function Campaign({
                   headline={item.headline || "Creative"}
                   caption={item.caption}
                   initialStatus={item.status}
+                />
+                <SchedulePostButton
+                  contentItemId={item.id}
+                  initialStatus={item.status}
+                  initialScheduledFor={item.scheduledFor?.toISOString() || null}
                 />
                 <EditContentButton
                   contentItemId={item.id}
