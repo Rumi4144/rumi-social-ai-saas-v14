@@ -5,6 +5,7 @@ import RenderCreativeButton from "@/components/RenderCreativeButton";
 import RegenerateImageButton from "@/components/RegenerateImageButton";
 import RegenerateCaptionButton from "@/components/RegenerateCaptionButton";
 import EditContentButton from "@/components/EditContentButton";
+import ApproveContentButton from "@/components/ApproveContentButton";
 
 export default async function Campaign({
   params,
@@ -138,7 +139,12 @@ export default async function Campaign({
               <p>{item.caption}</p>
 
               <div className="approval">
-                <button>Approve</button>
+                <ApproveContentButton
+                  contentItemId={item.id}
+                  headline={item.headline || "Creative"}
+                  caption={item.caption}
+                  initialStatus={item.status}
+                />
                 <EditContentButton
                   contentItemId={item.id}
                   campaignId={campaign.id}
