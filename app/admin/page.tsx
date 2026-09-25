@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { superAdminContext } from "@/lib/admin/context";
 import AdminOrganizationGrid from "@/components/AdminOrganizationGrid";
+import AdminCreateOrganization from "@/components/AdminCreateOrganization";
 
 export default async function AdminPage() {
   try {
@@ -111,6 +112,8 @@ export default async function AdminPage() {
           </div>
         ))}
       </div>
+
+      <AdminCreateOrganization />
 
       <AdminOrganizationGrid organizations={organizations} />
     </>
