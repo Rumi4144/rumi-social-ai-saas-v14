@@ -42,6 +42,25 @@ export default async function AdminPage() {
     },
   });
 
+  const totals = organizations.reduce(
+    (acc, org) => {
+      acc.users += org.memberships.length;
+      acc.brands += org.brands.length;
+      acc.campaigns += org.brands.reduce(
+        (sum, brand) => sum + brand._count.campaigns,
+        0,
+      );
+      acc.credits += org.subscription?.credits ?? 0;
+      return acc;
+    },
+    {
+      users: 0,
+      brands: 0,
+      campaigns: 0,
+      credits: 0,
+    },
+  );
+
   return (
     <>
       <section className="hero v2">
@@ -61,6 +80,36 @@ export default async function AdminPage() {
           <small>SECURE</small>
         </div>
       </section>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+          gap: 14,
+          marginTop: 28,
+        }}
+      >
+        {[
+          ["Organizations", organizations.length],
+          ["Users", totals.users],
+          ["Brands", totals.brands],
+          ["Campaigns", totals.campaigns],
+          ["AI Credits", totals.credits],
+        ].map(([label, value]) => (
+          <div className="card" key={label}>
+            <div className="eyebrow">{label}</div>
+            <div
+              style={{
+                fontSize: 36,
+                fontWeight: 800,
+                marginTop: 8,
+              }}
+            >
+              {value}
+            </div>
+          </div>
+        ))}
+      </div>
 
       <div
         style={{
@@ -129,6 +178,11 @@ export default async function AdminPage() {
                 </p>
               </div>
 
+              <p style={{ marginTop: 16 }}>
+                <strong>Status:</strong>{" "}
+                {org.status === "suspended" ? "Suspended" : "Active"}
+              </p>
+
               <div
                 style={{
                   display: "flex",
@@ -143,6 +197,10 @@ export default async function AdminPage() {
                   scroll={true}
                 >
                   Manage Organization
+                </Link>
+
+                <Link className="button gold" href={`/admin/enter/${org.id}`}>
+                  Enter Workspace
                 </Link>
               </div>
             </section>
