@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { superAdminContext } from "@/lib/admin/context";
+import AdminOrganizationGrid from "@/components/AdminOrganizationGrid";
 
 export default async function AdminPage() {
   try {
@@ -111,102 +112,7 @@ export default async function AdminPage() {
         ))}
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 20,
-          marginTop: 28,
-        }}
-      >
-        {organizations.map((org) => {
-          const campaignCount = org.brands.reduce(
-            (total, brand) => total + brand._count.campaigns,
-            0,
-          );
-
-          return (
-            <section className="card" key={org.id}>
-              <div className="eyebrow">ORGANIZATION</div>
-
-              <h2>{org.name}</h2>
-
-              <p>
-                <strong>{org.memberships.length}</strong>{" "}
-                {org.memberships.length === 1 ? "member" : "members"}
-                {" · "}
-                <strong>{org.brands.length}</strong>{" "}
-                {org.brands.length === 1 ? "brand" : "brands"}
-                {" · "}
-                <strong>{campaignCount}</strong>{" "}
-                {campaignCount === 1 ? "campaign" : "campaigns"}
-              </p>
-
-              <div
-                style={{
-                  marginTop: 18,
-                  paddingTop: 18,
-                  borderTop: "1px solid rgba(0,0,0,.12)",
-                }}
-              >
-                <strong>Users</strong>
-
-                {org.memberships.map((membership) => (
-                  <p key={membership.id} style={{ margin: "8px 0" }}>
-                    {membership.user.name || membership.user.email}
-                    <br />
-                    <small>
-                      {membership.user.email} · {membership.role}
-                    </small>
-                  </p>
-                ))}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 18,
-                  paddingTop: 18,
-                  borderTop: "1px solid rgba(0,0,0,.12)",
-                }}
-              >
-                <strong>Subscription</strong>
-
-                <p>
-                  {org.subscription
-                    ? `${org.subscription.plan} · ${org.subscription.credits} credits`
-                    : "No subscription"}
-                </p>
-              </div>
-
-              <p style={{ marginTop: 16 }}>
-                <strong>Status:</strong>{" "}
-                {org.status === "suspended" ? "Suspended" : "Active"}
-              </p>
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  flexWrap: "wrap",
-                  marginTop: 20,
-                }}
-              >
-                <Link
-                  className="button"
-                  href={`/admin/organizations/${org.id}`}
-                  scroll={true}
-                >
-                  Manage Organization
-                </Link>
-
-                <Link className="button gold" href={`/admin/enter/${org.id}`}>
-                  Enter Workspace
-                </Link>
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      <AdminOrganizationGrid organizations={organizations} />
     </>
   );
 }
