@@ -8,6 +8,7 @@ import AdminOrganizationDetails from "@/components/AdminOrganizationDetails";
 import AdminInviteUser from "@/components/AdminInviteUser";
 import AdminMemberManager from "@/components/AdminMemberManager";
 import AdminPendingInvitations from "@/components/AdminPendingInvitations";
+import AdminDeleteOrganization from "@/components/AdminDeleteOrganization";
 
 export default async function AdminOrganizationPage({
   params,
@@ -234,6 +235,10 @@ export default async function AdminOrganizationPage({
           </div>
         )}
       </section>
+      <AdminDeleteOrganization
+        organizationId={organization.id}
+        organizationName={organization.name}
+      />
     </>
   );
 }
