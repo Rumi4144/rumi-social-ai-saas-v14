@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { superAdminContext } from "@/lib/admin/context";
 import AdminSubscriptionEditor from "@/components/AdminSubscriptionEditor";
 import AdminOrganizationStatus from "@/components/AdminOrganizationStatus";
+import AdminOrganizationDetails from "@/components/AdminOrganizationDetails";
 import AdminInviteUser from "@/components/AdminInviteUser";
 import AdminMemberManager from "@/components/AdminMemberManager";
 import AdminPendingInvitations from "@/components/AdminPendingInvitations";
@@ -148,6 +149,11 @@ export default async function AdminOrganizationPage({
 
         <section className="card">
           <h2>Organization</h2>
+
+          <AdminOrganizationDetails
+            organizationId={organization.id}
+            initialName={organization.name}
+          />
 
           <AdminOrganizationStatus
             organizationId={organization.id}
