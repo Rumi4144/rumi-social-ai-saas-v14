@@ -16,9 +16,7 @@ export async function GET(req: Request) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
     if (oauthError) {
-      return NextResponse.redirect(
-        `${appUrl}/settings?instagram=cancelled`
-      );
+      return NextResponse.redirect(`${appUrl}/settings?instagram=cancelled`);
     }
 
     if (!code || !stateValue) {
@@ -52,7 +50,7 @@ export async function GET(req: Request) {
         },
         body: tokenBody,
         cache: "no-store",
-      }
+      },
     );
 
     const tokenResult = await tokenRes.json();
@@ -63,29 +61,18 @@ export async function GET(req: Request) {
           tokenResult.error_message ||
           tokenResult.error?.message ||
           JSON.stringify(tokenResult)
-        }`
+        }`,
       );
     }
 
     const shortToken = String(tokenResult.access_token);
 
     // Exchange short-lived token for long-lived token.
-    const longTokenUrl = new URL(
-      "https://graph.instagram.com/access_token"
-    );
+    const longTokenUrl = new URL("https://graph.instagram.com/access_token");
 
-    longTokenUrl.searchParams.set(
-      "grant_type",
-      "ig_exchange_token"
-    );
-    longTokenUrl.searchParams.set(
-      "client_secret",
-      appSecret
-    );
-    longTokenUrl.searchParams.set(
-      "access_token",
-      shortToken
-    );
+    longTokenUrl.searchParams.set("grant_type", "ig_exchange_token");
+    longTokenUrl.searchParams.set("client_secret", appSecret);
+    longTokenUrl.searchParams.set("access_token", shortToken);
 
     const longTokenRes = await fetch(longTokenUrl, {
       cache: "no-store",
@@ -96,29 +83,18 @@ export async function GET(req: Request) {
     if (!longTokenRes.ok || !longTokenResult.access_token) {
       throw new Error(
         `INSTAGRAM_LONG_TOKEN_FAILED: ${
-          longTokenResult.error?.message ||
-          JSON.stringify(longTokenResult)
-        }`
+          longTokenResult.error?.message || JSON.stringify(longTokenResult)
+        }`,
       );
     }
 
-    const accessToken = String(
-      longTokenResult.access_token
-    );
+    const accessToken = String(longTokenResult.access_token);
 
     // Get connected Instagram identity.
-    const profileUrl = new URL(
-      "https://graph.instagram.com/me"
-    );
+    const profileUrl = new URL("https://graph.instagram.com/me");
 
-    profileUrl.searchParams.set(
-      "fields",
-      "id,username,account_type"
-    );
-    profileUrl.searchParams.set(
-      "access_token",
-      accessToken
-    );
+    profileUrl.searchParams.set("fields", "id,username,account_type");
+    profileUrl.searchParams.set("access_token", accessToken);
 
     const profileRes = await fetch(profileUrl, {
       cache: "no-store",
@@ -129,9 +105,8 @@ export async function GET(req: Request) {
     if (!profileRes.ok || !profile.id) {
       throw new Error(
         `INSTAGRAM_PROFILE_FAILED: ${
-          profile.error?.message ||
-          JSON.stringify(profile)
-        }`
+          profile.error?.message || JSON.stringify(profile)
+        }`,
       );
     }
 
@@ -151,21 +126,19 @@ export async function GET(req: Request) {
     const encryptedToken = encryptSecret(accessToken);
 
     // Reuse an existing Instagram connection when possible.
-    const existing =
-      await prisma.socialConnection.findFirst({
-        where: {
-          organizationId: state.organizationId,
-          provider: "instagram",
-          externalId: String(profile.id),
-        },
-      });
+    const existing = await prisma.socialConnection.findFirst({
+      where: {
+        organizationId: state.organizationId,
+        provider: "instagram",
+        externalId: String(profile.id),
+      },
+    });
 
     if (existing) {
       await prisma.socialConnection.update({
         where: { id: existing.id },
         data: {
-          accountName:
-            profile.username || "Instagram",
+          accountName: profile.username || "Instagram",
           status: "connected",
           encryptedToken,
         },
@@ -175,8 +148,7 @@ export async function GET(req: Request) {
         data: {
           organizationId: state.organizationId,
           provider: "instagram",
-          accountName:
-            profile.username || "Instagram",
+          accountName: profile.username || "Instagram",
           externalId: String(profile.id),
           status: "connected",
           encryptedToken,
@@ -184,33 +156,28 @@ export async function GET(req: Request) {
       });
     }
 
-    return NextResponse.redirect(
-      `${appUrl}/settings?instagram=connected`
-    );
+    return NextResponse.redirect(`${appUrl}/settings?instagram=connected`);
   } catch (error) {
     console.error("Instagram OAuth callback failed", error);
 
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL || "/";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "/";
 
-    const message =
-      error instanceof Error ? error.message : "UNKNOWN_ERROR";
+    const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
 
-    const safeError =
-      message.startsWith("INSTAGRAM_TOKEN_EXCHANGE_FAILED")
-        ? "token_exchange"
-        : message.startsWith("INSTAGRAM_LONG_TOKEN_FAILED")
+    const safeError = message.startsWith("INSTAGRAM_TOKEN_EXCHANGE_FAILED")
+      ? "token_exchange"
+      : message.startsWith("INSTAGRAM_LONG_TOKEN_FAILED")
         ? "long_token"
         : message.startsWith("INSTAGRAM_PROFILE_FAILED")
-        ? "profile"
-        : message.startsWith("INSTAGRAM_WORKSPACE_FORBIDDEN")
-        ? "workspace"
-        : message.includes("TOKEN_ENCRYPTION_KEY_MISSING")
-        ? "encryption_key_missing"
-        : "callback";
+          ? "profile"
+          : message.startsWith("INSTAGRAM_WORKSPACE_FORBIDDEN")
+            ? "workspace"
+            : message.includes("TOKEN_ENCRYPTION_KEY_MISSING")
+              ? "encryption_key_missing"
+              : "callback";
 
     return NextResponse.redirect(
-      `${appUrl}/settings?instagram=error&reason=${safeError}`
+      `${appUrl}/settings?instagram=error&reason=${safeError}`,
     );
   }
 }
