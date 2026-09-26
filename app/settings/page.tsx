@@ -95,9 +95,14 @@ export default async function SettingsPage() {
                 </p>
 
                 {tiktokConnection ? (
-                  <button type="button" disabled>
-                    Connected
-                  </button>
+                  <form
+                    action="/api/social/tiktok/disconnect"
+                    method="POST"
+                  >
+                    <button type="submit">
+                      Disconnect
+                    </button>
+                  </form>
                 ) : (
                   <a href="/api/social/tiktok/connect">
                     <button type="button">Connect</button>
