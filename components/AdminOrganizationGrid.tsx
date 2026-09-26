@@ -181,9 +181,12 @@ export default function AdminOrganizationGrid({
                   Manage Organization
                 </Link>
 
-                <Link className="button gold" href={`/admin/enter/${org.id}`}>
-                  Enter Workspace
-                </Link>
+                <a
+                className="button gold"
+                href={`${process.env.NEXT_PUBLIC_APP_URL}/admin/enter/${org.id}`}
+              >
+                Enter Workspace
+              </a>
               </div>
             </section>
           );
