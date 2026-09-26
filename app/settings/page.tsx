@@ -17,9 +17,6 @@ export default async function SettingsPage() {
   return (
     <>
       <div className="eyebrow">CONNECTIONS</div>
-      <p style={{ fontSize: 12 }}>
-        DEBUG WORKSPACE: {ctx.organizationId}
-      </p>
       <h1>Connect your business.</h1>
 
       <div className="settingsgrid">

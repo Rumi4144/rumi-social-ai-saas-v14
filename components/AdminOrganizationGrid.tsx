@@ -114,11 +114,6 @@ export default function AdminOrganizationGrid({
               <div className="eyebrow">ORGANIZATION</div>
 
               <h2>{org.name}</h2>
-              <p style={{ fontSize: 11, opacity: 0.65 }}>
-                DEBUG ID: {org.id}
-                <br />
-                ENTER URL: /admin/enter/{org.id}
-              </p>
 
               <p>
                 <strong>{org.memberships.length}</strong>{" "}
