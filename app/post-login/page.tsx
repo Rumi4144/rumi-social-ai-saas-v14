@@ -1,39 +1,51 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 export default async function PostLogin() {
   const session = await auth();
   const userId = (session?.user as any)?.id;
 
-  if (!userId) {
-    redirect("/login");
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: String(userId) },
-    select: {
-      isSuperAdmin: true,
-      memberships: {
+  const user = userId
+    ? await prisma.user.findUnique({
+        where: { id: String(userId) },
         select: {
-          organizationId: true,
+          id: true,
+          email: true,
+          name: true,
+          isSuperAdmin: true,
+          memberships: {
+            select: {
+              organizationId: true,
+              organization: {
+                select: { name: true },
+              },
+            },
+          },
         },
-        take: 1,
-      },
-    },
-  });
+      })
+    : null;
 
-  if (!user) {
-    redirect("/login");
-  }
+  return (
+    <main style={{ padding: 40 }}>
+      <h1>Post Login Diagnostic</h1>
 
-  if (user.isSuperAdmin) {
-    redirect("/admin/exit");
-  }
+      <p><strong>Session User ID:</strong> {userId || "NONE"}</p>
+      <p><strong>Email:</strong> {user?.email || "NONE"}</p>
+      <p><strong>Name:</strong> {user?.name || "NONE"}</p>
+      <p>
+        <strong>Super Admin:</strong>{" "}
+        {user ? String(user.isSuperAdmin) : "NO USER"}
+      </p>
+      <p>
+        <strong>Memberships:</strong>{" "}
+        {user?.memberships.length ?? 0}
+      </p>
 
-  if (!user.memberships.length) {
-    redirect("/onboarding");
-  }
-
-  redirect("/dashboard");
+      <pre>
+        {JSON.stringify(user?.memberships ?? [], null, 2)}
+      </pre>
+    </main>
+  );
 }
