@@ -1,19 +1,18 @@
 import { prisma } from "@/lib/prisma";
+import { tenantContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const instagramConnections = await prisma.socialConnection.findMany({
+  const ctx = await tenantContext();
+
+  const instagramConnection = await prisma.socialConnection.findFirst({
     where: {
+      organizationId: ctx.organizationId,
       provider: "instagram",
       status: "connected",
     },
-    orderBy: {
-      id: "desc",
-    },
   });
-
-  const instagramConnected = instagramConnections.length > 0;
 
   return (
     <>
@@ -35,16 +34,16 @@ export default async function SettingsPage() {
             {x === "Instagram Business" ? (
               <>
                 <p>
-                  {instagramConnected
+                  {instagramConnection
                     ? `Connected${
-                        instagramConnections[0]?.accountName
-                          ? ` as @${instagramConnections[0].accountName}`
+                        instagramConnection.accountName
+                          ? ` as @${instagramConnection.accountName}`
                           : ""
                       }`
                     : "Not connected"}
                 </p>
 
-                {instagramConnected ? (
+                {instagramConnection ? (
                   <button type="button" disabled>
                     Connected
                   </button>
