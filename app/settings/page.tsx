@@ -22,6 +22,14 @@ export default async function SettingsPage() {
     },
   });
 
+  const tiktokConnection = await prisma.socialConnection.findFirst({
+    where: {
+      organizationId: ctx.organizationId,
+      provider: "tiktok",
+      status: "connected",
+    },
+  });
+
   return (
     <>
       <div className="eyebrow">CONNECTIONS</div>
@@ -74,6 +82,24 @@ export default async function SettingsPage() {
                   <button type="button" disabled>Connected</button>
                 ) : (
                   <a href="/api/social/youtube/connect">
+                    <button type="button">Connect</button>
+                  </a>
+                )}
+              </>
+            ) : x === "TikTok" ? (
+              <>
+                <p>
+                  {tiktokConnection
+                    ? `Connected as ${tiktokConnection.accountName || "TikTok"}`
+                    : "Not connected"}
+                </p>
+
+                {tiktokConnection ? (
+                  <button type="button" disabled>
+                    Connected
+                  </button>
+                ) : (
+                  <a href="/api/social/tiktok/connect">
                     <button type="button">Connect</button>
                   </a>
                 )}
