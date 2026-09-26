@@ -110,20 +110,26 @@ export async function GET(req: Request) {
       );
     }
 
-    // Confirm the OAuth state still belongs to a real
-    // membership before saving the provider connection.
-    const membership = await prisma.membership.findFirst({
+    // Confirm the OAuth state belongs to an authorized user.
+  // Normal users require membership; Super Admin may enter any workspace.
+  const [membership, oauthUser] = await Promise.all([
+    prisma.membership.findFirst({
       where: {
         userId: state.userId,
         organizationId: state.organizationId,
       },
-    });
+    }),
+    prisma.user.findUnique({
+      where: { id: state.userId },
+      select: { isSuperAdmin: true },
+    }),
+  ]);
 
-    if (!membership) {
-      throw new Error("INSTAGRAM_WORKSPACE_FORBIDDEN");
-    }
+  if (!membership && !oauthUser?.isSuperAdmin) {
+    throw new Error(`INSTAGRAM_WORKSPACE_FORBIDDEN:user=${state.userId}:org=${state.organizationId}:userFound=${!!oauthUser}:superAdmin=${oauthUser?.isSuperAdmin ?? "null"}`);
+  }
 
-    const encryptedToken = encryptSecret(accessToken);
+  const encryptedToken = encryptSecret(accessToken);
 
     // Reuse an existing Instagram connection when possible.
     const existing = await prisma.socialConnection.findFirst({
