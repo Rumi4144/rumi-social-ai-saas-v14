@@ -14,6 +14,14 @@ export default async function SettingsPage() {
     },
   });
 
+  const youtubeConnection = await prisma.socialConnection.findFirst({
+    where: {
+      organizationId: ctx.organizationId,
+      provider: "youtube",
+      status: "connected",
+    },
+  });
+
   return (
     <>
       <div className="eyebrow">CONNECTIONS</div>
@@ -51,6 +59,21 @@ export default async function SettingsPage() {
                   </button>
                 ) : (
                   <a href="/api/social/instagram/connect">
+                    <button type="button">Connect</button>
+                  </a>
+                )}
+              </>
+            ) : x === "YouTube" ? (
+              <>
+                <p>
+                  {youtubeConnection
+                    ? `Connected as ${youtubeConnection.accountName || "YouTube"}`
+                    : "Not connected"}
+                </p>
+                {youtubeConnection ? (
+                  <button type="button" disabled>Connected</button>
+                ) : (
+                  <a href="/api/social/youtube/connect">
                     <button type="button">Connect</button>
                   </a>
                 )}
