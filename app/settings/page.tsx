@@ -23,6 +23,8 @@ export default async function SettingsPage() {
         {[
           "Instagram Business",
           "Facebook Page",
+          "YouTube",
+          "TikTok",
           "LinkedIn",
           "WooCommerce",
           "Shopify",
