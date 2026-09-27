@@ -19,15 +19,58 @@ type VisualDirectorInput = {
   variationIndex?: number;
 };
 
-const concepts = [
-  "editorial hero composition",
-  "aspirational lifestyle scene",
-  "dramatic close-up detail",
-  "symbolic visual metaphor",
-  "environmental storytelling",
-  "premium commercial photography",
-  "dynamic depth and perspective",
-  "minimal but visually striking composition",
+const treatments = [
+  {
+    name: "Vibrant Editorial",
+    direction:
+      "Use rich sophisticated color, confident contrast, luminous highlights, and polished editorial advertising energy.",
+  },
+  {
+    name: "Bright Lifestyle",
+    direction:
+      "Use fresh natural light, optimistic color, authentic environments, energetic depth, and an inviting contemporary lifestyle feeling.",
+  },
+  {
+    name: "Cinematic",
+    direction:
+      "Use cinematic directional lighting, dimensional shadows, atmospheric depth, rich color separation, and a strong visual focal point.",
+  },
+  {
+    name: "Brand-Dominant",
+    direction:
+      "Let the brand palette strongly influence accents, lighting, surfaces, wardrobe, or environment while maintaining natural photographic realism.",
+  },
+  {
+    name: "Rich Luxury",
+    direction:
+      "Use refined materials, deep tonal range, premium lighting, elegant contrast, restrained richness, and sophisticated commercial art direction.",
+  },
+  {
+    name: "Dynamic Contrast",
+    direction:
+      "Use strong foreground-background separation, complementary color contrast, unusual perspective, and immediate scroll-stopping visual impact.",
+  },
+  {
+    name: "Natural Organic",
+    direction:
+      "Use expressive natural color, sunlight, organic textures, environmental depth, and an authentic but elevated photographic feeling.",
+  },
+  {
+    name: "Conceptual",
+    direction:
+      "Translate the message into an original visual metaphor using color, light, scale, movement, environment, or symbolic objects without relying on clichés.",
+  },
+];
+
+const compositions = [
+  "asymmetrical editorial composition with generous negative space",
+  "environmental storytelling with a strong foreground focal point",
+  "dynamic off-center composition with layered depth",
+  "close-up or detail-led composition with dramatic visual texture",
+  "wide lifestyle composition with natural movement",
+  "architectural composition using light, shadow and geometry",
+  "cinematic perspective with foreground, subject and background separation",
+  "minimal hero composition with one memorable visual idea",
 ];
 
 export function buildVisualDirection(
@@ -43,8 +86,16 @@ export function buildVisualDirection(
     variationIndex = 0,
   } = input;
 
-  const concept =
-    concepts[Math.abs(variationIndex) % concepts.length];
+  const index = Math.abs(variationIndex);
+
+  const treatment =
+    treatments[index % treatments.length];
+
+  const composition =
+    compositions[
+      Math.floor(index / treatments.length) %
+        compositions.length
+    ];
 
   const palette = [
     brand.primaryColor,
@@ -55,72 +106,126 @@ export function buildVisualDirection(
     .join(", ");
 
   return `
-VISUAL DIRECTOR
+RUMI SOCIAL AI — VISUAL DIRECTOR V2
 
-Create a distinctive, premium, scroll-stopping visual for:
-Brand: ${brand.name}
-Campaign goal: ${campaignGoal || "brand communication"}
-Platform: ${platform || "social media"}
-Content type: ${contentType || "social post"}
-Headline context: ${headline || "none"}
+Create premium advertising imagery specifically for this brand and message.
 
-CREATIVE CONCEPT
-Use a ${concept}.
-${visualDirection ? `Creative direction: ${visualDirection}` : ""}
-
-BRAND DNA
+BRAND
+Name: ${brand.name}
 Voice: ${brand.voice || "professional, engaging and human"}
 Positioning: ${brand.positioning || "premium and trustworthy"}
 Design style: ${brand.designStyle || "contemporary premium"}
-Brand palette: ${palette || "derive a sophisticated palette appropriate to the brand"}
+Brand colors: ${palette || "derive an appropriate sophisticated palette"}
 Existing visual rules: ${brand.visualRules || "none provided"}
 
-VISUAL QUALITY
-Create an image with immediate visual impact and a strong focal point.
-Use sophisticated color contrast, dimensional lighting, depth,
-texture and intentional composition.
+CAMPAIGN
+Goal: ${campaignGoal || "brand communication"}
+Platform: ${platform || "social media"}
+Content type: ${contentType || "social post"}
+Message/headline: ${headline || "none"}
 
-The image should feel professionally art-directed rather than
-generic stock photography.
-
-Choose color intensity appropriate to the brand and subject.
-Do NOT automatically make every brand beige, muted or minimalist.
-Use richer color and stronger contrast when appropriate.
-
-Maintain premium color harmony. Brand colors may inspire accents,
-lighting or environmental details without overwhelming the image.
-
-VARIETY
-Avoid repetitive compositions, props, camera angles and visual clichés.
-Do not default to the same room, desk, object or centered composition.
-This creative should feel meaningfully different from other campaign images.
+VISUAL TREATMENT
+Treatment: ${treatment.name}
+${treatment.direction}
 
 COMPOSITION
-Create intentional negative space suitable for professional headline
-and CTA placement while keeping the primary subject visually strong.
+Use ${composition}.
 
-Avoid clutter and awkward cropping.
-Use professional advertising composition and realistic depth.
+ORIGINAL CREATIVE DIRECTION
+${visualDirection || "Interpret the campaign message visually."}
 
-RELEVANCE
-The image must communicate the idea or emotion behind the campaign,
-not merely decorate it.
+COLOR INTELLIGENCE
+Choose a palette appropriate to this specific brand, audience and message.
 
-Use visual metaphors, environments, products, people or abstract
-elements only when appropriate to this specific brand and message.
+Do not assume premium means beige, gray, brown, desaturated,
+minimal or monochromatic.
 
-AVOID
-Avoid generic stock-photo appearance.
-Avoid dull, muddy or unintentionally monochromatic color.
-Avoid cliché imagery unless specifically relevant to the brand.
-Avoid excessive beige, gray or brown unless the brand genuinely calls for it.
-Avoid repetitive wellness, office, laptop, handshake, meditation,
-clock or generic lifestyle imagery unless directly appropriate.
+When appropriate, introduce richer complementary colors,
+environmental color, wardrobe color, colored light, sky,
+nature, architectural color or tasteful accent elements.
 
-OUTPUT RULES
+Use brand colors intelligently as inspiration or accents.
+Do not flood the entire image with one brand color.
+
+Maintain excellent color harmony and professional advertising quality.
+
+VISUAL ENERGY
+The image must have a clear focal point and enough visual energy
+to stop someone scrolling through a social feed.
+
+Use light, color, contrast, depth, texture, movement or perspective
+to create visual interest.
+
+Avoid flat lighting and visually empty scenes unless deliberate
+minimalism is strongly appropriate to the brand.
+
+VARIETY ENGINE
+This creative must not feel like a generic template.
+
+Avoid repeatedly using:
+- beige interiors
+- empty chairs
+- desks
+- laptops
+- coffee cups
+- generic offices
+- centered objects
+- identical camera angles
+- identical lighting
+- generic meditation scenes
+- clocks or pendulums
+- handshake imagery
+
+Choose subjects and environments based on the actual campaign idea.
+
+EMOTIONAL STORYTELLING
+Translate the campaign message into a visual emotion or story.
+
+Depending on the brand and message, communicate qualities such as
+possibility, aspiration, confidence, excitement, serenity,
+craftsmanship, transformation, discovery, achievement,
+connection or curiosity.
+
+HUMAN IMAGERY
+Use people only when they strengthen the idea.
+When people are appropriate, favor authentic candid moments,
+natural expression, believable environments and contemporary
+commercial photography rather than staged stock-photo poses.
+
+PRODUCT IMAGERY
+When the campaign concerns a physical product, preserve the
+product's identity and make it visually dominant.
+Use lighting, environment and composition to elevate it rather
+than inventing misleading product details.
+
+TYPOGRAPHY SPACE
+Reserve intentional clean negative space for Rumi Social AI
+to add headline, brand name and CTA later.
+
+Do not place important visual details where typography is likely
+to be positioned.
+
+QUALITY BAR
+The result should resemble professionally art-directed advertising
+or editorial photography—not generic AI imagery or stock photography.
+
+It should be visually memorable even before typography is added.
+
+STRICT OUTPUT RULES
 Generate ONLY the underlying photography or artwork.
-Do not generate typography, words, letters, numbers, logos,
-watermarks, signatures, labels, UI elements or brand names inside the image.
-Rumi Social AI will apply typography and branding afterward.
+
+Absolutely no:
+- words
+- letters
+- numbers
+- typography
+- logos
+- brand names
+- signatures
+- watermarks
+- labels
+- UI elements
+
+Rumi Social AI applies all typography and branding afterward.
 `.trim();
 }
