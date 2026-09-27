@@ -112,10 +112,35 @@ export async function GET(req: Request) {
       throw new Error("FACEBOOK_NO_PAGES");
     }
 
-    // Never guess when the Facebook user manages multiple Pages.
+    // If multiple Pages are available, securely store the choices
+    // and let the user explicitly select the correct Page.
     if (pages.length > 1) {
+      const encryptedPages = encryptSecret(
+        JSON.stringify(
+          pages.map((page: any) => ({
+            id: String(page.id),
+            name: page.name || "Facebook Page",
+            accessToken: String(page.access_token || ""),
+            tasks: page.tasks || [],
+          }))
+        )
+      );
+
+      const selectionJob = await prisma.job.create({
+        data: {
+          organizationId: state.organizationId,
+          type: "facebook_page_selection",
+          status: "pending",
+          progress: 0,
+          payload: {
+            userId: state.userId,
+            encryptedPages,
+          },
+        },
+      });
+
       return NextResponse.redirect(
-        `${appUrl}/settings?facebook=multiple_pages&count=${pages.length}`
+        `${appUrl}/settings/facebook/select?job=${selectionJob.id}`
       );
     }
 
