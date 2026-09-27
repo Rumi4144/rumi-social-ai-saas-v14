@@ -69,9 +69,27 @@ export default async function CampaignsPage() {
                 {campaign.createdAt.toLocaleDateString()}
               </p>
 
-              <Link href={`/campaigns/${campaign.id}`}>
+              <p
+                style={{
+                  fontSize: "12px",
+                  opacity: 0.55,
+                  wordBreak: "break-all",
+                }}
+              >
+                Campaign ID: {campaign.id}
+              </p>
+
+              <a
+                href={`/campaigns/${campaign.id}`}
+                style={{
+                  display: "inline-block",
+                  position: "relative",
+                  zIndex: 10,
+                  pointerEvents: "auto",
+                }}
+              >
                 Open Campaign
-              </Link>
+              </a>
             </section>
           ))}
         </div>
