@@ -42,6 +42,7 @@ export default async function FacebookPageSelector({
   ) as Array<{
     id: string;
     name: string;
+    pictureUrl?: string;
   }>;
 
   return (
@@ -56,7 +57,31 @@ export default async function FacebookPageSelector({
       <div className="settingsgrid">
         {pages.map((page) => (
           <div key={page.id} className="card">
-            <h3>{page.name}</h3>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "14px",
+                marginBottom: "18px",
+              }}
+            >
+              {page.pictureUrl ? (
+                <img
+                  src={page.pictureUrl}
+                  alt=""
+                  width={56}
+                  height={56}
+                  style={{
+                    width: "56px",
+                    height: "56px",
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : null}
+
+              <h3 style={{ margin: 0 }}>{page.name}</h3>
+            </div>
 
             <form
               action="/api/social/facebook/select"

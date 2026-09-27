@@ -85,7 +85,7 @@ export async function GET(req: Request) {
 
     pagesUrl.searchParams.set(
       "fields",
-      "id,name,access_token,tasks"
+      "id,name,picture{url},access_token,tasks"
     );
     pagesUrl.searchParams.set(
       "access_token",
@@ -120,6 +120,7 @@ export async function GET(req: Request) {
           pages.map((page: any) => ({
             id: String(page.id),
             name: page.name || "Facebook Page",
+            pictureUrl: page.picture?.data?.url || "",
             accessToken: String(page.access_token || ""),
             tasks: page.tasks || [],
           }))
