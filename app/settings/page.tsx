@@ -30,6 +30,14 @@ export default async function SettingsPage() {
     },
   });
 
+  const facebookConnection = await prisma.socialConnection.findFirst({
+    where: {
+      organizationId: ctx.organizationId,
+      provider: "facebook",
+      status: "connected",
+    },
+  });
+
   return (
     <>
       <div className="eyebrow">CONNECTIONS</div>
@@ -67,6 +75,24 @@ export default async function SettingsPage() {
                   </button>
                 ) : (
                   <a href="/api/social/instagram/connect">
+                    <button type="button">Connect</button>
+                  </a>
+                )}
+              </>
+            ) : x === "Facebook Page" ? (
+              <>
+                <p>
+                  {facebookConnection
+                    ? `Connected as ${facebookConnection.accountName || "Facebook Page"}`
+                    : "Not connected"}
+                </p>
+
+                {facebookConnection ? (
+                  <button type="button" disabled>
+                    Connected
+                  </button>
+                ) : (
+                  <a href="/api/social/facebook/connect">
                     <button type="button">Connect</button>
                   </a>
                 )}
