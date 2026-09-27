@@ -53,6 +53,9 @@ export default async function Campaign({
       <p>
         {campaign.brand.name} · Goal: {campaign.goal}
       </p>
+      <p style={{ opacity: 0.65, fontSize: "14px" }}>
+        Created {new Date(campaign.createdAt).toLocaleString()}
+      </p>
 
       <div className="campaignitems">
         {campaign.items.map((item: any, index: number) => {
@@ -101,6 +104,14 @@ export default async function Campaign({
               : layoutSequence[index % layoutSequence.length];
 
           const displayAsset = brandedCreative || originalImage;
+
+        const creativeStatus = brandedCreative
+          ? "Branded AI Creative"
+          : originalImage?.provider === "website"
+            ? "Website Photo"
+            : originalImage
+              ? "AI Image"
+              : "No Image";
 
           return (
             <article className="card" key={item.id}>

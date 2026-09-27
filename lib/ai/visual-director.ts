@@ -205,6 +205,47 @@ to add headline, brand name and CTA later.
 Do not place important visual details where typography is likely
 to be positioned.
 
+SEMANTIC RELEVANCE GUARD
+The image must accurately represent the actual brand, product, service,
+and campaign message.
+
+Never introduce a product, treatment, profession, facility, activity,
+piece of equipment, or service that the business does not actually offer.
+
+Before selecting the main subject, ask:
+"Could this image cause a reasonable viewer to misunderstand what this
+business actually does?"
+
+If yes, choose another concept.
+
+For service businesses, visualize the benefit, emotion, experience,
+transformation, aspiration, or idea without inventing unrelated services.
+
+For product businesses, preserve the correct product category and do not
+substitute a visually similar but inaccurate product.
+
+Prefer concepts directly supported by the campaign message and Brand DNA.
+
+CLICHE FILTER
+Avoid generic or overused visual shorthand when a more distinctive concept
+can communicate the idea.
+
+Avoid by default:
+- stacked stones
+- massage chairs or spa equipment unless actually relevant
+- pendulums
+- clocks
+- generic meditation poses
+- handshakes
+- light bulbs
+- puzzle pieces
+- generic office meetings
+- empty treatment rooms
+- meaningless decorative objects
+
+These may appear only when genuinely relevant to the specific business
+and campaign.
+
 QUALITY BAR
 The result should resemble professionally art-directed advertising
 or editorial photography—not generic AI imagery or stock photography.

@@ -398,7 +398,7 @@ export async function POST(req: Request) {
           x.visualDirection &&
           (p.photoSource === "website"
             ? imageJobsCreated < websitePhotos.length
-            : imageJobsCreated < 3)
+            : true)
         ) {
           await tx.job.create({
             data: {
