@@ -65,26 +65,32 @@ export default function CampaignImageProcessor({
             );
           }
 
-          const nextJob = imageJobs.find(
-            (job: any) =>
-              job.status !== "succeeded" &&
-              job.status !== "failed"
-          );
+          const pendingJobs = imageJobs
+            .filter(
+              (job: any) =>
+                job.status !== "succeeded" &&
+                job.status !== "failed"
+            )
+            .slice(0, 3);
 
-          if (!nextJob) {
+          if (pendingJobs.length === 0) {
             router.refresh();
             break;
           }
 
-          await fetch("/api/campaigns/process", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              jobId: nextJob.id,
-            }),
-          });
+          await Promise.all(
+            pendingJobs.map((pendingJob: any) =>
+              fetch("/api/campaigns/process", {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                  jobId: pendingJob.id,
+                }),
+              })
+            )
+          );
 
           router.refresh();
 
