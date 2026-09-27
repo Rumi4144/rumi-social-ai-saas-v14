@@ -7,6 +7,7 @@ import RegenerateCaptionButton from "@/components/RegenerateCaptionButton";
 import EditContentButton from "@/components/EditContentButton";
 import ApproveContentButton from "@/components/ApproveContentButton";
 import SchedulePostButton from "@/components/SchedulePostButton";
+import CampaignImageProcessor from "@/components/CampaignImageProcessor";
 
 export default async function Campaign({
   params,
@@ -57,6 +58,8 @@ export default async function Campaign({
         Created {new Date(campaign.createdAt).toLocaleString()}
       </p>
 
+      <CampaignImageProcessor campaignId={campaign.id} />
+
       <div className="campaignitems">
         {campaign.items.map((item: any, index: number) => {
           const itemAssets = assets
@@ -105,6 +108,13 @@ export default async function Campaign({
 
           const displayAsset = brandedCreative || originalImage;
 
+        const storyNumber =
+          item.type === "story"
+            ? campaign.items
+                .filter((candidate: any) => candidate.type === "story")
+                .findIndex((candidate: any) => candidate.id === item.id) + 1
+            : null;
+
         const creativeStatus = brandedCreative
           ? "Branded AI Creative"
           : originalImage?.provider === "website"
@@ -146,7 +156,20 @@ export default async function Campaign({
                 {item.platform} · {item.type}
               </span>
 
-              <h3>{item.headline || "Creative"}</h3>
+              {storyNumber ? (
+            <div
+              style={{
+                fontSize: "13px",
+                fontWeight: 700,
+                marginBottom: "6px",
+                opacity: 0.6,
+              }}
+            >
+              Story {storyNumber}
+            </div>
+          ) : null}
+
+          <h3>{item.headline || "Creative"}</h3>
 
               <p>{item.caption}</p>
 
