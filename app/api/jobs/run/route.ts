@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { generateCampaign } from "@/lib/ai/campaign";
 import { renderSocialSvg } from "@/lib/render/svg";
+import { buildVisualDirection } from "@/lib/ai/visual-director";
 
 export async function POST(req: Request) {
   const secret = req.headers.get("x-worker-secret");
@@ -70,6 +71,48 @@ export async function POST(req: Request) {
 
       const format = p.format || "portrait";
 
+    const visualContentItem = await prisma.contentItem.findUnique({
+      where: { id: p.contentItemId },
+      include: {
+        campaign: {
+          include: {
+            brand: true,
+          },
+        },
+      },
+    });
+
+    if (!visualContentItem) {
+      throw new Error("CONTENT_ITEM_NOT_FOUND");
+    }
+
+    const visualCampaign = visualContentItem.campaign;
+    const visualBrand = visualCampaign.brand;
+
+    const visualDirectorPrompt = buildVisualDirection({
+      brand: {
+        name: visualBrand.name,
+        voice: visualBrand.voice,
+        positioning: visualBrand.positioning,
+        visualRules: visualBrand.visualRules,
+        primaryColor: visualBrand.primaryColor,
+        secondaryColor: visualBrand.secondaryColor,
+        accentColor: visualBrand.accentColor,
+        designStyle: visualBrand.designStyle,
+      },
+      campaignGoal: visualCampaign.goal,
+      platform: visualContentItem.platform,
+      contentType: visualContentItem.type,
+      headline: visualContentItem.headline,
+      visualDirection: p.prompt,
+      variationIndex: Math.abs(
+        Array.from(visualContentItem.id).reduce(
+          (sum, ch) => sum + ch.charCodeAt(0),
+          0
+        )
+      ),
+    });
+
       const size: "1024x1024" | "1024x1536" =
         format === "square" ? "1024x1024" : "1024x1536";
 
@@ -91,7 +134,7 @@ export async function POST(req: Request) {
 
         const result = await client.images.generate({
           model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
-          prompt: p.prompt,
+          prompt: visualDirectorPrompt,
           size,
           quality: "medium",
           output_format: "png",
