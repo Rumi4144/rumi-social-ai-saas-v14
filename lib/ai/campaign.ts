@@ -85,6 +85,8 @@ const schema = {
     },
     stories: {
       type: "array",
+      minItems: 5,
+      maxItems: 5,
       items: {
         type: "object",
         additionalProperties: false,
@@ -159,6 +161,43 @@ Vary hooks, creative angles, captions, calls-to-action, and visual concepts whil
 Follow the brand voice, positioning, preferred words, banned words/claims, and visual rules.
 Use the website only as business context. Never invent facts, product details, prices, reviews, guarantees, or claims that were not supplied.
 Make calls-to-action appropriate to the campaign objective and business type.
+
+
+STORY SEQUENCE RULES:
+Create EXACTLY 5 Instagram Story slides.
+
+Treat the five Stories as one coherent visual sequence, not five
+variations of the same image or message.
+
+Story 1: attention-grabbing emotional hook.
+Story 2: introduce a new perspective, benefit, question or useful idea.
+Story 3: use a human, product, lifestyle, environment or detail-led
+moment appropriate to the specific brand.
+Story 4: deepen the campaign idea using a distinctly different visual concept.
+Story 5: conclude the sequence with an appropriate call-to-action.
+
+VISUAL VARIETY:
+Every Story must have a meaningfully different visualDirection.
+
+Across the five Stories, deliberately vary:
+- primary subject
+- setting or environment
+- camera distance and angle
+- lighting
+- dominant colors
+- composition
+- visual metaphor
+- use of people versus objects/environment
+
+Do NOT generate five variations of the same person, landscape,
+sunrise, room, product angle or symbolic metaphor.
+
+The five images should look like one professionally art-directed campaign
+while providing obvious visual progression from Story 1 through Story 5.
+
+These rules must adapt to the specific Brand Brain, business type,
+campaign objective and message. Do not force one visual style across
+different customer accounts.
 
 Create a short, distinctive campaign title of 4 to 9 words in the title field. Do not copy the brief verbatim. Do not begin the title with generic instructions such as "Launch", "Create", "Promote", or "Generate". The title should feel like a professional campaign name and reflect the product, service, story, or central creative idea. Be commercially useful but factual. Never invent product specifications, certifications, awards, customer reviews, scarcity, prices, materials, provenance, medical claims, guarantees or performance claims not supplied in the brief. Make the content varied rather than repeating one caption.`;
   const response = await client.responses.create({
