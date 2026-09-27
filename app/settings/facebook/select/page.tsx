@@ -80,7 +80,32 @@ export default async function FacebookPageSelector({
                 />
               ) : null}
 
-              <h3 style={{ margin: 0 }}>{page.name}</h3>
+              <div>
+                <h3 style={{ margin: 0 }}>{page.name}</h3>
+
+                <div
+                  style={{
+                    marginTop: "6px",
+                    fontSize: "13px",
+                    opacity: 0.65,
+                  }}
+                >
+                  Page ID: {page.id}
+                </div>
+
+                <a
+                  href={`https://www.facebook.com/${page.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-block",
+                    marginTop: "6px",
+                    fontSize: "14px",
+                  }}
+                >
+                  View on Facebook ↗
+                </a>
+              </div>
             </div>
 
             <form
