@@ -443,18 +443,70 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
         }
       }
 
-      for (const x of pack.stories) {
-        await tx.contentItem.create({
-          data: {
+    for (const x of pack.stories) {
+      const storyItem = await tx.contentItem.create({
+        data: {
+          campaignId: campaign.id,
+          type: "story",
+          platform: "instagram",
+          headline: `Story ${x.frame}`,
+          caption: x.text,
+          status: "draft",
+        },
+      });
+
+      await tx.job.create({
+        data: {
+          organizationId: job.organizationId,
+          type: "GENERATE_IMAGE",
+          payload: {
             campaignId: campaign.id,
-            type: "story",
-            platform: "instagram",
-            headline: `Story ${x.frame}`,
-            caption: x.text,
-            status: "draft",
+            contentItemId: storyItem.id,
+            photoSource: p.photoSource || "ai",
+            sourceImageUrl:
+              p.photoSource === "website" && websitePhotos.length > 0
+                ? websitePhotos[
+                    websitePhotoIndex % websitePhotos.length
+                  ]
+                : undefined,
+            format: "story",
+            textPosition:
+              creativeLayouts[
+                creativeLayoutIndex % creativeLayouts.length
+              ],
+            prompt: `Create premium Instagram Story campaign photography.
+
+Brand: ${campaign.brand.name}
+Campaign: ${pack.title}
+Story message: ${x.text}
+
+Create a visually compelling vertical scene that communicates the
+meaning and emotion of this specific story.
+
+The image must accurately represent the actual brand and campaign.
+Do not introduce unrelated products, treatments, equipment,
+professions, facilities or services.
+
+Avoid generic industry clichés and repetitive imagery.
+Create a distinctive visual concept appropriate to this message.
+
+Generate underlying photography or artwork only.
+Do not generate text, logos, letters, numbers or watermarks.
+Leave intentional negative space for Rumi Social AI typography.`,
           },
-        });
+          status: "queued",
+          progress: 0,
+        },
+      });
+
+      if (
+        p.photoSource === "website" &&
+        websitePhotos.length > 0
+      ) {
+        websitePhotoIndex++;
       }
+      creativeLayoutIndex++;
+    }
 
       await tx.contentItem.create({
         data: {
