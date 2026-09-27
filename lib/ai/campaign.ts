@@ -202,6 +202,9 @@ different customer accounts.
 Create a short, distinctive campaign title of 4 to 9 words in the title field. Do not copy the brief verbatim. Do not begin the title with generic instructions such as "Launch", "Create", "Promote", or "Generate". The title should feel like a professional campaign name and reflect the product, service, story, or central creative idea. Be commercially useful but factual. Never invent product specifications, certifications, awards, customer reviews, scarcity, prices, materials, provenance, medical claims, guarantees or performance claims not supplied in the brief. Make the content varied rather than repeating one caption.`;
   const response = await client.responses.create({
     model: process.env.OPENAI_TEXT_MODEL || "gpt-5.6-luna",
+    reasoning: {
+      effort: "low",
+    },
     input: prompt,
     text: {
       format: {
