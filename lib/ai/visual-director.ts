@@ -205,6 +205,99 @@ to add headline, brand name and CTA later.
 Do not place important visual details where typography is likely
 to be positioned.
 
+CONCEPT RELEVANCE — VISUAL DIRECTOR V4
+
+The PRIMARY visual subject must communicate the campaign idea.
+
+Do not make incidental furniture, decor, equipment, architecture,
+or generic industry objects the hero subject unless that object is
+actually the product being promoted.
+
+For service businesses, prioritize visual subjects such as:
+- authentic people experiencing or moving toward the desired outcome
+- meaningful human moments
+- purposeful actions
+- lifestyle situations relevant to the message
+- environments that reinforce the idea
+- original visual metaphors directly connected to the campaign
+- expressive detail photography when genuinely meaningful
+
+Before choosing the hero subject, ask:
+
+"If the headline and branding disappeared, would the image still
+communicate the general emotion or idea of this campaign?"
+
+If not, choose a stronger concept.
+
+ABSTRACT CONCEPT SAFETY
+
+Do not translate abstract ideas into arbitrary objects.
+
+Words and ideas such as:
+change, possibility, confidence, clarity, perspective, progress,
+transformation, curiosity, growth, intention and discovery
+
+must NOT automatically become:
+chairs, couches, desks, clocks, doors, stairs, roads, paths,
+stacked stones, pendulums, windows, empty rooms or generic
+wellness objects.
+
+These objects may appear naturally in a scene, but they must not
+become the dominant subject unless genuinely relevant to the
+specific business, product or campaign message.
+
+SERVICE VS PRODUCT INTELLIGENCE
+
+If the business sells a physical product:
+make the authentic product or product experience visually important.
+
+If the business provides a service:
+do not invent a physical object to represent the service.
+Favor human experience, outcome, emotion, action, environment
+or a directly meaningful conceptual treatment.
+
+CAMPAIGN DIVERSITY ENGINE
+
+Every campaign should feel art-directed as a COLLECTION rather
+than repeatedly generating the same type of scene.
+
+Rotate visual subject categories across creatives:
+
+1. HUMAN — authentic person or human interaction
+2. LIFESTYLE — believable real-world experience
+3. CONCEPTUAL — distinctive visual metaphor
+4. ENVIRONMENTAL — place, atmosphere or context with meaning
+5. DETAIL — expressive close-up, gesture, material or meaningful detail
+6. PRODUCT — only when a real product is relevant
+
+Do not use the same dominant subject category repeatedly when
+another appropriate category can communicate the campaign.
+
+Deliberately vary:
+- hero subject
+- environment
+- indoor versus outdoor setting
+- human versus non-human focus
+- camera distance
+- perspective
+- lighting
+- dominant palette
+- composition
+- emotional energy
+
+ANTI-REPETITION RULE
+
+Avoid campaign-wide repetition of visually dominant motifs.
+
+If one creative prominently features a chair, room, mountain,
+sunset, pathway, doorway, desk, plant, silhouette or other strong
+motif, subsequent creatives should use a substantially different
+hero subject and setting.
+
+The goal is not random variety. Every creative must remain
+semantically connected to the campaign while expressing that idea
+through a fresh visual concept.
+
 SEMANTIC RELEVANCE GUARD
 The image must accurately represent the actual brand, product, service,
 and campaign message.
