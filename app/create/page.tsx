@@ -176,30 +176,20 @@ export default function Create() {
           );
         }
 
-        const completedImages = imageJobs.filter(
-          (job: any) => job.status === "succeeded"
-        ).length;
+      if (!mainJob || mainJob.status !== "succeeded") {
+        setStatus("Writing campaign...");
+      } else {
+        setStatus(
+          "Opening campaign — creatives will continue generating..."
+        );
 
-        if (!mainJob || mainJob.status !== "succeeded") {
-          setStatus("Writing campaign...");
-        } else if (imageJobs.length === 0) {
-          setStatus("Preparing images...");
-        } else if (completedImages < imageJobs.length) {
-          setStatus(
-            `Generating images ${completedImages}/${imageJobs.length}...`
-          );
-        } else {
-          setStatus("Applying Brand Brain...");
+        await new Promise((resolve) =>
+          setTimeout(resolve, 300)
+        );
 
-          await new Promise((resolve) =>
-            setTimeout(resolve, 500)
-          );
-
-          setStatus("✓ Campaign ready");
-
-          window.location.href = `/campaigns/${campaignId}`;
-          return;
-        }
+        window.location.href = `/campaigns/${campaignId}`;
+        return;
+      }
 
         await new Promise((resolve) =>
           setTimeout(resolve, 700)
