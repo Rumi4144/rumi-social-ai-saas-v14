@@ -235,17 +235,26 @@ export async function POST(req: Request) {
           },
         };
 
-        if (existingCreative) {
-          await prisma.mediaAsset.update({
+      const creativeAsset = existingCreative
+        ? await prisma.mediaAsset.update({
             where: { id: existingCreative.id },
             data: creativeData,
-          });
-        } else {
-          await prisma.mediaAsset.create({
+          })
+        : await prisma.mediaAsset.create({
             data: creativeData,
           });
-        }
-      }
+
+      const appUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        "https://rumisocialai.com";
+
+      await prisma.contentItem.update({
+        where: { id: p.contentItemId },
+        data: {
+          mediaUrl: `${appUrl}/api/media/${creativeAsset.id}`,
+        },
+      });
+    }
 
       await prisma.job.update({
         where: { id: job.id },

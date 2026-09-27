@@ -101,9 +101,22 @@ export default async function Publishing() {
                 ) : null}
 
                 {item.mediaUrl ? (
-                  <p>
-                    Media attached
-                  </p>
+                  <div style={{ marginTop: "16px" }}>
+                    <img
+                      src={item.mediaUrl}
+                      alt={item.headline || "Social media creative"}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        maxWidth: "520px",
+                        height: "auto",
+                        borderRadius: "12px",
+                      }}
+                    />
+                    <p style={{ marginTop: "8px" }}>
+                      Image post
+                    </p>
+                  </div>
                 ) : (
                   <p>Text-only post</p>
                 )}
