@@ -5,6 +5,84 @@ import { useState } from "react";
 export default function Create() {
   const [brief, setBrief] = useState("");
   const [goal, setGoal] = useState("launch");
+  const [days, setDays] = useState(14);
+
+  const platforms = [
+    "facebook",
+    "instagram",
+    "threads",
+    "linkedin",
+    "tiktok",
+    "youtube",
+  ] as const;
+
+  const [dailyPlatforms, setDailyPlatforms] = useState<
+    Record<number, string[]>
+  >({});
+
+  const [campaignStartDate, setCampaignStartDate] = useState(
+    () => new Date().toISOString().slice(0, 10)
+  );
+
+  const [expandedDay, setExpandedDay] = useState<number | null>(null);
+
+  function dateForDay(day: number) {
+    const date = new Date(`${campaignStartDate}T12:00:00`);
+    date.setDate(date.getDate() + day - 1);
+    return date;
+  }
+
+  function formatCampaignDate(day: number) {
+    return dateForDay(day).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+  function platformsForDay(day: number) {
+    return dailyPlatforms[day] ?? ["facebook", "instagram"];
+  }
+
+  function togglePlatform(day: number, platform: string) {
+    setDailyPlatforms((current) => {
+      const selected =
+        current[day] ?? ["facebook", "instagram"];
+
+      return {
+        ...current,
+        [day]: selected.includes(platform)
+          ? selected.filter((value) => value !== platform)
+          : [...selected, platform],
+      };
+    });
+  }
+
+  function selectAllForDay(day: number) {
+    setDailyPlatforms((current) => ({
+      ...current,
+      [day]: [...platforms],
+    }));
+  }
+
+  function clearDay(day: number) {
+    setDailyPlatforms((current) => ({
+      ...current,
+      [day]: [],
+    }));
+  }
+
+  function applyDayToAll(day: number) {
+    const selected = [...platformsForDay(day)];
+    const next: Record<number, string[]> = {};
+
+    for (let index = 1; index <= days; index++) {
+      next[index] = [...selected];
+    }
+
+    setDailyPlatforms(next);
+  }
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -78,7 +156,12 @@ export default function Create() {
         body: JSON.stringify({
           brief,
           goal,
-          days: 14,
+          days,
+          dailyPlan: Array.from({ length: days }, (_, index) => ({
+            day: index + 1,
+            date: dateForDay(index + 1).toISOString().slice(0, 10),
+            platforms: platformsForDay(index + 1),
+          })),
           photoSource,
           imageUrl:
             photoSource === "website"
@@ -405,6 +488,262 @@ export default function Create() {
           <option value="education">Education</option>
         </select>
 
+        <div style={{ marginTop: 22 }}>
+          <label>Campaign duration</label>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              marginTop: 10,
+              alignItems: "center",
+            }}
+          >
+            {[7, 14, 30].map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setDays(option)}
+                disabled={busy}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: "999px",
+                  border: "1px solid #d8d3ca",
+                  cursor: "pointer",
+                  fontWeight: days === option ? 700 : 500,
+                  background: days === option ? "#17191d" : "#f4f1eb",
+                  color: days === option ? "#fff" : "#17191d",
+                }}
+              >
+                {option} Days
+              </button>
+            ))}
+
+            <label style={{ marginLeft: 4 }}>
+              Custom
+              <input
+                type="number"
+                min={1}
+                max={90}
+                value={days}
+                disabled={busy}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  if (Number.isFinite(value)) {
+                    setDays(Math.min(90, Math.max(1, value)));
+                  }
+                }}
+                style={{
+                  width: 78,
+                  marginLeft: 8,
+                  padding: "9px 10px",
+                }}
+              />
+            </label>
+          </div>
+
+          <p style={{ opacity: 0.65, marginTop: 8 }}>
+            Campaign Director will prepare a {days}-day campaign.
+          </p>
+        </div>
+
+        <div style={{ marginTop: 28, marginBottom: 28 }}>
+          <h3 style={{ marginBottom: 6 }}>Campaign Schedule</h3>
+
+          <p style={{ opacity: 0.65, marginTop: 0 }}>
+            Choose your start date, then select platforms for each scheduled day.
+          </p>
+
+          <div style={{ marginTop: 18, marginBottom: 18 }}>
+            <label>
+              Campaign start date
+              <input
+                type="date"
+                value={campaignStartDate}
+                disabled={busy}
+                onChange={(e) => setCampaignStartDate(e.target.value)}
+                style={{
+                  marginLeft: 12,
+                  padding: "9px 12px",
+                }}
+              />
+            </label>
+          </div>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {Array.from({ length: days }, (_, index) => {
+              const day = index + 1;
+              const selected = platformsForDay(day);
+              const isOpen = expandedDay === day;
+
+              const platformNames = selected.map((platform) =>
+                platform === "linkedin"
+                  ? "LinkedIn"
+                  : platform === "youtube"
+                  ? "YouTube"
+                  : platform === "tiktok"
+                  ? "TikTok"
+                  : platform.charAt(0).toUpperCase() +
+                    platform.slice(1)
+              );
+
+              return (
+                <div
+                  key={day}
+                  style={{
+                    border: "1px solid #ded9d0",
+                    borderRadius: 14,
+                    background: "#fff",
+                    overflow: "hidden",
+                  }}
+                >
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      setExpandedDay(isOpen ? null : day)
+                    }
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 16,
+                      padding: "16px 18px",
+                      border: 0,
+                      background: "transparent",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div>
+                      <strong>{formatCampaignDate(day)}</strong>
+
+                      <div
+                        style={{
+                          marginTop: 5,
+                          opacity: 0.65,
+                          fontSize: 14,
+                        }}
+                      >
+                        {platformNames.length
+                          ? platformNames.join(" · ")
+                          : "No platforms selected"}
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        fontSize: 22,
+                        transform: isOpen
+                          ? "rotate(90deg)"
+                          : "none",
+                      }}
+                    >
+                      ›
+                    </span>
+                  </button>
+
+                  {isOpen && (
+                    <div
+                      style={{
+                        borderTop: "1px solid #eee9e1",
+                        padding: "16px 18px 18px",
+                      }}
+                    >
+                      <strong>Publish this day to</strong>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 16,
+                          marginTop: 14,
+                        }}
+                      >
+                        {platforms.map((platform) => (
+                          <label
+                            key={platform}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 7,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected.includes(platform)}
+                              disabled={busy}
+                              onChange={() =>
+                                togglePlatform(day, platform)
+                              }
+                              style={{
+                                appearance: "auto",
+                                WebkitAppearance: "checkbox",
+                                width: 18,
+                                height: 18,
+                                minWidth: 18,
+                                margin: 0,
+                                padding: 0,
+                                position: "static",
+                                transform: "none",
+                                flex: "0 0 auto",
+                              }}
+                            />
+
+                            {platform === "linkedin"
+                              ? "LinkedIn"
+                              : platform === "youtube"
+                              ? "YouTube"
+                              : platform === "tiktok"
+                              ? "TikTok"
+                              : platform.charAt(0).toUpperCase() +
+                                platform.slice(1)}
+                          </label>
+                        ))}
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          flexWrap: "wrap",
+                          marginTop: 16,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => selectAllForDay(day)}
+                          disabled={busy}
+                        >
+                          Select All
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => clearDay(day)}
+                          disabled={busy}
+                        >
+                          Clear
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => applyDayToAll(day)}
+                          disabled={busy}
+                        >
+                          Apply to All Days
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
         <div className="deliverables">
           <b>Campaign Director will prepare</b>
           <span>Strategy</span>

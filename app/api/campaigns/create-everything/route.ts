@@ -13,6 +13,22 @@ const S = z.object({
   photoSource: z.enum(["website", "ai"]).default("ai"),
   imageUrl: z.string().url().optional(),
   imageUrls: z.array(z.string().url()).max(20).optional(),
+  dailyPlan: z.array(
+    z.object({
+      day: z.number().int().min(1).max(30),
+      date: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+      platforms: z.array(
+        z.enum([
+          "facebook",
+          "instagram",
+          "threads",
+          "linkedin",
+          "tiktok",
+          "youtube",
+        ])
+      ),
+    })
+  ).max(30).optional(),
 });
 
 export async function POST(req: Request) {
@@ -90,6 +106,7 @@ export async function POST(req: Request) {
           brief: p.data.brief,
           goal: p.data.goal,
           days: p.data.days,
+          dailyPlan: p.data.dailyPlan ?? [],
           photoSource: p.data.photoSource,
           imageUrl: p.data.imageUrl,
           imageUrls: p.data.imageUrls,
