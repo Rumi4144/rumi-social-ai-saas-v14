@@ -41,6 +41,101 @@ export default function Create() {
     });
   }
 
+  function specialDayForDate(date: Date) {
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const year = date.getFullYear();
+
+    const fixed: Record<string, string> = {
+      "1-1": "New Year's Day",
+      "2-14": "Valentine's Day",
+      "7-4": "Independence Day",
+      "10-31": "Halloween",
+      "11-11": "Veterans Day",
+      "12-24": "Christmas Eve",
+      "12-25": "Christmas Day",
+      "12-31": "New Year's Eve",
+    };
+
+    const fixedName = fixed[`${month}-${day}`];
+    if (fixedName) return fixedName;
+
+    function nthWeekday(
+      targetMonth: number,
+      weekday: number,
+      occurrence: number
+    ) {
+      const first = new Date(year, targetMonth - 1, 1);
+      const offset = (7 + weekday - first.getDay()) % 7;
+
+      return new Date(
+        year,
+        targetMonth - 1,
+        1 + offset + (occurrence - 1) * 7
+      );
+    }
+
+    function lastWeekday(targetMonth: number, weekday: number) {
+      const last = new Date(year, targetMonth, 0);
+      const offset = (7 + last.getDay() - weekday) % 7;
+
+      return new Date(
+        year,
+        targetMonth - 1,
+        last.getDate() - offset
+      );
+    }
+
+    const sameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+
+    if (sameDay(date, nthWeekday(1, 1, 3)))
+      return "Martin Luther King Jr. Day";
+
+    if (sameDay(date, nthWeekday(2, 1, 3)))
+      return "Presidents Day";
+
+    if (sameDay(date, nthWeekday(5, 0, 2)))
+      return "Mother's Day";
+
+    if (sameDay(date, lastWeekday(5, 1)))
+      return "Memorial Day";
+
+    if (sameDay(date, nthWeekday(6, 0, 3)))
+      return "Father's Day";
+
+    if (sameDay(date, nthWeekday(9, 1, 1)))
+      return "Labor Day";
+
+    if (sameDay(date, nthWeekday(11, 4, 4)))
+      return "Thanksgiving";
+
+    const thanksgiving = nthWeekday(11, 4, 4);
+    const blackFriday = new Date(thanksgiving);
+    blackFriday.setDate(blackFriday.getDate() + 1);
+
+    if (sameDay(date, blackFriday))
+      return "Black Friday";
+
+    const smallBusinessSaturday = new Date(thanksgiving);
+    smallBusinessSaturday.setDate(
+      smallBusinessSaturday.getDate() + 2
+    );
+
+    if (sameDay(date, smallBusinessSaturday))
+      return "Small Business Saturday";
+
+    const cyberMonday = new Date(thanksgiving);
+    cyberMonday.setDate(cyberMonday.getDate() + 4);
+
+    if (sameDay(date, cyberMonday))
+      return "Cyber Monday";
+
+    return null;
+  }
+
   function platformsForDay(day: number) {
     return dailyPlatforms[day] ?? ["facebook", "instagram"];
   }
@@ -160,6 +255,7 @@ export default function Create() {
           dailyPlan: Array.from({ length: days }, (_, index) => ({
             day: index + 1,
             date: dateForDay(index + 1).toISOString().slice(0, 10),
+            specialDay: specialDayForDate(dateForDay(index + 1)),
             platforms: platformsForDay(index + 1),
           })),
           photoSource,
@@ -576,6 +672,7 @@ export default function Create() {
               const day = index + 1;
               const selected = platformsForDay(day);
               const isOpen = expandedDay === day;
+              const specialDay = specialDayForDate(dateForDay(day));
 
               const platformNames = selected.map((platform) =>
                 platform === "linkedin"
@@ -619,6 +716,17 @@ export default function Create() {
                   >
                     <div>
                       <strong>{formatCampaignDate(day)}</strong>
+
+                      {specialDay && (
+                        <div
+                          style={{
+                            marginTop: 5,
+                            fontWeight: 700,
+                          }}
+                        >
+                          ★ {specialDay}
+                        </div>
+                      )}
 
                       <div
                         style={{

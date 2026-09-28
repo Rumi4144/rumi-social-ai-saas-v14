@@ -127,6 +127,12 @@ export async function generateCampaign(input: {
   brief: string;
   goal: string;
   days: number;
+  dailyPlan?: Array<{
+    day: number;
+    date: string;
+    specialDay?: string | null;
+    platforms: string[];
+  }>;
   brand: {
     name: string;
     voice?: string | null;
@@ -143,9 +149,41 @@ export async function generateCampaign(input: {
 }) {
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY_MISSING");
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const scheduleContext =
+    input.dailyPlan?.length
+      ? input.dailyPlan
+          .map((item) => {
+            const special = item.specialDay
+              ? ` | Special day: ${item.specialDay}`
+              : "";
+
+            const platforms = item.platforms.length
+              ? item.platforms.join(", ")
+              : "none";
+
+            return `Day ${item.day} | Date: ${item.date}${special} | Platforms: ${platforms}`;
+          })
+          .join("\n")
+      : "No day-by-day publishing plan supplied.";
+
   const prompt = `Create a complete ${input.days}-day social campaign for ${input.brand.name}.
 Brief: ${input.brief}
 Goal: ${input.goal}
+
+DAILY PUBLISHING PLAN:
+${scheduleContext}
+
+Treat the DAILY PUBLISHING PLAN as authoritative scheduling context.
+For each numbered campaign day, create posts only for the platforms selected for that day.
+Do not create a platform post for a day when that platform is not selected.
+Use the supplied calendar date as context for that day's creative.
+
+When a Special day is supplied, consider it an optional creative opportunity, not a mandatory promotion.
+Use the occasion only when it is relevant and appropriate to the brand, campaign objective, audience and brief.
+Do not force holiday language, discounts, sales, religious messaging or promotional claims merely because a special day appears on the calendar.
+If the special day is relevant, make that day's concept meaningfully specific to the occasion rather than adding the holiday name superficially.
+Maintain campaign continuity and creative variety across surrounding days.
+
 Brand voice: ${input.brand.voice || "professional, distinctive"}
 Positioning: ${input.brand.positioning || ""}
 Business type: ${input.businessContext?.businessType || ""}
@@ -164,7 +202,9 @@ Make calls-to-action appropriate to the campaign objective and business type.
 
 
 STORY SEQUENCE RULES:
-Create EXACTLY 5 Instagram Story slides.
+If Instagram is selected on at least one day in the DAILY PUBLISHING PLAN, create EXACTLY 5 Instagram Story slides.
+If Instagram is not selected anywhere in the DAILY PUBLISHING PLAN, return an empty stories array.
+The Story sequence is a campaign-level creative asset and does not override the per-day platform selections above.
 
 Treat the five Stories as one coherent visual sequence, not five
 variations of the same image or message.

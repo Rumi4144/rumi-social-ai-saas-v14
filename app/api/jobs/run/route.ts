@@ -449,7 +449,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
           campaignId: campaign.id,
           type: "story",
           platform: "instagram",
-          headline: `Story ${x.frame}`,
+          headline: x.text.length > 90 ? `${x.text.slice(0, 87)}...` : x.text,
           caption: x.text,
           status: "draft",
         },
