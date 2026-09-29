@@ -640,7 +640,9 @@ export default function Create() {
           </div>
 
           <p style={{ opacity: 0.65, marginTop: 8 }}>
+            <span style={{ color: "#dc2626", fontWeight: 700 }}>
             Campaign Director will prepare a {days}-day campaign.
+          </span>
           </p>
         </div>
 
@@ -878,6 +880,17 @@ export default function Create() {
   ? `✦ ${status || "Creating campaign..."}`
   : "✦ Create Everything"}
         </button>
+
+        <span
+          style={{
+            color: "#dc2626",
+            fontWeight: 700,
+            marginLeft: 18,
+            display: "inline-block",
+          }}
+        >
+          Campaign Director will prepare a {days}-day campaign.
+        </span>
 
         {status && <p className="status">{status}</p>}
       </div>
