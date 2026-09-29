@@ -63,6 +63,12 @@ export default async function Campaign({
 
   if (!campaign) notFound();
 
+  console.log(
+    "[CAMPAIGN PERF] before JSX return:",
+    Date.now() - pageStarted,
+    "ms"
+  );
+
   return (
     <>
       <div className="eyebrow">CAMPAIGN · {campaign.status.toUpperCase()}</div>
