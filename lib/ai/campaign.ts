@@ -10,7 +10,7 @@ export type CampaignPackage = {
   posts: {
     day: number;
     type: string;
-    platform: string;
+    platforms: string[];
     headline: string;
     caption: string;
     visualDirection: string;
@@ -56,7 +56,7 @@ const schema = {
         required: [
           "day",
           "type",
-          "platform",
+          "platforms",
           "headline",
           "caption",
           "visualDirection",
@@ -64,7 +64,11 @@ const schema = {
         properties: {
           day: { type: "integer" },
           type: { type: "string" },
-          platform: { type: "string" },
+          platforms: {
+          type: "array",
+          minItems: 1,
+          items: { type: "string" },
+        },
           headline: { type: "string" },
           caption: { type: "string" },
           visualDirection: { type: "string" },
@@ -174,8 +178,12 @@ DAILY PUBLISHING PLAN:
 ${scheduleContext}
 
 Treat the DAILY PUBLISHING PLAN as authoritative scheduling context.
-For each numbered campaign day, create posts only for the platforms selected for that day.
-Do not create a platform post for a day when that platform is not selected.
+For each numbered campaign day, create EXACTLY ONE primary social post.
+That single daily post must be suitable for distribution to ALL platforms selected for that day.
+Do NOT create duplicate Facebook, Instagram, LinkedIn, or other platform-specific versions of the same day's post.
+The selected platforms are publishing destinations for the daily post, not instructions to create additional posts.
+For a 7-day campaign, return EXACTLY 7 primary posts: one post for each campaign day.
+Each day's post must have its own distinct creative angle, headline, caption, call-to-action, and visual concept while maintaining one coherent campaign strategy.
 Use the supplied calendar date as context for that day's creative.
 
 When a Special day is supplied, consider it an optional creative opportunity, not a mandatory promotion.

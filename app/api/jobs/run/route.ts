@@ -324,6 +324,12 @@ export async function POST(req: Request) {
       brief: string;
       goal: string;
       days: number;
+    dailyPlan?: Array<{
+      day: number;
+      date: string;
+      specialDay?: string | null;
+      platforms: string[];
+    }>;
       photoSource?: "website" | "ai";
       imageUrl?: string;
       imageUrls?: string[];
@@ -350,6 +356,7 @@ export async function POST(req: Request) {
       brief: p.brief,
       goal: p.goal,
       days: p.days,
+    dailyPlan: p.dailyPlan ?? [],
       brand: campaign.brand,
       businessContext: p.brandContext
         ? {
@@ -387,7 +394,9 @@ export async function POST(req: Request) {
           data: {
             campaignId: campaign.id,
             type: x.type,
-            platform: x.platform,
+            platform: Array.isArray(x.platforms)
+            ? x.platforms.join(",")
+            : "",
             headline: x.headline,
             caption: x.caption,
             status: "draft",
