@@ -11,10 +11,15 @@ import CampaignImageProcessor from "@/components/CampaignImageProcessor";
 
 export default async function Campaign({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
   const { id } = await params;
+  const query = await searchParams;
+  const page = Math.max(1, Number.parseInt(query.page || "1", 10) || 1);
+  const pageSize = 5;
 
   const pageStarted = Date.now();
   const tenantStarted = Date.now();
@@ -85,7 +90,9 @@ export default async function Campaign({
       {/* CampaignImageProcessor temporarily disabled for performance test */}
 
       <div className="campaignitems">
-        {campaign.items.slice(0, 5).map((item: any, index: number) => {
+        {campaign.items
+          .slice((page - 1) * pageSize, page * pageSize)
+          .map((item: any, index: number) => {
           const itemAssets = assets
             .filter((asset) => asset.contentItemId === item.id && asset.url)
             .sort(
@@ -227,6 +234,35 @@ export default async function Campaign({
             </article>
           );
         })}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 16,
+          margin: "32px 0",
+          flexWrap: "wrap",
+        }}
+      >
+        {page > 1 && (
+          <a className="button" href={`?page=${page - 1}`}>
+            ← Previous 5
+          </a>
+        )}
+
+        <strong>
+          Showing {(page - 1) * pageSize + 1}–
+          {Math.min(page * pageSize, campaign.items.length)} of{" "}
+          {campaign.items.length}
+        </strong>
+
+        {page * pageSize < campaign.items.length && (
+          <a className="button" href={`?page=${page + 1}`}>
+            Next 5 →
+          </a>
+        )}
       </div>
     </>
   );
