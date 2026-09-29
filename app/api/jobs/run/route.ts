@@ -17,6 +17,37 @@ export async function POST(req: Request) {
   const organizationId =
     typeof body?.organizationId === "string" ? body.organizationId.trim() : "";
 
+  const requestedJobId =
+    typeof body?.jobId === "string" ? body.jobId.trim() : "";
+
+  let requestedCampaignId = "";
+
+  if (requestedJobId) {
+    const requestedJob = await prisma.job.findFirst({
+      where: {
+        id: requestedJobId,
+        organizationId,
+      },
+      select: {
+        payload: true,
+      },
+    });
+
+    const requestedPayload =
+      requestedJob?.payload &&
+      typeof requestedJob.payload === "object" &&
+      !Array.isArray(requestedJob.payload)
+        ? requestedJob.payload
+        : null;
+
+    requestedCampaignId =
+      requestedPayload &&
+      "campaignId" in requestedPayload &&
+      typeof requestedPayload.campaignId === "string"
+        ? requestedPayload.campaignId
+        : "";
+  }
+
   if (!organizationId) {
     return NextResponse.json(
       { error: "ORGANIZATION_ID_REQUIRED" },
@@ -29,7 +60,25 @@ export async function POST(req: Request) {
   // GENERATE_IMAGE jobs, without touching another customer's queue.
   // Prioritize campaign creation so new campaigns do not sit behind
   // previously queued image-generation work for the same organization.
+  const currentCampaignImage = requestedCampaignId
+    ? await prisma.job.findFirst({
+        where: {
+          organizationId,
+          status: "queued",
+          type: "GENERATE_IMAGE",
+          payload: {
+            path: ["campaignId"],
+            equals: requestedCampaignId,
+          },
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      })
+    : null;
+
   const job =
+    currentCampaignImage ??
     (await prisma.job.findFirst({
       where: {
         organizationId,
