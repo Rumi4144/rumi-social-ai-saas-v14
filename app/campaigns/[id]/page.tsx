@@ -19,7 +19,7 @@ export default async function Campaign({
   const { id } = await params;
   const query = await searchParams;
   const page = Math.max(1, Number.parseInt(query.page || "1", 10) || 1);
-  const pageSize = 5;
+  const pageSize = 7;
 
   const pageStarted = Date.now();
   const tenantStarted = Date.now();
@@ -184,7 +184,13 @@ export default async function Campaign({
               )}
 
               <span className="eyebrow">
-                {item.platform} · {item.type}
+                DAY {(page - 1) * pageSize + index + 1} ·{" "}
+              {item.platform
+                .split(",")
+                .map((platform: string) =>
+                  platform.charAt(0).toUpperCase() + platform.slice(1)
+                )
+                .join(" · ")}
               </span>
 
               {storyNumber ? (
