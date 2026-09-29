@@ -85,7 +85,7 @@ export default async function Campaign({
       {/* CampaignImageProcessor temporarily disabled for performance test */}
 
       <div className="campaignitems">
-        {campaign.items.map((item: any, index: number) => {
+        {campaign.items.slice(0, 5).map((item: any, index: number) => {
           const itemAssets = assets
             .filter((asset) => asset.contentItemId === item.id && asset.url)
             .sort(
