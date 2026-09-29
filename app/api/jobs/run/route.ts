@@ -401,13 +401,22 @@ export async function POST(req: Request) {
           : [];
 
       for (const x of pack.posts) {
+      const scheduledDay = p.dailyPlan?.find(
+        (day) => day.day === x.day
+      );
+
+      const publishingPlatforms =
+        scheduledDay?.platforms?.length
+          ? scheduledDay.platforms
+          : Array.isArray(x.platforms)
+            ? x.platforms
+            : [];
+
         const item = await tx.contentItem.create({
           data: {
             campaignId: campaign.id,
             type: x.type,
-            platform: Array.isArray(x.platforms)
-            ? x.platforms.join(",")
-            : "",
+            platform: publishingPlatforms.join(","),
             headline: x.headline,
             caption: x.caption,
             status: "draft",
