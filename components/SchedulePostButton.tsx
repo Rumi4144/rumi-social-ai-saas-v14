@@ -37,6 +37,27 @@ export default function SchedulePostButton({
   }, [initialStatus, initialScheduledFor]);
 
   useEffect(() => {
+    function handleApproved(event: Event) {
+      const customEvent = event as CustomEvent<{
+        contentItemId: string;
+      }>;
+
+      if (customEvent.detail?.contentItemId === contentItemId) {
+        setStatus("approved");
+      }
+    }
+
+    window.addEventListener("content-item-approved", handleApproved);
+
+    return () => {
+      window.removeEventListener(
+        "content-item-approved",
+        handleApproved
+      );
+    };
+  }, [contentItemId]);
+
+  useEffect(() => {
     if (!open || connections.length > 0) return;
 
     async function loadConnections() {

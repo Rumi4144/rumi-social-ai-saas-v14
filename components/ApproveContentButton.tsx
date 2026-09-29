@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function ApproveContentButton({
   contentItemId,
@@ -14,7 +13,6 @@ export default function ApproveContentButton({
   caption?: string | null;
   initialStatus: string;
 }) {
-  const router = useRouter();
 
   const [status, setStatus] = useState(initialStatus);
   const [busy, setBusy] = useState(false);
@@ -50,7 +48,11 @@ export default function ApproveContentButton({
       }
 
       setStatus("approved");
-      router.refresh();
+      window.dispatchEvent(
+        new CustomEvent("content-item-approved", {
+          detail: { contentItemId },
+        })
+      );
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Could not approve content.",
