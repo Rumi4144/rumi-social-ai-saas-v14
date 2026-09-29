@@ -76,7 +76,7 @@ export default async function Campaign({
         Created {new Date(campaign.createdAt).toLocaleString()}
       </p>
 
-      <CampaignImageProcessor campaignId={campaign.id} />
+      {/* CampaignImageProcessor temporarily disabled for performance test */}
 
       <div className="campaignitems">
         {campaign.items.map((item: any, index: number) => {
