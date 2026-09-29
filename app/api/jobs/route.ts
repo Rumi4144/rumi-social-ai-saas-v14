@@ -27,7 +27,30 @@ export async function GET(req: Request) {
       take: campaignId ? 100 : 25,
     });
 
-    return NextResponse.json({ jobs });
+    const lightweightJobs = jobs.map((job: any) => {
+      const payload =
+        job.payload &&
+        typeof job.payload === "object" &&
+        !Array.isArray(job.payload)
+          ? job.payload
+          : {};
+
+      return {
+        id: job.id,
+        type: job.type,
+        status: job.status,
+        progress: job.progress,
+        error: job.error,
+        payload: {
+          campaignId:
+            "campaignId" in payload && typeof payload.campaignId === "string"
+              ? payload.campaignId
+              : undefined,
+        },
+      };
+    });
+
+    return NextResponse.json({ jobs: lightweightJobs });
   } catch (error) {
     return NextResponse.json(
       {
