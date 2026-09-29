@@ -27,18 +27,29 @@ export async function POST(req: Request) {
   // Process only the next queued job belonging to this organization.
   // This safely handles CREATE_EVERYTHING first, followed by its
   // GENERATE_IMAGE jobs, without touching another customer's queue.
-  const job = await prisma.job.findFirst({
-    where: {
-      organizationId,
-      status: "queued",
-      type: {
-        in: ["CREATE_EVERYTHING", "GENERATE_IMAGE"],
+  // Prioritize campaign creation so new campaigns do not sit behind
+  // previously queued image-generation work for the same organization.
+  const job =
+    (await prisma.job.findFirst({
+      where: {
+        organizationId,
+        status: "queued",
+        type: "CREATE_EVERYTHING",
       },
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-  });
+      orderBy: {
+        createdAt: "asc",
+      },
+    })) ??
+    (await prisma.job.findFirst({
+      where: {
+        organizationId,
+        status: "queued",
+        type: "GENERATE_IMAGE",
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    }));
 
   if (!job) {
     return NextResponse.json({ status: "idle" });
