@@ -358,16 +358,41 @@ export default function Create() {
       if (!mainJob || mainJob.status !== "succeeded") {
         setStatus("Writing campaign...");
       } else {
+        const primaryImageJobs = imageJobs.filter(
+          (job: any) => job.payload?.format !== "story"
+        );
+
+        const completedPrimaryImages = primaryImageJobs.filter(
+          (job: any) => job.status === "succeeded"
+        ).length;
+
+        const failedPrimaryImage = primaryImageJobs.find(
+          (job: any) => job.status === "failed"
+        );
+
+        if (failedPrimaryImage) {
+          throw new Error(
+            failedPrimaryImage.error || "Primary image generation failed"
+          );
+        }
+
+        if (
+          primaryImageJobs.length >= days &&
+          completedPrimaryImages >= days
+        ) {
+          setStatus("Campaign ready — opening...");
+
+          await new Promise((resolve) =>
+            setTimeout(resolve, 300)
+          );
+
+          window.location.href = `/campaigns/${campaignId}`;
+          return;
+        }
+
         setStatus(
-          "Opening campaign — creatives will continue generating..."
+          `Creating campaign images... ${completedPrimaryImages}/${days}`
         );
-
-        await new Promise((resolve) =>
-          setTimeout(resolve, 300)
-        );
-
-        window.location.href = `/campaigns/${campaignId}`;
-        return;
       }
 
         await new Promise((resolve) =>

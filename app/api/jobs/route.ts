@@ -46,6 +46,10 @@ export async function GET(req: Request) {
             "campaignId" in payload && typeof payload.campaignId === "string"
               ? payload.campaignId
               : undefined,
+          format:
+            "format" in payload && typeof payload.format === "string"
+              ? payload.format
+              : undefined,
         },
       };
     });
