@@ -68,6 +68,10 @@ export default async function Campaign({
 
   if (!campaign) notFound();
 
+  const dailyItems = campaign.items.filter(
+    (item: any) => item.type !== "story"
+  );
+
   console.log(
     "[CAMPAIGN PERF] before JSX return:",
     Date.now() - pageStarted,
@@ -90,7 +94,7 @@ export default async function Campaign({
       {/* CampaignImageProcessor temporarily disabled for performance test */}
 
       <div className="campaignitems">
-        {campaign.items
+        {dailyItems
           .slice((page - 1) * pageSize, page * pageSize)
           .map((item: any, index: number) => {
           const itemAssets = assets
@@ -254,19 +258,19 @@ export default async function Campaign({
       >
         {page > 1 && (
           <a className="button" href={`?page=${page - 1}`}>
-            ← Previous 5
+            ← Previous 7
           </a>
         )}
 
         <strong>
           Showing {(page - 1) * pageSize + 1}–
-          {Math.min(page * pageSize, campaign.items.length)} of{" "}
-          {campaign.items.length}
+          {Math.min(page * pageSize, dailyItems.length)} of{" "}
+          {dailyItems.length}
         </strong>
 
-        {page * pageSize < campaign.items.length && (
+        {page * pageSize < dailyItems.length && (
           <a className="button" href={`?page=${page + 1}`}>
-            Next 5 →
+            Next 7 →
           </a>
         )}
       </div>
