@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 
 export default async function PostLogin() {
   const session = await auth();
@@ -28,7 +29,14 @@ export default async function PostLogin() {
   }
 
   if (user.isSuperAdmin) {
-    redirect("/api/admin/reset-workspace");
+    const cookieStore = await cookies();
+    const activeWorkspace = cookieStore.get("adminWorkspace")?.value;
+
+    if (!activeWorkspace) {
+      redirect("/admin");
+    }
+
+    redirect("/dashboard");
   }
 
   if (!user.memberships.length) {
