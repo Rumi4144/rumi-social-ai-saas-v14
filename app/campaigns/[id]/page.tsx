@@ -15,8 +15,13 @@ export default async function Campaign({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { organizationId } = await tenantContext();
 
+  const pageStarted = Date.now();
+  const tenantStarted = Date.now();
+  const { organizationId } = await tenantContext();
+  console.log("[CAMPAIGN PERF] tenantContext:", Date.now() - tenantStarted, "ms");
+
+  const dataStarted = Date.now();
   const [campaign, assets] = await Promise.all([
     prisma.campaign.findFirst({
       where: {
@@ -42,6 +47,19 @@ export default async function Campaign({
       },
     }),
   ]);
+
+  console.log(
+    "[CAMPAIGN PERF] database queries:",
+    Date.now() - dataStarted,
+    "ms",
+    "| items:",
+    campaign?.items?.length ?? 0,
+    "| assets:",
+    assets.length,
+    "| total so far:",
+    Date.now() - pageStarted,
+    "ms"
+  );
 
   if (!campaign) notFound();
 
