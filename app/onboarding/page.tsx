@@ -195,7 +195,7 @@ export default function OnboardingPage() {
         })}
       </div>
 
-      <section className="card" style={{ marginTop: 28 }}>
+      <section className="card onboarding-wizard" style={{ marginTop: 28 }}>
         {step === 1 && (
           <>
             <div className="eyebrow">STEP 1 · ABOUT YOU</div>
@@ -383,23 +383,64 @@ export default function OnboardingPage() {
             <div className="eyebrow">STEP 3 · WEBSITE & BRAND</div>
             <h2>Give Campaign Director the source material.</h2>
 
-            <label>Website or product URL</label>
-            <input
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              placeholder="https://yourwebsite.com"
-            />
-            <p style={{ opacity: 0.7 }}>
-              Optional. You can leave this blank if you do not have a website.
-            </p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1fr)",
+                gap: 28,
+                marginTop: 28,
+                width: "100%",
+                minWidth: 0,
+                alignSelf: "stretch",
+              }}
+            >
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, width: "100%", minWidth: 0 }}>
+                <label style={{ fontWeight: 700 }}>
+                  Website or product URL
+                </label>
 
-            <label>Describe your business</label>
-            <textarea
-              rows={6}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What do you make, sell, or help people with? What makes your business different?"
-            />
+                <input
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  placeholder="https://yourwebsite.com"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    minHeight: 54,
+                    padding: "12px 14px",
+                    fontSize: 16,
+                  }}
+                />
+
+                <p style={{ opacity: 0.7, margin: 0, lineHeight: 1.5 }}>
+                  Optional. Add your website so Campaign Director can use it as
+                  source material for your brand and future campaigns.
+                </p>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, width: "100%", minWidth: 0 }}>
+                <label style={{ fontWeight: 700 }}>
+                  Describe your business
+                </label>
+
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What do you make, sell, or help people with? What makes your business different?"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    minHeight: 180,
+                    padding: "14px",
+                    fontSize: 16,
+                    lineHeight: 1.5,
+                    resize: "vertical",
+                  }}
+                />
+              </div>
+            </div>
           </>
         )}
 
