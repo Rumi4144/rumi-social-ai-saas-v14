@@ -449,13 +449,36 @@ export default function OnboardingPage() {
             <div className="eyebrow">STEP 4 · YOUR AUDIENCE</div>
             <h2>Who should your content speak to?</h2>
 
-            <label>Ideal audience or customer</label>
-            <textarea
-              rows={6}
-              value={targetAudience}
-              onChange={(e) => setTargetAudience(e.target.value)}
-              placeholder="Describe the people you most want to reach, what they care about, and why they choose you."
-            />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1fr)",
+                gap: 8,
+                marginTop: 28,
+                width: "100%",
+                minWidth: 0,
+              }}
+            >
+              <label style={{ fontWeight: 700 }}>
+                Ideal audience or customer
+              </label>
+
+              <textarea
+                value={targetAudience}
+                onChange={(e) => setTargetAudience(e.target.value)}
+                placeholder="Describe the people you most want to reach, what they care about, and why they choose you."
+                style={{
+                  display: "block",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  minHeight: 180,
+                  padding: "14px",
+                  fontSize: 16,
+                  lineHeight: 1.5,
+                  resize: "vertical",
+                }}
+              />
+            </div>
           </>
         )}
 
