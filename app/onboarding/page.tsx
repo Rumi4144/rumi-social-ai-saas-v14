@@ -165,13 +165,34 @@ export default function OnboardingPage() {
       </section>
 
       <div className="steps">
-        <b>1 You</b>
-        <span>2 Business</span>
-        <span>3 Website</span>
-        <span>4 Audience</span>
-        <span>5 Goals</span>
-        <span>6 Voice</span>
-        <span>7 Ready</span>
+        {[
+          "You",
+          "Business",
+          "Website",
+          "Audience",
+          "Goals",
+          "Voice",
+          "Ready",
+        ].map((label, index) => {
+          const number = index + 1;
+
+          return (
+            <span
+              key={label}
+              style={
+                step === number
+                  ? {
+                      background: "#171c23",
+                      color: "#fff",
+                      fontWeight: 700,
+                    }
+                  : undefined
+              }
+            >
+              {number} {label}
+            </span>
+          );
+        })}
       </div>
 
       <section className="card" style={{ marginTop: 28 }}>
@@ -247,50 +268,112 @@ export default function OnboardingPage() {
             <div className="eyebrow">STEP 2 · YOUR BUSINESS</div>
             <h2>Tell us what you do.</h2>
 
-            <label>Brand or business name</label>
-            <input
-              value={brand}
-              onChange={(e) => setBrand(e.target.value)}
-              placeholder="Rumi Guitars"
-            />
+            <div style={{ marginTop: 28, maxWidth: 720 }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 8,
+                  fontWeight: 700,
+                }}
+              >
+                Brand or business name
+              </label>
 
-            <label>Business type</label>
-            <div className="deliverables">
-              {[
-                "E-commerce",
-                "Local Business",
-                "Professional Services",
-                "Creator / Personal Brand",
-                "Agency",
-                "Restaurant / Hospitality",
-                "Health / Wellness",
-                "Education",
-                "Technology / SaaS",
-                "Other",
-              ].map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={businessType === item ? "button" : ""}
-                  onClick={() => setBusinessType(item)}
-                >
-                  {item}
-                </button>
-              ))}
+              <input
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                placeholder="Rumi Guitars"
+                style={{
+                  width: "100%",
+                  minHeight: 52,
+                  fontSize: 16,
+                }}
+              />
             </div>
 
-            <label>Industry</label>
-            <div className="deliverables">
-              {industries.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={industry === item ? "button" : ""}
-                  onClick={() => setIndustry(item)}
-                >
-                  {item}
-                </button>
-              ))}
+            <div style={{ marginTop: 32 }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 14,
+                  fontWeight: 700,
+                }}
+              >
+                What type of business is this?
+              </label>
+
+              <div
+                className="deliverables"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                }}
+              >
+                {[
+                  "E-commerce",
+                  "Local Business",
+                  "Professional Services",
+                  "Creator / Personal Brand",
+                  "Agency",
+                  "Restaurant / Hospitality",
+                  "Health / Wellness",
+                  "Education",
+                  "Technology / SaaS",
+                  "Other",
+                ].map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={businessType === item ? "button" : ""}
+                    onClick={() => setBusinessType(item)}
+                    style={{
+                      minHeight: 44,
+                      paddingLeft: 18,
+                      paddingRight: 18,
+                    }}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginTop: 32 }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 14,
+                  fontWeight: 700,
+                }}
+              >
+                What industry are you in?
+              </label>
+
+              <div
+                className="deliverables"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                }}
+              >
+                {industries.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={industry === item ? "button" : ""}
+                    onClick={() => setIndustry(item)}
+                    style={{
+                      minHeight: 44,
+                      paddingLeft: 18,
+                      paddingRight: 18,
+                    }}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
           </>
         )}
