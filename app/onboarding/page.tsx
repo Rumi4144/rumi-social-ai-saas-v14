@@ -180,25 +180,64 @@ export default function OnboardingPage() {
             <div className="eyebrow">STEP 1 · ABOUT YOU</div>
             <h2>Who are we building for?</h2>
 
-            <label>Your name</label>
-            <input
-              value={personName}
-              onChange={(e) => setPersonName(e.target.value)}
-              placeholder="Your name"
-            />
+            <div style={{ marginTop: 28, maxWidth: 720 }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 8,
+                  fontWeight: 700,
+                }}
+              >
+                Your name
+              </label>
 
-            <label>Your role</label>
-            <div className="deliverables">
-              {roles.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={role === item ? "button" : ""}
-                  onClick={() => setRole(item)}
-                >
-                  {item}
-                </button>
-              ))}
+              <input
+                value={personName}
+                onChange={(e) => setPersonName(e.target.value)}
+                placeholder="Enter your name"
+                style={{
+                  width: "100%",
+                  minHeight: 52,
+                  fontSize: 16,
+                }}
+              />
+            </div>
+
+            <div style={{ marginTop: 32 }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 14,
+                  fontWeight: 700,
+                }}
+              >
+                What best describes your role?
+              </label>
+
+              <div
+                className="deliverables"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                }}
+              >
+                {roles.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={role === item ? "button" : ""}
+                    onClick={() => setRole(item)}
+                    style={{
+                      minHeight: 44,
+                      paddingLeft: 18,
+                      paddingRight: 18,
+                    }}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
           </>
         )}
