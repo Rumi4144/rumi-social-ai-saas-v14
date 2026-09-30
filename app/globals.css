@@ -38,8 +38,16 @@ body > aside {
 }
 
 body > main {
-  margin-left: 320px;
   min-height: 100vh;
-  width: calc(100% - 320px);
   align-self: initial;
+}
+
+body.authenticated > main {
+  margin-left: 320px;
+  width: calc(100% - 320px);
+}
+
+body.public-page > main {
+  margin-left: 0;
+  width: 100%;
 }

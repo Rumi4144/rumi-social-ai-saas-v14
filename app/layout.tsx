@@ -2,6 +2,7 @@ import "./globals.css";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { tenantContext } from "@/lib/auth/context";
 import SignOutButton from "@/components/SignOutButton";
 import ScrollToTop from "@/components/ScrollToTop";
 export const metadata = {
@@ -25,13 +26,55 @@ export default async function RootLayout({
 
   const isSuperAdmin = currentUser?.isSuperAdmin === true;
 
+  let workspaceName = "";
+
+  if (session?.user) {
+    try {
+      const ctx = await tenantContext();
+      workspaceName = ctx.organization.name;
+    } catch {
+      workspaceName = "";
+    }
+  }
+
   return (
     <html lang="en">
-      <body>
+      <body className={session?.user ? "authenticated" : "public-page"}>
+        {session?.user && (
         <aside>
           <div className="logo">
             RUMI <b>SOCIAL AI</b>
             <small>CREATIVE OS</small>
+            {workspaceName && (
+              <div
+                style={{
+                  marginTop: 14,
+                  paddingTop: 12,
+                  borderTop: "1px solid rgba(255,255,255,.15)",
+                }}
+              >
+                <small
+                  style={{
+                    display: "block",
+                    opacity: 0.55,
+                    fontSize: 9,
+                    letterSpacing: "0.14em",
+                    marginBottom: 4,
+                  }}
+                >
+                  CURRENT WORKSPACE
+                </small>
+                <strong
+                  style={{
+                    display: "block",
+                    fontSize: 14,
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {workspaceName}
+                </strong>
+              </div>
+            )}
           </div>
           <nav>
             <Link href="/dashboard">Overview</Link>
@@ -66,6 +109,7 @@ export default async function RootLayout({
           </nav>
           <div className="sidefoot">Standalone SaaS V2 · Beta</div>
         </aside>
+        )}
         <main>
           <ScrollToTop />
           {children}
