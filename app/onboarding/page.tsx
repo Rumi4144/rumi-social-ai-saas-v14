@@ -67,7 +67,7 @@ export default function OnboardingPage() {
   const [website, setWebsite] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
-  const [voice, setVoice] = useState("Professional");
+  const [selectedVoices, setSelectedVoices] = useState<string[]>(["Professional"]);
   const [postingFrequency, setPostingFrequency] = useState("");
   const [approvalRequired, setApprovalRequired] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -97,7 +97,7 @@ export default function OnboardingPage() {
             : step === 5
               ? selectedGoals.length > 0
               : step === 6
-                ? voice.length > 0
+                ? selectedVoices.length > 0
                 : true;
 
   async function finish() {
@@ -119,7 +119,7 @@ export default function OnboardingPage() {
           industry,
           description: description.trim(),
           targetAudience: targetAudience.trim(),
-          voice,
+          voice: selectedVoices.join(", "),
           goal: selectedGoals.join(", "),
           postingFrequency,
           approvalRequired,
@@ -543,22 +543,53 @@ export default function OnboardingPage() {
             <div className="eyebrow">STEP 6 · BRAND PERSONALITY</div>
             <h2>How should your brand sound?</h2>
 
-            <div className="deliverables">
-              {voices.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={voice === item ? "button" : ""}
-                  onClick={() => setVoice(item)}
-                >
-                  {item}
-                </button>
-              ))}
+            <p style={{ opacity: 0.7, marginTop: 8 }}>
+              Select all that apply.
+            </p>
+
+            <div
+              className="deliverables"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                marginTop: 24,
+              }}
+            >
+              {voices.map((item) => {
+                const selected = selectedVoices.includes(item);
+
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    className={selected ? "button" : ""}
+                    aria-pressed={selected}
+                    onClick={() =>
+                      setSelectedVoices((current) =>
+                        current.includes(item)
+                          ? current.filter((voice) => voice !== item)
+                          : [...current, item]
+                      )
+                    }
+                    style={{
+                      minHeight: 46,
+                      paddingLeft: 18,
+                      paddingRight: 18,
+                    }}
+                  >
+                    {selected ? "✓ " : ""}
+                    {item}
+                  </button>
+                );
+              })}
             </div>
 
-            <p style={{ marginTop: 18 }}>
-              Selected voice: <strong>{voice}</strong>
-            </p>
+            {selectedVoices.length > 0 && (
+              <p style={{ marginTop: 18 }}>
+                <strong>Selected:</strong> {selectedVoices.join(", ")}
+              </p>
+            )}
           </>
         )}
 
@@ -613,7 +644,7 @@ export default function OnboardingPage() {
                 <strong>Goals:</strong> {selectedGoals.join(", ")}
               </p>
               <p>
-                <strong>Voice:</strong> {voice}
+                <strong>Voice:</strong> {selectedVoices.join(", ")}
               </p>
               {website && (
                 <p>
