@@ -282,7 +282,7 @@ export default function OnboardingPage() {
               <input
                 value={brand}
                 onChange={(e) => setBrand(e.target.value)}
-                placeholder="Rumi Guitars"
+                placeholder="Enter your brand or business name"
                 style={{
                   width: "100%",
                   minHeight: 52,
@@ -629,21 +629,83 @@ export default function OnboardingPage() {
               })}
             </div>
 
-            <label style={{ marginTop: 24 }}>Publishing approval</label>
-            <div className="deliverables">
+            <label style={{ marginTop: 24, fontWeight: 700 }}>
+              Publishing approval
+            </label>
+
+            <p style={{ opacity: 0.7, marginTop: 8 }}>
+              Choose how approved content should be published.
+            </p>
+
+            <div
+              className="deliverables"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 14,
+                marginTop: 16,
+              }}
+            >
               <button
                 type="button"
-                className={approvalRequired ? "button" : ""}
+                aria-pressed={approvalRequired}
                 onClick={() => setApprovalRequired(true)}
+                style={{
+                  textAlign: "left",
+                  padding: 18,
+                  minHeight: 100,
+                  borderRadius: 12,
+                  border: approvalRequired
+                    ? "2px solid #171c23"
+                    : "2px solid #ddd8d0",
+                  background: approvalRequired ? "#171c23" : "#f7f5f1",
+                  color: approvalRequired ? "#ffffff" : "#171c23",
+                }}
               >
-                Review before publishing
+                <strong style={{ display: "block", fontSize: 16 }}>
+                  {approvalRequired ? "✓ " : ""}Review Every Post
+                </strong>
+                <span
+                  style={{
+                    display: "block",
+                    marginTop: 6,
+                    lineHeight: 1.4,
+                    opacity: 0.8,
+                  }}
+                >
+                  I approve each post before it is published.
+                </span>
               </button>
+
               <button
                 type="button"
-                className={!approvalRequired ? "button" : ""}
+                aria-pressed={!approvalRequired}
                 onClick={() => setApprovalRequired(false)}
+                style={{
+                  textAlign: "left",
+                  padding: 18,
+                  minHeight: 100,
+                  borderRadius: 12,
+                  border: !approvalRequired
+                    ? "2px solid #171c23"
+                    : "2px solid #ddd8d0",
+                  background: !approvalRequired ? "#171c23" : "#f7f5f1",
+                  color: !approvalRequired ? "#ffffff" : "#171c23",
+                }}
               >
-                Allow approved automation
+                <strong style={{ display: "block", fontSize: 16 }}>
+                  {!approvalRequired ? "✓ " : ""}Auto-Publish Approved Campaigns
+                </strong>
+                <span
+                  style={{
+                    display: "block",
+                    marginTop: 6,
+                    lineHeight: 1.4,
+                    opacity: 0.8,
+                  }}
+                >
+                  Publish scheduled posts automatically after I approve the campaign.
+                </span>
               </button>
             </div>
 
