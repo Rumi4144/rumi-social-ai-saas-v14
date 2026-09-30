@@ -41,25 +41,33 @@ model Membership {
 }
 
 model Brand {
-  id             String       @id @default(cuid())
-  name           String
-  voice          String?
-  positioning    String?
-  preferredWords String?
-  bannedWords    String?
-  visualRules    String?
-  logoUrl        String?
-  primaryColor   String?
-  secondaryColor String?
-  accentColor    String?
-  headingFont    String?
-  bodyFont       String?
-  designStyle    String?
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  products       Product[]
-  campaigns      Campaign[]
-  createdAt      DateTime     @default(now())
+  id                  String       @id @default(cuid())
+  name                String
+  voice               String?
+  positioning         String?
+  preferredWords      String?
+  bannedWords         String?
+  visualRules         String?
+  logoUrl             String?
+  primaryColor        String?
+  secondaryColor      String?
+  accentColor         String?
+  headingFont         String?
+  bodyFont            String?
+  designStyle         String?
+  industry            String?
+  websiteUrl          String?
+  description         String?
+  targetAudience      String?
+  contentGoals        String?
+  postingFrequency    String?
+  approvalRequired    Boolean      @default(true)
+  onboardingCompleted Boolean      @default(false)
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id])
+  products            Product[]
+  campaigns           Campaign[]
+  createdAt           DateTime     @default(now())
 }
 
 model Product {
