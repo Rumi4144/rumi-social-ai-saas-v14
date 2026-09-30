@@ -69,7 +69,7 @@ export default async function Campaign({
   if (!campaign) notFound();
 
   const dailyItems = campaign.items.filter(
-    (item: any) => item.type !== "story"
+    (item: any) => item.type !== "story" && item.type !== "reel"
   );
 
   console.log(
