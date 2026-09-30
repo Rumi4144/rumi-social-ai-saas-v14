@@ -497,7 +497,38 @@ export async function POST(req: Request) {
 Create premium social-media campaign photography for ${campaign.brand.name}.
 Campaign: ${pack.title}.
 Content headline: ${x.headline}.
+PRODUCT FIDELITY — CRITICAL:
+When a source/product image is provided, the product shown in that image is authoritative. Preserve the actual product faithfully. Do NOT redesign, substitute, reinterpret, or invent a different product.
+
+Maintain the original product's body shape, proportions, silhouette, materials, wood appearance, finish, hardware, decorative details, construction details, and identifying visual features.
+
+For guitars and other musical instruments, preserve the exact instrument category and construction. For a classical or flamenco guitar, preserve its nylon-string/classical character, body proportions, headstock, bridge, rosette, fretboard, string configuration, woods, finish, and hardware. NEVER transform a classical or flamenco guitar into a steel-string acoustic guitar. Do not invent a pickguard, steel-string bridge, alternate headstock, different soundhole treatment, extra hardware, or unrelated design features.
+
+Treat the source product as something being professionally photographed, not something being redesigned. You may improve the environment, background, lighting, shadows, camera angle, staging, and advertising composition while keeping the product itself visually faithful.
+
 Preserve realistic product proportions and craftsmanship.
+
+CAMPAIGN VISUAL DIVERSITY — CRITICAL:
+Do not create a campaign that repeats essentially the same subject, product pose, background, camera angle, or composition day after day.
+
+Treat the full campaign as a visual story. Each day's image should have a distinct visual purpose while remaining clearly connected to the same brand and campaign.
+
+Rotate intelligently among:
+- hero product or service imagery
+- craftsmanship/process
+- close-up details and materials
+- environment or atmosphere
+- lifestyle or real-world context
+- heritage, inspiration, or story
+- human interaction when appropriate
+- emotional/conceptual imagery relevant to the message
+- final product/service call-to-action imagery
+
+A product does NOT need to dominate every image. When the product appears, preserve it faithfully. When it does not appear, create brand-relevant supporting imagery rather than inventing a substitute product.
+
+Avoid seven variations of the same object centered in different rooms. Avoid repetitive poses, backgrounds, lighting, and camera angles.
+
+The seven images should feel like one premium campaign with seven distinct chapters, not seven versions of the same advertisement.
 
 COMPOSITION: Position the primary product predominantly on the RIGHT side
 of the portrait frame. Keep the complete product visually important and
