@@ -66,7 +66,7 @@ export default function OnboardingPage() {
   const [description, setDescription] = useState("");
   const [website, setWebsite] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
-  const [goal, setGoal] = useState("");
+  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
   const [voice, setVoice] = useState("Professional");
   const [postingFrequency, setPostingFrequency] = useState("");
   const [approvalRequired, setApprovalRequired] = useState(true);
@@ -95,7 +95,7 @@ export default function OnboardingPage() {
           : step === 4
             ? targetAudience.trim().length >= 3
             : step === 5
-              ? goal.length > 0
+              ? selectedGoals.length > 0
               : step === 6
                 ? voice.length > 0
                 : true;
@@ -120,7 +120,7 @@ export default function OnboardingPage() {
           description: description.trim(),
           targetAudience: targetAudience.trim(),
           voice,
-          goal,
+          goal: selectedGoals.join(", "),
           postingFrequency,
           approvalRequired,
         }),
@@ -487,18 +487,54 @@ export default function OnboardingPage() {
             <div className="eyebrow">STEP 5 · CONTENT GOALS</div>
             <h2>What should your content accomplish?</h2>
 
-            <div className="deliverables">
-              {goals.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={goal === item ? "button" : ""}
-                  onClick={() => setGoal(item)}
-                >
-                  {item}
-                </button>
-              ))}
+            <p style={{ opacity: 0.7, marginTop: 8 }}>
+              Select all that apply.
+            </p>
+
+            <div
+              className="deliverables"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                marginTop: 24,
+              }}
+            >
+              {goals.map((item) => {
+                const selected = selectedGoals.includes(item);
+
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    className={selected ? "button" : ""}
+                    aria-pressed={selected}
+                    onClick={() =>
+                      setSelectedGoals((current) =>
+                        current.includes(item)
+                          ? current.filter((goal) => goal !== item)
+                          : [...current, item]
+                      )
+                    }
+                    style={{
+                      minHeight: 46,
+                      paddingLeft: 18,
+                      paddingRight: 18,
+                    }}
+                  >
+                    {selected ? "✓ " : ""}
+                    {item}
+                  </button>
+                );
+              })}
             </div>
+
+            {selectedGoals.length > 0 && (
+              <p style={{ marginTop: 18 }}>
+                <strong>{selectedGoals.length}</strong>{" "}
+                {selectedGoals.length === 1 ? "goal selected" : "goals selected"}
+              </p>
+            )}
           </>
         )}
 
@@ -574,7 +610,7 @@ export default function OnboardingPage() {
                 <strong>Audience:</strong> {targetAudience}
               </p>
               <p>
-                <strong>Goal:</strong> {goal}
+                <strong>Goals:</strong> {selectedGoals.join(", ")}
               </p>
               <p>
                 <strong>Voice:</strong> {voice}
