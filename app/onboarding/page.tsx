@@ -128,6 +128,11 @@ export default function OnboardingPage() {
 
       const data = await res.json();
 
+      if (res.status === 401 || data?.code === "UNAUTHENTICATED") {
+        setMessage("Your session has expired. Please sign in again.");
+        return;
+      }
+
       if (!res.ok) {
         setMessage(
           typeof data?.error === "string"

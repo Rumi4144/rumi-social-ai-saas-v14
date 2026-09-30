@@ -110,12 +110,24 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("ONBOARDING_COMPLETE_ERROR", error);
 
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Could not complete onboarding";
+
+    if (message === "UNAUTHENTICATED") {
+      return NextResponse.json(
+        {
+          error: "Your session has expired. Please sign in again.",
+          code: "UNAUTHENTICATED",
+        },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Could not complete onboarding",
+        error: "Could not complete onboarding. Please try again.",
       },
       { status: 500 }
     );
