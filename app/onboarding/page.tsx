@@ -600,16 +600,33 @@ export default function OnboardingPage() {
 
             <label>How often do you normally want to publish?</label>
             <div className="deliverables">
-              {frequencies.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={postingFrequency === item ? "button" : ""}
-                  onClick={() => setPostingFrequency(item)}
-                >
-                  {item}
-                </button>
-              ))}
+              {frequencies.map((item) => {
+                const selected = postingFrequency === item;
+
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    className={selected ? "button" : ""}
+                    aria-pressed={selected}
+                    onClick={() => setPostingFrequency(item)}
+                    style={{
+                      minHeight: 46,
+                      paddingLeft: 18,
+                      paddingRight: 18,
+                      fontWeight: selected ? 800 : 500,
+                      background: selected ? "#171c23" : "#eee9df",
+                      color: selected ? "#ffffff" : "#171c23",
+                      border: selected
+                        ? "2px solid #171c23"
+                        : "2px solid transparent",
+                    }}
+                  >
+                    {selected ? "✓ " : ""}
+                    {item}
+                  </button>
+                );
+              })}
             </div>
 
             <label style={{ marginTop: 24 }}>Publishing approval</label>
