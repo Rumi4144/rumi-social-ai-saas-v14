@@ -51,25 +51,27 @@ export async function GET(
       source = Buffer.from(await response.arrayBuffer());
     }
 
-    const png = await sharp(source, {
-      density: 144,
+    const jpeg = await sharp(source, {
+      density: 120,
     })
-      .png({
-        compressionLevel: 9,
+      .flatten({ background: "#ffffff" })
+      .jpeg({
+        quality: 88,
+        mozjpeg: true,
       })
       .toBuffer();
 
-    if (png.length >= 10 * 1024 * 1024) {
+    if (jpeg.length >= 10 * 1024 * 1024) {
       return new NextResponse("Rendered image exceeds Facebook limit", {
         status: 413,
       });
     }
 
-    return new NextResponse(new Uint8Array(png), {
+    return new NextResponse(new Uint8Array(jpeg), {
       status: 200,
       headers: {
-        "Content-Type": "image/png",
-        "Content-Length": String(png.length),
+        "Content-Type": "image/jpeg",
+        "Content-Length": String(jpeg.length),
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
