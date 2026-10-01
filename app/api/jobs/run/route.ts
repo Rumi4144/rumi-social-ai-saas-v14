@@ -490,10 +490,7 @@ export async function POST(req: Request) {
         x.headline?.trim() ||
         x.caption?.trim() ||
         `${campaign.brand.name} premium campaign creative`
-      ) &&
-          (p.photoSource === "website"
-            ? imageJobsCreated < websitePhotos.length
-            : true)
+      )
         ) {
           await tx.job.create({
             data: {
