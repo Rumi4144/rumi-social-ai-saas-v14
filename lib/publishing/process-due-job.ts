@@ -49,12 +49,27 @@ export async function processDuePublishJob() {
 
   const attempt = job.attempts + 1;
 
+  let publishMediaUrl = item.mediaUrl;
+
+  // Facebook's photo endpoint cannot consume our SVG social creative.
+  // Use the rasterized PNG publishing endpoint instead.
+  if (
+    job.platform.toLowerCase() === "facebook" &&
+    publishMediaUrl
+  ) {
+    publishMediaUrl = publishMediaUrl.replace(
+      /\/api\/media\/([^/?#]+)(?:\/publish)?(\?.*)?$/,
+      (_match, assetId, query = "") =>
+        `/api/media/${assetId}/publish${query}`
+    );
+  }
+
   const result = await publishToProvider({
     platform: job.platform,
     token: connection.encryptedToken || "",
     externalAccountId: connection.externalId || "",
     caption: item.caption || "",
-    mediaUrl: item.mediaUrl,
+    mediaUrl: publishMediaUrl,
   });
 
   await prisma.publishAttempt.create({
