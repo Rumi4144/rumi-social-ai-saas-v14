@@ -485,7 +485,12 @@ export async function POST(req: Request) {
         });
 
         if (
-          x.visualDirection &&
+          (
+        x.visualDirection?.trim() ||
+        x.headline?.trim() ||
+        x.caption?.trim() ||
+        `${campaign.brand.name} premium campaign creative`
+      ) &&
           (p.photoSource === "website"
             ? imageJobsCreated < websitePhotos.length
             : true)
@@ -504,7 +509,10 @@ export async function POST(req: Request) {
                 photoSource: p.photoSource || "ai",
                 textPosition:
                   creativeLayouts[creativeLayoutIndex % creativeLayouts.length],
-                prompt: `${x.visualDirection}
+                prompt: `${x.visualDirection?.trim() ||
+          x.headline?.trim() ||
+          x.caption?.trim() ||
+          `${campaign.brand.name} premium campaign creative`}
 
 Create premium social-media campaign photography for ${campaign.brand.name}.
 Campaign: ${pack.title}.
