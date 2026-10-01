@@ -397,6 +397,12 @@ export async function POST(req: Request) {
         name: string;
         voice?: string | null;
         positioning?: string | null;
+      industry?: string | null;
+      description?: string | null;
+      targetAudience?: string | null;
+      contentGoals?: string | null;
+      postingFrequency?: string | null;
+      approvalRequired?: boolean;
         businessType?: string | null;
         website?: string | null;
         primaryGoal?: string | null;
@@ -421,6 +427,12 @@ export async function POST(req: Request) {
       businessContext: p.brandContext
         ? {
             businessType: p.brandContext.businessType,
+              industry: p.brandContext.industry,
+              description: p.brandContext.description,
+              targetAudience: p.brandContext.targetAudience,
+              contentGoals: p.brandContext.contentGoals,
+              postingFrequency: p.brandContext.postingFrequency,
+              approvalRequired: p.brandContext.approvalRequired,
             website: p.brandContext.website,
             primaryGoal: p.brandContext.primaryGoal,
           }

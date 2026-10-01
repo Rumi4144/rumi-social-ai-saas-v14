@@ -147,6 +147,12 @@ export async function generateCampaign(input: {
   };
   businessContext?: {
     businessType?: string | null;
+    industry?: string | null;
+    description?: string | null;
+    targetAudience?: string | null;
+    contentGoals?: string | null;
+    postingFrequency?: string | null;
+    approvalRequired?: boolean;
     website?: string | null;
     primaryGoal?: string | null;
   };
@@ -195,8 +201,18 @@ Maintain campaign continuity and creative variety across surrounding days.
 Brand voice: ${input.brand.voice || "professional, distinctive"}
 Positioning: ${input.brand.positioning || ""}
 Business type: ${input.businessContext?.businessType || ""}
+Industry: ${input.businessContext?.industry || ""}
 Website: ${input.businessContext?.website || ""}
+Business description: ${input.businessContext?.description || ""}
+Target audience: ${input.businessContext?.targetAudience || ""}
+Brand content goals: ${input.businessContext?.contentGoals || ""}
 Long-term business goal: ${input.businessContext?.primaryGoal || ""}
+Preferred publishing frequency: ${input.businessContext?.postingFrequency || ""}
+Publishing approval: ${
+  input.businessContext?.approvalRequired === false
+    ? "Auto-publish approved campaigns"
+    : "Review every post before publishing"
+}
 Preferred words: ${input.brand.preferredWords || ""}
 Banned words/claims: ${input.brand.bannedWords || ""}
 Visual rules: ${input.brand.visualRules || ""}
