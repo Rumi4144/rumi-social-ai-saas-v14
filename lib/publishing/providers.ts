@@ -46,42 +46,77 @@ export async function publishToProvider(input: {
         };
       }
 
-      let endpoint: string;
-      let body: URLSearchParams;
+      let response: Response;
 
-      // Text-only Facebook Page post.
-      if (!input.mediaUrl) {
-        endpoint =
-          `https://graph.facebook.com/v23.0/${pageId}/feed`;
+    // Text-only Facebook Page post.
+    if (!input.mediaUrl) {
+      const endpoint =
+        `https://graph.facebook.com/v23.0/${pageId}/feed`;
 
-        body = new URLSearchParams({
-          message: input.caption || "",
-          access_token: pageAccessToken,
-        });
-      } else {
-        // Image post with caption.
-        endpoint =
-          `https://graph.facebook.com/v23.0/${pageId}/photos`;
+      const body = new URLSearchParams({
+        message: input.caption || "",
+        access_token: pageAccessToken,
+      });
 
-        body = new URLSearchParams({
-          url: input.mediaUrl,
-          caption: input.caption || "",
-          published: "true",
-          access_token: pageAccessToken,
-        });
-      }
-
-      const response = await fetch(endpoint, {
+      response = await fetch(endpoint, {
         method: "POST",
         headers: {
-          "Content-Type":
-            "application/x-www-form-urlencoded",
+          "Content-Type": "application/x-www-form-urlencoded",
         },
         body,
         cache: "no-store",
       });
+    } else {
+      // Download the finished Rumi Social AI creative ourselves,
+      // then upload the actual image bytes to Facebook.
+      // This avoids Meta having to fetch our media URL.
+      const mediaResponse = await fetch(input.mediaUrl, {
+        cache: "no-store",
+      });
 
-      const result = await response.json();
+      if (!mediaResponse.ok) {
+        return {
+          ok: false,
+          code: mediaResponse.status,
+          error: `FACEBOOK_MEDIA_FETCH_FAILED_${mediaResponse.status}`,
+        };
+      }
+
+      const mediaType =
+        mediaResponse.headers.get("content-type") || "image/png";
+
+      const mediaBytes = await mediaResponse.arrayBuffer();
+
+      if (mediaBytes.byteLength >= 10 * 1024 * 1024) {
+        return {
+          ok: false,
+          error: "FACEBOOK_IMAGE_TOO_LARGE",
+        };
+      }
+
+      const form = new FormData();
+
+      form.append(
+        "source",
+        new Blob([mediaBytes], { type: mediaType }),
+        mediaType.includes("jpeg") ? "creative.jpg" : "creative.png"
+      );
+
+      form.append("caption", input.caption || "");
+      form.append("published", "true");
+      form.append("access_token", pageAccessToken);
+
+      response = await fetch(
+        `https://graph.facebook.com/v23.0/${pageId}/photos`,
+        {
+          method: "POST",
+          body: form,
+          cache: "no-store",
+        }
+      );
+    }
+
+    const result = await response.json();
 
       if (!response.ok) {
         console.error(
