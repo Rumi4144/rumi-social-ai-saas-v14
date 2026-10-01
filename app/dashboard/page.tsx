@@ -90,10 +90,6 @@ export default async function Dashboard() {
           )}
         </div>
 
-        <div className="orb">
-          AI
-          <small>READY</small>
-        </div>
       </section>
 
       <div className="grid">
