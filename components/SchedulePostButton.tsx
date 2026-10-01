@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Connection = {
@@ -22,6 +22,7 @@ export default function SchedulePostButton({
   const router = useRouter();
 
   const [open, setOpen] = useState(false);
+  const schedulePanelRef = useRef<HTMLDivElement>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [scheduledFor, setScheduledFor] = useState("");
@@ -30,6 +31,17 @@ export default function SchedulePostButton({
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+
+    requestAnimationFrame(() => {
+      schedulePanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, [open]);
 
   useEffect(() => {
     setStatus(initialStatus);
@@ -190,6 +202,7 @@ export default function SchedulePostButton({
 
       {open && (
         <div
+        ref={schedulePanelRef}
           style={{
             marginTop: 12,
             padding: 16,
