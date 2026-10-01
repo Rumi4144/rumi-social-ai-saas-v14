@@ -293,7 +293,7 @@ export default function Create() {
 
       setStatus("Writing campaign...");
 
-      for (let cycle = 0; cycle < 20; cycle++) {
+      for (let cycle = 0; cycle < 120; cycle++) {
         const processRes = await fetch("/api/campaigns/process", {
           method: "POST",
           headers: {
@@ -400,9 +400,9 @@ export default function Create() {
         );
       }
 
-      throw new Error(
-        "Campaign is taking longer than expected. Please check the campaign page."
-      );
+      setStatus("Campaign is still finishing. Opening campaign...");
+    window.location.href = `/campaigns/${campaignId}`;
+    return;
     } catch (error) {
       setStatus(
         error instanceof Error
