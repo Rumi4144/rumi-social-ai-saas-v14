@@ -51,7 +51,74 @@ export async function GET(
       source = Buffer.from(await response.arrayBuffer());
     }
 
-    const jpeg = await sharp(source, {
+    // Make stored SVG creatives completely self-contained before
+    // rasterizing them for social publishing.
+    let renderSource = source;
+
+    const sourceText = source.toString("utf8");
+
+    if (sourceText.trimStart().startsWith("<svg")) {
+      let svg = sourceText;
+
+      // Embed every remote image referenced by the SVG.
+      const remoteUrls = Array.from(
+        new Set(
+          [...svg.matchAll(/href=["'](https?:[^"']+)["']/g)]
+            .map((match) => match[1])
+        )
+      );
+
+      for (const remoteUrl of remoteUrls) {
+        try {
+          const imageResponse = await fetch(remoteUrl, {
+            cache: "no-store",
+            headers: {
+              "User-Agent": "Mozilla/5.0 RumiSocialAI/1.0",
+              Accept: "image/*",
+            },
+          });
+
+          if (!imageResponse.ok) {
+            console.error(
+              "PUBLISH_EMBED_IMAGE_FAILED",
+              remoteUrl,
+              imageResponse.status
+            );
+            continue;
+          }
+
+          const contentType =
+            imageResponse.headers.get("content-type") || "image/jpeg";
+
+          const imageBytes = Buffer.from(
+            await imageResponse.arrayBuffer()
+          );
+
+          const dataUrl =
+            `data:${contentType};base64,${imageBytes.toString("base64")}`;
+
+          svg = svg.split(remoteUrl).join(dataUrl);
+        } catch (error) {
+          console.error(
+            "PUBLISH_EMBED_IMAGE_ERROR",
+            remoteUrl,
+            error
+          );
+        }
+      }
+
+      // Vercel's Sharp/libvips environment may not have the custom
+      // brand fonts. Use common fallback families for the publishing
+      // raster only so text remains readable.
+      svg = svg.replace(
+        /font-family="[^"]*"/g,
+        'font-family="sans-serif"'
+      );
+
+      renderSource = Buffer.from(svg);
+    }
+
+    const jpeg = await sharp(renderSource, {
       density: 120,
     })
       .flatten({ background: "#ffffff" })
