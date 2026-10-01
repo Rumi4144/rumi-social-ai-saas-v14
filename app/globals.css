@@ -51,3 +51,26 @@ body.public-page > main {
   margin-left: 0;
   width: 100%;
 }
+
+/* Public login page — centered without application sidebar */
+body.public-page .loginwrap {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 32px;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+}
+
+body.public-page .loginbox {
+  width: min(100%, 520px);
+  margin: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+  body.public-page .loginwrap {
+    padding: 18px;
+  }
+}
