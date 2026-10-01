@@ -26,6 +26,8 @@ export async function GET(req: Request) {
   for (let i = 0; i < 20; i++) {
     const result = await processDuePublishJob();
 
+    console.log("CRON_PUBLISH_RESULT", JSON.stringify(result));
+
     if (result.status === "idle") {
       break;
     }
