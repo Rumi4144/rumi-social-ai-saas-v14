@@ -189,7 +189,22 @@ export async function publishToProvider(input: {
       const externalId =
         result.post_id || result.id;
 
-      return {
+  
+    if (externalId) {
+      const inspectResponse = await fetch(
+        `https://graph.facebook.com/v23.0/${externalId}?fields=id,permalink_url,is_published,attachments&access_token=${encodeURIComponent(pageAccessToken)}`,
+        { cache: "no-store" }
+      );
+
+      const inspectResult = await inspectResponse.json();
+
+      console.log(
+        "FACEBOOK_POST_INSPECT",
+        JSON.stringify(inspectResult)
+      );
+    }
+
+    return {
         ok: true,
         code: response.status,
         externalId: externalId
