@@ -60,16 +60,18 @@ export async function GET(
     if (sourceText.trimStart().startsWith("<svg")) {
       let svg = sourceText;
 
-      // Make every remote image inside the SVG self-contained.
-      const remoteUrls = Array.from(
-        new Set(
-          [...svg.matchAll(/href=["'](https?:[^"']+)["']/g)].map(
-            (match) => match[1]
-          )
-        )
-      );
+      // Embed every remote SVG image before Resvg renders it.
+      const hrefRegex = /href=(["'])(https?:\/\/[^"'<>]+)\1/g;
+      const matches = [...svg.matchAll(hrefRegex)];
 
-      for (const remoteUrl of remoteUrls) {
+      for (const match of matches) {
+        const originalHref = match[0];
+        const quote = match[1];
+        const escapedUrl = match[2];
+
+        // SVG URLs may contain XML entities such as &amp;.
+        const remoteUrl = escapedUrl.replace(/&amp;/g, "&");
+
         try {
           const imageResponse = await fetch(remoteUrl, {
             cache: "no-store",
@@ -82,26 +84,32 @@ export async function GET(
           if (!imageResponse.ok) {
             console.error(
               "PUBLISH_EMBED_IMAGE_FAILED",
-              imageResponse.status
+              imageResponse.status,
+              remoteUrl
             );
             continue;
           }
 
           const contentType =
-            imageResponse.headers.get("content-type") ||
-            "image/jpeg";
+            imageResponse.headers.get("content-type") || "image/jpeg";
 
           const imageBytes = Buffer.from(
             await imageResponse.arrayBuffer()
           );
 
           const dataUrl =
-            `data:${contentType};base64,` +
-            imageBytes.toString("base64");
+            `data:${contentType};base64,${imageBytes.toString("base64")}`;
 
-          svg = svg.split(remoteUrl).join(dataUrl);
+          svg = svg.replace(
+            originalHref,
+            `href=${quote}${dataUrl}${quote}`
+          );
         } catch (error) {
-          console.error("PUBLISH_EMBED_IMAGE_ERROR", error);
+          console.error(
+            "PUBLISH_EMBED_IMAGE_ERROR",
+            remoteUrl,
+            error
+          );
         }
       }
 
