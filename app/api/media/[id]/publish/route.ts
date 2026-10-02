@@ -66,7 +66,7 @@ export async function GET(
       asset.campaignId &&
       asset.contentItemId
     ) {
-      const originalImage = await prisma.mediaAsset.findFirst({
+      const candidateImages = await prisma.mediaAsset.findMany({
         where: {
           campaignId: asset.campaignId,
           contentItemId: asset.contentItemId,
@@ -78,6 +78,17 @@ export async function GET(
           createdAt: "desc",
         },
       });
+
+      // Match the same image-selection logic used by the campaign page.
+      const originalImage =
+        candidateImages.find(
+          (candidate) => candidate.provider === "openai"
+        ) ||
+        candidateImages.find(
+          (candidate) =>
+            candidate.provider === "internal" ||
+            candidate.provider === "website"
+        );
 
       if (originalImage?.url) {
         try {
