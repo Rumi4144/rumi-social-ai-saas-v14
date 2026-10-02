@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { generateCampaign } from "@/lib/ai/campaign";
 import { renderSocialSvg } from "@/lib/render/svg";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
-import sharp from "sharp";
+import { imageToJpegDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
 
 export async function POST(req: Request) {
   const secret = req.headers.get("x-worker-secret");
@@ -263,36 +263,9 @@ export async function POST(req: Request) {
       if (contentItem && campaign?.brand) {
         const brand = campaign.brand;
 
-        // Remote website photos must be embedded before they are
-        // placed inside the SVG data URL.
         let renderImageUrl: string | undefined = asset.url || undefined;
-
-        if (renderImageUrl && /^https?:\/\//i.test(renderImageUrl)) {
-          const imageResponse = await fetch(renderImageUrl, {
-            cache: "no-store",
-            headers: {
-              "User-Agent": "Mozilla/5.0 RumiSocialAI/1.0",
-              Accept: "image/*",
-            },
-          });
-
-          if (!imageResponse.ok) {
-            throw new Error(
-              `SOURCE_IMAGE_FETCH_FAILED_${imageResponse.status}`,
-            );
-          }
-
-          const bytes = Buffer.from(await imageResponse.arrayBuffer());
-
-          // Normalize website images (especially WebP/AVIF) to JPEG so
-          // the publish renderer can rasterize the stored SVG reliably.
-          const normalizedBytes = await sharp(bytes)
-            .rotate()
-            .jpeg({ quality: 92 })
-            .toBuffer();
-
-          renderImageUrl =
-            `data:image/jpeg;base64,${normalizedBytes.toString("base64")}`;
+        if (renderImageUrl) {
+          renderImageUrl = await imageToJpegDataUrl(renderImageUrl);
         }
 
         const svg = renderSocialSvg({
@@ -311,15 +284,15 @@ export async function POST(req: Request) {
           designStyle: brand.designStyle || undefined,
         });
 
-        const creativeUrl =
-          "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
+        const creativeJpeg = await svgToPublishJpeg(svg);
+        const creativeUrl = `data:image/jpeg;base64,${creativeJpeg.toString("base64")}`;
 
         const existingCreative = await prisma.mediaAsset.findFirst({
           where: {
             organizationId: job.organizationId,
             contentItemId: p.contentItemId,
             kind: "social_creative",
-            provider: "internal-svg",
+            provider: { in: ["internal-raster", "internal-svg"] },
           },
           orderBy: {
             createdAt: "desc",
@@ -331,7 +304,7 @@ export async function POST(req: Request) {
           campaignId: p.campaignId,
           contentItemId: p.contentItemId,
           kind: "social_creative",
-          provider: "internal-svg",
+          provider: "internal-raster",
           status: "ready",
           url: creativeUrl,
           metadata: {

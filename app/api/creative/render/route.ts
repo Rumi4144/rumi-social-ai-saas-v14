@@ -3,7 +3,7 @@ import { z } from "zod";
 import { renderSocialSvg } from "@/lib/render/svg";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
-import sharp from "sharp";
+import { imageToJpegDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
 
 const S = z.object({
   campaignId: z.string().optional(),
@@ -47,41 +47,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // SVGs stored as data URLs cannot reliably display remote
-    // website images. Embed remote product photos as base64 first.
     let embeddedImageUrl = parsed.data.imageUrl;
-
-    if (
-      embeddedImageUrl &&
-      /^https?:\/\//i.test(embeddedImageUrl)
-    ) {
-      const imageResponse = await fetch(embeddedImageUrl, {
-        cache: "no-store",
-        headers: {
-          "User-Agent": "Mozilla/5.0 RumiSocialAI/1.0",
-          Accept: "image/*",
-        },
-      });
-
-      if (!imageResponse.ok) {
-        throw new Error(
-          `SOURCE_IMAGE_FETCH_FAILED_${imageResponse.status}`
-        );
-      }
-
-      const bytes = Buffer.from(
-        await imageResponse.arrayBuffer()
-      );
-
-      // Normalize website images (especially WebP/AVIF) to JPEG.
-      // Resvg reliably renders embedded JPEG/PNG raster images.
-      const normalizedBytes = await sharp(bytes)
-        .rotate()
-        .jpeg({ quality: 92 })
-        .toBuffer();
-
-      embeddedImageUrl =
-        `data:image/jpeg;base64,${normalizedBytes.toString("base64")}`;
+    if (embeddedImageUrl) {
+      embeddedImageUrl = await imageToJpegDataUrl(embeddedImageUrl);
     }
 
     const svg = renderSocialSvg({
@@ -102,9 +70,8 @@ export async function POST(req: Request) {
       designStyle: brand.designStyle || undefined,
     });
 
-    const dataUrl =
-      "data:image/svg+xml;base64," +
-      Buffer.from(svg).toString("base64");
+    const jpeg = await svgToPublishJpeg(svg);
+    const dataUrl = `data:image/jpeg;base64,${jpeg.toString("base64")}`;
 
     const existingAsset = parsed.data.contentItemId
       ? await prisma.mediaAsset.findFirst({
@@ -112,7 +79,7 @@ export async function POST(req: Request) {
             organizationId: ctx.organizationId,
             contentItemId: parsed.data.contentItemId,
             kind: "social_creative",
-            provider: "internal-svg",
+            provider: { in: ["internal-raster", "internal-svg"] },
           },
           orderBy: {
             createdAt: "desc",
@@ -125,7 +92,7 @@ export async function POST(req: Request) {
       campaignId: parsed.data.campaignId,
       contentItemId: parsed.data.contentItemId,
       kind: "social_creative",
-      provider: "internal-svg",
+      provider: "internal-raster",
       status: "ready",
       url: dataUrl,
       metadata: {

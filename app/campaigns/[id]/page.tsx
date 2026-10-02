@@ -116,11 +116,17 @@ export default async function Campaign({
                 (asset.provider === "internal" || asset.provider === "website"),
             );
 
-          const brandedCreative = itemAssets.find(
-            (asset) =>
-              asset.kind === "social_creative" &&
-              asset.provider === "internal-svg",
-          );
+          const brandedCreative =
+            itemAssets.find(
+              (asset) =>
+                asset.kind === "social_creative" &&
+                asset.provider === "internal-raster",
+            ) ||
+            itemAssets.find(
+              (asset) =>
+                asset.kind === "social_creative" &&
+                asset.provider === "internal-svg",
+            );
 
           const layoutSequence = ["top", "left", "right", "left"] as const;
 
