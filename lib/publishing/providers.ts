@@ -118,6 +118,15 @@ export async function publishToProvider(input: {
 
       const uploadResult = await uploadResponse.json();
 
+      console.log(
+        "FACEBOOK_PHOTO_UPLOAD_RESPONSE",
+        JSON.stringify({
+          httpStatus: uploadResponse.status,
+          ok: uploadResponse.ok,
+          result: uploadResult,
+        })
+      );
+
       if (!uploadResponse.ok || !uploadResult?.id) {
         console.error("Facebook photo upload failed", uploadResult);
 
