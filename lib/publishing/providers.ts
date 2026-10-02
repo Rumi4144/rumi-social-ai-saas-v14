@@ -153,6 +153,15 @@ export async function publishToProvider(input: {
 
     const result = await response.json();
 
+    console.log(
+      "FACEBOOK_FINAL_RESPONSE",
+      JSON.stringify({
+        httpStatus: response.status,
+        ok: response.ok,
+        result,
+      })
+    );
+
       if (!response.ok) {
         console.error(
           "Facebook publishing failed",
