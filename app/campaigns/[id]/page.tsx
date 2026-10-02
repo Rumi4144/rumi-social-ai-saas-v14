@@ -235,6 +235,24 @@ export default async function Campaign({
                   textPosition={textPosition}
                 />
                 <RegenerateCaptionButton contentItemId={item.id} />
+
+            {brandedCreative?.id ? (
+              <a
+                href={`/api/media/${brandedCreative.id}/publish`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  padding: "8px 12px",
+                  border: "1px solid #ccc",
+                  borderRadius: "6px",
+                  textDecoration: "none",
+                  color: "inherit",
+                  background: "white",
+                }}
+              >
+                Preview Published Image
+              </a>
+            ) : null}
                 <RegenerateImageButton
                   campaignId={campaign.id}
                   contentItemId={item.id}
