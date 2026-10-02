@@ -1,4 +1,5 @@
 import { decryptSecret } from "@/lib/security/crypto";
+import { publishInstagram } from "./instagram";
 
 export type PublishResult = {
   ok: boolean;
@@ -26,6 +27,10 @@ export async function publishToProvider(input: {
   let decrypted: string;
   try { decrypted = decryptSecret(input.token); }
   catch { return { ok: false, error: "TOKEN_DECRYPT_FAILED" }; }
+
+  if (input.platform.toLowerCase() === "instagram") {
+    return publishInstagram({ accessToken: decrypted, accountId: input.externalAccountId, caption: input.caption, mediaUrl: input.mediaUrl });
+  }
 
   if (input.platform.toLowerCase() !== "facebook") {
     return { ok: false, error: `${input.platform.toUpperCase()}_PROVIDER_NOT_CONFIGURED` };
