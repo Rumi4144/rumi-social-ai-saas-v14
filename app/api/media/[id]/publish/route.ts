@@ -109,7 +109,7 @@ export async function GET(
         process.cwd(),
         "public",
         "fonts",
-        "noto-sans-latin-400-normal.woff"
+        "Arial.ttf"
       );
 
       // Resvg receives the font directly.
@@ -121,9 +121,9 @@ export async function GET(
         font: {
           fontFiles: [fontPath],
           loadSystemFonts: false,
-          defaultFontFamily: "Noto Sans",
-          sansSerifFamily: "Noto Sans",
-          serifFamily: "Noto Sans",
+          defaultFontFamily: "Arial",
+          sansSerifFamily: "Arial",
+          serifFamily: "Arial",
         },
       });
 
