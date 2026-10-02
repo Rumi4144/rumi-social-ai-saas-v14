@@ -203,9 +203,23 @@ export async function publishToProvider(input: {
         JSON.stringify(inspectResult)
       );
 
+      const firstAttachment =
+        inspectResult?.attachments?.data?.[0] || null;
+
       console.log(
-        "FACEBOOK_ATTACHMENTS_JSON",
-        JSON.stringify(inspectResult?.attachments || null)
+        "FACEBOOK_ATTACHMENT_DETAIL",
+        JSON.stringify({
+          type: firstAttachment?.type || null,
+          url: firstAttachment?.url || null,
+          targetId: firstAttachment?.target?.id || null,
+          targetUrl: firstAttachment?.target?.url || null,
+          mediaImageSrc:
+            firstAttachment?.media?.image?.src || null,
+          mediaWidth:
+            firstAttachment?.media?.image?.width || null,
+          mediaHeight:
+            firstAttachment?.media?.image?.height || null,
+        })
       );
     }
 
