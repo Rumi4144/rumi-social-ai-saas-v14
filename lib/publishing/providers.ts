@@ -93,6 +93,11 @@ export async function publishToProvider(input: {
     );
     const postId = feed.result?.id ? String(feed.result.id) : "";
 
+    console.log(
+      "FACEBOOK_V3_CREATED",
+      JSON.stringify({ pageId, photoId, postId })
+    );
+
     if (!feed.response.ok || !postId) {
       await facebookJson(`https://graph.facebook.com/v23.0/${photoId}?access_token=${encodeURIComponent(pageAccessToken)}`, { method: "DELETE" }).catch(() => null);
       return { ok: false, code: feed.response.status, error: feed.result?.error?.message || "FACEBOOK_FEED_ATTACH_FAILED" };
