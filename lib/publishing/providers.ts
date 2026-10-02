@@ -7,6 +7,13 @@ export type PublishResult = {
   error?: string;
 };
 
+async function facebookJson(url: string, init?: RequestInit) {
+  const response = await fetch(url, { ...init, cache: "no-store" });
+  let result: any = null;
+  try { result = await response.json(); } catch { result = null; }
+  return { response, result };
+}
+
 export async function publishToProvider(input: {
   platform: string;
   token: string;
@@ -14,187 +21,100 @@ export async function publishToProvider(input: {
   caption: string;
   mediaUrl?: string | null;
 }): Promise<PublishResult> {
-  if (!input.token) {
-    return { ok: false, error: "MISSING_TOKEN" };
-  }
+  if (!input.token) return { ok: false, error: "MISSING_TOKEN" };
 
   let decrypted: string;
+  try { decrypted = decryptSecret(input.token); }
+  catch { return { ok: false, error: "TOKEN_DECRYPT_FAILED" }; }
+
+  if (input.platform.toLowerCase() !== "facebook") {
+    return { ok: false, error: `${input.platform.toUpperCase()}_PROVIDER_NOT_CONFIGURED` };
+  }
 
   try {
-    decrypted = decryptSecret(input.token);
-  } catch {
-    return { ok: false, error: "TOKEN_DECRYPT_FAILED" };
-  }
+    const stored = JSON.parse(decrypted) as { pageAccessToken?: string; pageId?: string };
+    const pageAccessToken = stored.pageAccessToken;
+    const pageId = stored.pageId || input.externalAccountId;
+    if (!pageAccessToken || !pageId) return { ok: false, error: "FACEBOOK_PAGE_CREDENTIALS_MISSING" };
 
-  const platform = input.platform.toLowerCase();
-
-  if (platform === "facebook") {
-    try {
-      const stored = JSON.parse(decrypted) as {
-        pageAccessToken?: string;
-        pageId?: string;
-      };
-
-      const pageAccessToken = stored.pageAccessToken;
-      const pageId = stored.pageId || input.externalAccountId;
-
-      if (!pageAccessToken || !pageId) {
-        return {
-          ok: false,
-          error: "FACEBOOK_PAGE_CREDENTIALS_MISSING",
-        };
-      }
-
-      // Text-only Page post.
-      if (!input.mediaUrl) {
-        const response = await fetch(
-          `https://graph.facebook.com/v23.0/${pageId}/feed`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body: new URLSearchParams({
-              message: input.caption || "",
-              access_token: pageAccessToken,
-            }),
-            cache: "no-store",
-          }
-        );
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          console.error("Facebook text publishing failed", result);
-          return {
-            ok: false,
-            code: response.status,
-            error: result?.error?.message || "FACEBOOK_PUBLISH_FAILED",
-          };
-        }
-
-        return {
-          ok: true,
-          code: response.status,
-          externalId: result?.id ? String(result.id) : undefined,
-        };
-      }
-
-      // Fetch the finished Rumi Social AI creative server-side so Facebook
-      // receives real image bytes rather than an internal media URL.
-      const mediaResponse = await fetch(input.mediaUrl, { cache: "no-store" });
-
-      if (!mediaResponse.ok) {
-        return {
-          ok: false,
-          code: mediaResponse.status,
-          error: `FACEBOOK_MEDIA_FETCH_FAILED_${mediaResponse.status}`,
-        };
-      }
-
-      const mediaType = mediaResponse.headers.get("content-type") || "image/jpeg";
-      const mediaBytes = await mediaResponse.arrayBuffer();
-
-      if (mediaBytes.byteLength >= 10 * 1024 * 1024) {
-        return { ok: false, error: "FACEBOOK_IMAGE_TOO_LARGE" };
-      }
-
-      // Step 1: upload the image as unpublished media. This creates a media
-      // object Facebook can attach to a normal Page feed post without first
-      // publishing a standalone photo to the Page.
-      const photoForm = new FormData();
-      photoForm.append(
-        "source",
-        new Blob([mediaBytes], { type: mediaType }),
-        mediaType.includes("png") ? "creative.png" : "creative.jpg"
-      );
-      photoForm.append("published", "false");
-      photoForm.append("access_token", pageAccessToken);
-
-      const photoResponse = await fetch(
-        `https://graph.facebook.com/v23.0/${pageId}/photos`,
-        {
-          method: "POST",
-          body: photoForm,
-          cache: "no-store",
-        }
-      );
-
-      const photoResult = await photoResponse.json();
-
-      if (!photoResponse.ok || !photoResult?.id) {
-        console.error("Facebook unpublished media upload failed", photoResult);
-        return {
-          ok: false,
-          code: photoResponse.status,
-          error:
-            photoResult?.error?.message || "FACEBOOK_MEDIA_UPLOAD_FAILED",
-        };
-      }
-
-      const mediaFbid = String(photoResult.id);
-
-      // Step 2: create the Page feed post and attach the unpublished media.
-      // Meta expects indexed attached_media form parameters.
-      const feedBody = new URLSearchParams();
-      feedBody.set("message", input.caption || "");
-      feedBody.set(
-        "attached_media[0]",
-        JSON.stringify({ media_fbid: mediaFbid })
-      );
-      feedBody.set("access_token", pageAccessToken);
-
-      const feedResponse = await fetch(
-        `https://graph.facebook.com/v23.0/${pageId}/feed`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: feedBody,
-          cache: "no-store",
-        }
-      );
-
-      const feedResult = await feedResponse.json();
-
-      if (!feedResponse.ok || !feedResult?.id) {
-        console.error("Facebook feed publishing failed", feedResult);
-
-        // Best-effort cleanup of the unpublished media if feed creation fails.
-        try {
-          await fetch(
-            `https://graph.facebook.com/v23.0/${mediaFbid}?access_token=${encodeURIComponent(pageAccessToken)}`,
-            { method: "DELETE", cache: "no-store" }
-          );
-        } catch (cleanupError) {
-          console.error("Facebook media cleanup failed", cleanupError);
-        }
-
-        return {
-          ok: false,
-          code: feedResponse.status,
-          error: feedResult?.error?.message || "FACEBOOK_PUBLISH_FAILED",
-        };
-      }
-
-      return {
-        ok: true,
-        code: feedResponse.status,
-        externalId: String(feedResult.id),
-      };
-    } catch (error) {
-      console.error("Facebook provider failed", error);
-      return {
-        ok: false,
-        error:
-          error instanceof Error ? error.message : "FACEBOOK_PROVIDER_FAILED",
-      };
+    // Verify the Page token belongs to the Page we are about to publish to.
+    const identity = await facebookJson(
+      `https://graph.facebook.com/v23.0/me?fields=id,name&access_token=${encodeURIComponent(pageAccessToken)}`
+    );
+    if (!identity.response.ok || !identity.result?.id) {
+      return { ok: false, code: identity.response.status, error: identity.result?.error?.message || "FACEBOOK_PAGE_IDENTITY_FAILED" };
     }
-  }
+    if (String(identity.result.id) !== String(pageId)) {
+      return { ok: false, error: `FACEBOOK_PAGE_ID_MISMATCH:${identity.result.id}:${pageId}` };
+    }
 
-  return {
-    ok: false,
-    error: `${input.platform.toUpperCase()}_PROVIDER_NOT_CONFIGURED`,
-  };
+    // Text-only posts are straightforward Page feed posts.
+    if (!input.mediaUrl) {
+      const body = new URLSearchParams({ message: input.caption || "", access_token: pageAccessToken });
+      const { response, result } = await facebookJson(
+        `https://graph.facebook.com/v23.0/${pageId}/feed`,
+        { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }
+      );
+      if (!response.ok) return { ok: false, code: response.status, error: result?.error?.message || "FACEBOOK_FEED_PUBLISH_FAILED" };
+      return { ok: true, code: response.status, externalId: result?.id ? String(result.id) : undefined };
+    }
+
+    // Fetch the final raster creative from Rumi Social AI.
+    const mediaResponse = await fetch(input.mediaUrl, { cache: "no-store" });
+    if (!mediaResponse.ok) return { ok: false, code: mediaResponse.status, error: `FACEBOOK_MEDIA_FETCH_FAILED_${mediaResponse.status}` };
+    const mediaBytes = await mediaResponse.arrayBuffer();
+    if (mediaBytes.byteLength >= 10 * 1024 * 1024) return { ok: false, error: "FACEBOOK_IMAGE_TOO_LARGE" };
+    const mediaType = mediaResponse.headers.get("content-type") || "image/jpeg";
+
+    // Stage media as unpublished, so the staging upload itself does not create a Page photo story.
+    const form = new FormData();
+    form.append("source", new Blob([mediaBytes], { type: mediaType }), mediaType.includes("png") ? "creative.png" : "creative.jpg");
+    form.append("published", "false");
+    form.append("access_token", pageAccessToken);
+
+    const upload = await facebookJson(
+      `https://graph.facebook.com/v23.0/${pageId}/photos`,
+      { method: "POST", body: form }
+    );
+    const photoId = upload.result?.id ? String(upload.result.id) : "";
+    if (!upload.response.ok || !photoId) {
+      return { ok: false, code: upload.response.status, error: upload.result?.error?.message || "FACEBOOK_PHOTO_STAGE_FAILED" };
+    }
+
+    // Attach the staged media to a Page feed story using Meta's indexed attached_media form field.
+    const feedBody = new URLSearchParams();
+    feedBody.set("message", input.caption || "");
+    feedBody.set("attached_media[0]", JSON.stringify({ media_fbid: photoId }));
+    feedBody.set("access_token", pageAccessToken);
+
+    const feed = await facebookJson(
+      `https://graph.facebook.com/v23.0/${pageId}/feed`,
+      { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: feedBody }
+    );
+    const postId = feed.result?.id ? String(feed.result.id) : "";
+
+    if (!feed.response.ok || !postId) {
+      await facebookJson(`https://graph.facebook.com/v23.0/${photoId}?access_token=${encodeURIComponent(pageAccessToken)}`, { method: "DELETE" }).catch(() => null);
+      return { ok: false, code: feed.response.status, error: feed.result?.error?.message || "FACEBOOK_FEED_ATTACH_FAILED" };
+    }
+
+    // Do not trust HTTP 200 alone. Verify Meta exposes this object in the Page feed.
+    const verify = await facebookJson(
+      `https://graph.facebook.com/v23.0/${pageId}/feed?fields=id&limit=25&access_token=${encodeURIComponent(pageAccessToken)}`
+    );
+    const visibleInFeed = Boolean(
+      verify.response.ok && Array.isArray(verify.result?.data) && verify.result.data.some((row: any) => String(row?.id) === postId)
+    );
+
+    if (!visibleInFeed) {
+      await facebookJson(`https://graph.facebook.com/v23.0/${postId}?access_token=${encodeURIComponent(pageAccessToken)}`, { method: "DELETE" }).catch(() => null);
+      await facebookJson(`https://graph.facebook.com/v23.0/${photoId}?access_token=${encodeURIComponent(pageAccessToken)}`, { method: "DELETE" }).catch(() => null);
+      return { ok: false, code: 409, error: "FACEBOOK_POST_NOT_VISIBLE_IN_PAGE_FEED" };
+    }
+
+    return { ok: true, code: feed.response.status, externalId: postId };
+  } catch (error) {
+    console.error("Facebook provider failed", error);
+    return { ok: false, error: error instanceof Error ? error.message : "FACEBOOK_PROVIDER_FAILED" };
+  }
 }
