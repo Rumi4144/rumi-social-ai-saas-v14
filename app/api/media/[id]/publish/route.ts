@@ -107,13 +107,44 @@ export async function GET(
         }
       }
 
-      // Vercel's Sharp/libvips environment may not have the custom
-      // brand fonts. Use common fallback families for the publishing
-      // raster only so text remains readable.
-      svg = svg.replace(
-        /font-family="[^"]*"/g,
-        'font-family="sans-serif"'
-      );
+      // Embed Noto Sans directly into the SVG so publishing does not
+      // depend on Fontconfig or fonts installed in the Vercel runtime.
+      try {
+        const { readFile } = await import("fs/promises");
+        const { join } = await import("path");
+
+        const fontPath = join(
+          process.cwd(),
+          "public",
+          "fonts",
+          "noto-sans-latin-400-normal.woff"
+        );
+
+        const fontBytes = await readFile(fontPath);
+
+        const fontData = fontBytes.toString("base64");
+
+        const fontStyle = `<style>
+          @font-face {
+            font-family: "RumiPublish";
+            src: url("data:font/woff;base64,${fontData}") format("woff");
+            font-weight: 400;
+            font-style: normal;
+          }
+          text, tspan {
+            font-family: "RumiPublish";
+          }
+        </style>`;
+
+        svg = svg.replace("<defs>", `<defs>${fontStyle}`);
+
+        svg = svg.replace(
+          /font-family="[^"]*"/g,
+          'font-family="RumiPublish"'
+        );
+      } catch (fontError) {
+        console.error("PUBLISH_FONT_EMBED_ERROR", fontError);
+      }
 
       renderSource = Buffer.from(svg);
     }
