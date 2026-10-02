@@ -98,18 +98,47 @@ export async function publishToProvider(input: {
       return { ok: false, code: feed.response.status, error: feed.result?.error?.message || "FACEBOOK_FEED_ATTACH_FAILED" };
     }
 
-    // Do not trust HTTP 200 alone. Verify Meta exposes this object in the Page feed.
+    // Verify the exact object Meta just returned instead of requiring the
+    // Page /feed collection to reflect it immediately. The collection can lag.
     const verify = await facebookJson(
-      `https://graph.facebook.com/v23.0/${pageId}/feed?fields=id&limit=25&access_token=${encodeURIComponent(pageAccessToken)}`
-    );
-    const visibleInFeed = Boolean(
-      verify.response.ok && Array.isArray(verify.result?.data) && verify.result.data.some((row: any) => String(row?.id) === postId)
+      `https://graph.facebook.com/v23.0/${postId}?fields=id,permalink_url,is_published,attachments&access_token=${encodeURIComponent(pageAccessToken)}`
     );
 
-    if (!visibleInFeed) {
+    const verifiedId = verify.result?.id ? String(verify.result.id) : "";
+    const permalink = typeof verify.result?.permalink_url === "string"
+      ? verify.result.permalink_url
+      : "";
+    const isPublished = verify.result?.is_published === true;
+    const attachments = Array.isArray(verify.result?.attachments?.data)
+      ? verify.result.attachments.data
+      : [];
+    const hasAttachment = attachments.length > 0;
+
+    console.log(
+      "FACEBOOK_V3_VERIFY",
+      JSON.stringify({
+        postId,
+        verifiedId,
+        isPublished,
+        hasPermalink: Boolean(permalink),
+        hasAttachment,
+      })
+    );
+
+    if (
+      !verify.response.ok ||
+      verifiedId !== postId ||
+      !isPublished ||
+      !permalink ||
+      !hasAttachment
+    ) {
       await facebookJson(`https://graph.facebook.com/v23.0/${postId}?access_token=${encodeURIComponent(pageAccessToken)}`, { method: "DELETE" }).catch(() => null);
       await facebookJson(`https://graph.facebook.com/v23.0/${photoId}?access_token=${encodeURIComponent(pageAccessToken)}`, { method: "DELETE" }).catch(() => null);
-      return { ok: false, code: 409, error: "FACEBOOK_POST_NOT_VISIBLE_IN_PAGE_FEED" };
+      return {
+        ok: false,
+        code: verify.response.status || 409,
+        error: verify.result?.error?.message || "FACEBOOK_POST_VERIFICATION_FAILED",
+      };
     }
 
     return { ok: true, code: feed.response.status, externalId: postId };

@@ -103,11 +103,19 @@ export async function processDuePublishJob() {
 
   const status = attempt >= 4 ? "failed" : "retry";
 
+  // Do not burn through all retries in one cron invocation. When a publish
+  // attempt can be retried, move its due time forward so the current cron
+  // drain loop cannot immediately pick the same job again.
+  const retryAt = status === "retry"
+    ? new Date(Date.now() + 5 * 60 * 1000)
+    : undefined;
+
   await prisma.publishJob.update({
     where: { id: job.id },
     data: {
       status,
       lastError: result.error || "Publishing failed",
+      ...(retryAt ? { scheduledFor: retryAt } : {}),
     },
   });
 
