@@ -142,8 +142,8 @@ export async function GET(
 
       if (originalImageDataUrl) {
         svg = svg.replace(
-          /href=(["'])https?:\/\/[^"'<>]+\1/,
-          `href="${originalImageDataUrl}"`
+          /(<image\b[^>]*?\s)href=(["'])[^"']*\2/i,
+          `$1href="${originalImageDataUrl}"`
         );
       }
 
