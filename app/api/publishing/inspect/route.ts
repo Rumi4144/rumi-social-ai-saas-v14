@@ -20,10 +20,10 @@ export async function GET(req: Request) {
     const pageId = stored.pageId || connection.externalId;
     const token = stored.pageAccessToken;
     if (!token || !pageId) return NextResponse.json({ error: "Credentials missing" }, { status: 409 });
-    const read = async (path: string, params: Record<string, string> = {}) => {
+    const read = async (path: string, params: Record<string, string> = {}, accessToken = token) => {
       const query = new URLSearchParams(params);
       const response = await fetch(`https://graph.facebook.com/v23.0/${path}?${query}`, {
-        headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+        headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store",
       });
       const data = await response.json();
       return { status: response.status, data };
@@ -37,11 +37,19 @@ export async function GET(req: Request) {
     const photoId = attachment?.target?.id;
     const photo = photoId ? await read(String(photoId), { fields: "id,page_story_id" }) : null;
     const app = process.env.FACEBOOK_APP_ID ? await read(process.env.FACEBOOK_APP_ID, { fields: "id,name" }) : null;
+    const appToken = process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET
+      ? `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}` : null;
+    const debug = appToken ? await read("debug_token", { input_token: token }, appToken) : null;
+    const tokenDetails = debug ? {
+      status: debug.status, error: debug.data?.error,
+      appId: debug.data?.data?.app_id, type: debug.data?.data?.type,
+      isValid: debug.data?.data?.is_valid, scopes: debug.data?.data?.scopes,
+    } : null;
     return NextResponse.json({
       jobId: job.id, pageId, post,
       feed: { status: feed.status, containsPost: feed.data?.data?.some((p: { id: string }) => p.id === job.externalPostId), error: feed.data?.error },
       published: { status: published.status, containsPost: published.data?.data?.some((p: { id: string }) => p.id === job.externalPostId), error: published.data?.error },
-      photo, app,
+      photo, app, tokenDetails,
     }, { headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" } });
   } catch {
     return NextResponse.json({ error: "Inspection failed" }, { status: 400 });
