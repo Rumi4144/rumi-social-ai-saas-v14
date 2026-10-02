@@ -42,7 +42,7 @@ export async function GET(req: Request) {
       feed: { status: feed.status, containsPost: feed.data?.data?.some((p: { id: string }) => p.id === job.externalPostId), error: feed.data?.error },
       published: { status: published.status, containsPost: published.data?.data?.some((p: { id: string }) => p.id === job.externalPostId), error: published.data?.error },
       photo, app,
-    }, { headers: { "Cache-Control": "no-store" } });
+    }, { headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" } });
   } catch {
     return NextResponse.json({ error: "Inspection failed" }, { status: 400 });
   }
