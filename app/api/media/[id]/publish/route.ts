@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Resvg } from "@resvg/resvg-js";
 import sharp from "sharp";
+import { readFile } from "fs/promises";
+import { join } from "path";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -51,20 +54,18 @@ export async function GET(
       source = Buffer.from(await response.arrayBuffer());
     }
 
-    // Make stored SVG creatives completely self-contained before
-    // rasterizing them for social publishing.
     let renderSource = source;
-
     const sourceText = source.toString("utf8");
 
     if (sourceText.trimStart().startsWith("<svg")) {
       let svg = sourceText;
 
-      // Embed every remote image referenced by the SVG.
+      // Make every remote image inside the SVG self-contained.
       const remoteUrls = Array.from(
         new Set(
-          [...svg.matchAll(/href=["'](https?:[^"']+)["']/g)]
-            .map((match) => match[1])
+          [...svg.matchAll(/href=["'](https?:[^"']+)["']/g)].map(
+            (match) => match[1]
+          )
         )
       );
 
@@ -73,7 +74,7 @@ export async function GET(
           const imageResponse = await fetch(remoteUrl, {
             cache: "no-store",
             headers: {
-              "User-Agent": "Mozilla/5.0 RumiSocialAI/1.0",
+              "User-Agent": "Mozilla/5.0 RumiSocialAI/2.0",
               Accept: "image/*",
             },
           });
@@ -81,77 +82,59 @@ export async function GET(
           if (!imageResponse.ok) {
             console.error(
               "PUBLISH_EMBED_IMAGE_FAILED",
-              remoteUrl,
               imageResponse.status
             );
             continue;
           }
 
           const contentType =
-            imageResponse.headers.get("content-type") || "image/jpeg";
+            imageResponse.headers.get("content-type") ||
+            "image/jpeg";
 
           const imageBytes = Buffer.from(
             await imageResponse.arrayBuffer()
           );
 
           const dataUrl =
-            `data:${contentType};base64,${imageBytes.toString("base64")}`;
+            `data:${contentType};base64,` +
+            imageBytes.toString("base64");
 
           svg = svg.split(remoteUrl).join(dataUrl);
         } catch (error) {
-          console.error(
-            "PUBLISH_EMBED_IMAGE_ERROR",
-            remoteUrl,
-            error
-          );
+          console.error("PUBLISH_EMBED_IMAGE_ERROR", error);
         }
       }
 
-      // Embed Noto Sans directly into the SVG so publishing does not
-      // depend on Fontconfig or fonts installed in the Vercel runtime.
-      try {
-        const { readFile } = await import("fs/promises");
-        const { join } = await import("path");
+      const fontPath = join(
+        process.cwd(),
+        "public",
+        "fonts",
+        "noto-sans-latin-400-normal.woff"
+      );
 
-        const fontPath = join(
-          process.cwd(),
-          "public",
-          "fonts",
-          "noto-sans-latin-400-normal.woff"
-        );
+      // Resvg receives the font directly.
+      // No Fontconfig or operating-system font lookup is required.
+      const resvg = new Resvg(svg, {
+        fitTo: {
+          mode: "original",
+        },
+        font: {
+          fontFiles: [fontPath],
+          loadSystemFonts: false,
+          defaultFontFamily: "Noto Sans",
+          sansSerifFamily: "Noto Sans",
+          serifFamily: "Noto Sans",
+        },
+      });
 
-        const fontBytes = await readFile(fontPath);
+      const rendered = resvg.render();
+      const png = rendered.asPng();
 
-        const fontData = fontBytes.toString("base64");
-
-        const fontStyle = `<style>
-          @font-face {
-            font-family: "RumiPublish";
-            src: url("data:font/woff;base64,${fontData}") format("woff");
-            font-weight: 400;
-            font-style: normal;
-          }
-          text, tspan {
-            font-family: "RumiPublish";
-          }
-        </style>`;
-
-        svg = svg.replace("<defs>", `<defs>${fontStyle}`);
-
-        svg = svg.replace(
-          /font-family="[^"]*"/g,
-          'font-family="RumiPublish"'
-        );
-      } catch (fontError) {
-        console.error("PUBLISH_FONT_EMBED_ERROR", fontError);
-      }
-
-      renderSource = Buffer.from(svg);
+      renderSource = Buffer.from(png);
     }
 
-    const jpeg = await sharp(renderSource, {
-      density: 120,
-    })
+    // Facebook-friendly JPEG.
+    const jpeg = await sharp(renderSource)
       .flatten({ background: "#ffffff" })
       .jpeg({
         quality: 88,
@@ -160,9 +143,10 @@ export async function GET(
       .toBuffer();
 
     if (jpeg.length >= 10 * 1024 * 1024) {
-      return new NextResponse("Rendered image exceeds Facebook limit", {
-        status: 413,
-      });
+      return new NextResponse(
+        "Rendered image exceeds Facebook limit",
+        { status: 413 }
+      );
     }
 
     return new NextResponse(new Uint8Array(jpeg), {
@@ -170,7 +154,8 @@ export async function GET(
       headers: {
         "Content-Type": "image/jpeg",
         "Content-Length": String(jpeg.length),
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Cache-Control":
+          "public, max-age=31536000, immutable",
       },
     });
   } catch (error) {

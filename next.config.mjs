@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */const nextConfig={
+serverExternalPackages:["@resvg/resvg-js"],
 poweredByHeader:false,
 reactStrictMode:true,
 outputFileTracingIncludes:{
