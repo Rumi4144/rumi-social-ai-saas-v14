@@ -3,6 +3,7 @@ import { z } from "zod";
 import { renderSocialSvg } from "@/lib/render/svg";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
+import sharp from "sharp";
 
 const S = z.object({
   campaignId: z.string().optional(),
@@ -68,15 +69,19 @@ export async function POST(req: Request) {
         );
       }
 
-      const contentType =
-        imageResponse.headers.get("content-type") || "image/jpeg";
-
       const bytes = Buffer.from(
         await imageResponse.arrayBuffer()
       );
 
+      // Normalize website images (especially WebP/AVIF) to JPEG.
+      // Resvg reliably renders embedded JPEG/PNG raster images.
+      const normalizedBytes = await sharp(bytes)
+        .rotate()
+        .jpeg({ quality: 92 })
+        .toBuffer();
+
       embeddedImageUrl =
-        `data:${contentType};base64,${bytes.toString("base64")}`;
+        `data:image/jpeg;base64,${normalizedBytes.toString("base64")}`;
     }
 
     const svg = renderSocialSvg({

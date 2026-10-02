@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { generateCampaign } from "@/lib/ai/campaign";
 import { renderSocialSvg } from "@/lib/render/svg";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
+import sharp from "sharp";
 
 export async function POST(req: Request) {
   const secret = req.headers.get("x-worker-secret");
@@ -281,12 +282,17 @@ export async function POST(req: Request) {
             );
           }
 
-          const contentType =
-            imageResponse.headers.get("content-type") || "image/jpeg";
-
           const bytes = Buffer.from(await imageResponse.arrayBuffer());
 
-          renderImageUrl = `data:${contentType};base64,${bytes.toString("base64")}`;
+          // Normalize website images (especially WebP/AVIF) to JPEG so
+          // the publish renderer can rasterize the stored SVG reliably.
+          const normalizedBytes = await sharp(bytes)
+            .rotate()
+            .jpeg({ quality: 92 })
+            .toBuffer();
+
+          renderImageUrl =
+            `data:image/jpeg;base64,${normalizedBytes.toString("base64")}`;
         }
 
         const svg = renderSocialSvg({
