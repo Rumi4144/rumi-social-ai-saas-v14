@@ -94,53 +94,28 @@ export async function publishToProvider(input: {
         };
       }
 
-      const form = new FormData();
+      // Publish directly to the Facebook Page feed.
+      // Do not create a Facebook /photos object.
+      const feedBody = new URLSearchParams({
+        message: input.caption || "",
+        access_token: pageAccessToken,
+      });
 
-      form.append(
-        "source",
-        new Blob([mediaBytes], { type: mediaType }),
-        mediaType.includes("jpeg") ? "creative.jpg" : "creative.png"
-      );
+      if (input.mediaUrl) {
+        feedBody.set("link", input.mediaUrl);
+      }
 
-      // Upload the image without publishing it as a standalone
-      // Facebook photo. Then attach that photo to a Page feed post.
-      form.append("caption", input.caption || "");
-      form.append("published", "true");
-      form.append("access_token", pageAccessToken);
-
-      const uploadResponse = await fetch(
-        `https://graph.facebook.com/v23.0/${pageId}/photos`,
+      response = await fetch(
+        `https://graph.facebook.com/v23.0/${pageId}/feed`,
         {
           method: "POST",
-          body: form,
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: feedBody,
           cache: "no-store",
         }
       );
-
-      const uploadResult = await uploadResponse.json();
-
-      console.log(
-        "FACEBOOK_PHOTO_UPLOAD_RESPONSE",
-        JSON.stringify({
-          httpStatus: uploadResponse.status,
-          ok: uploadResponse.ok,
-          result: uploadResult,
-        })
-      );
-
-      if (!uploadResponse.ok || !uploadResult?.id) {
-        console.error("Facebook photo upload failed", uploadResult);
-
-        return {
-          ok: false,
-          code: uploadResponse.status,
-          error:
-            uploadResult?.error?.message ||
-            "FACEBOOK_PHOTO_UPLOAD_FAILED",
-        };
-      }
-
-      response = uploadResponse;
     }
 
     const result = await response.json();
