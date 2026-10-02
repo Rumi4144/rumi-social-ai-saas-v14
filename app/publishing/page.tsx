@@ -33,6 +33,10 @@ export default async function Publishing() {
       take: 50,
     });
 
+  const instagramConnection = await prisma.socialConnection.findFirst({
+    where: { organizationId: ctx.organizationId, provider: "instagram", status: "connected" },
+  });
+
   const recentJobs = await prisma.publishJob.findMany({
     where: {
       organizationId: ctx.organizationId,
@@ -70,6 +74,12 @@ export default async function Publishing() {
             Settings before publishing.
           </p>
         )}
+      </section>
+
+      <section style={{ marginTop: "24px" }}>
+        <h2>Instagram</h2>
+        <p>{instagramConnection ? `Connected as @${instagramConnection.accountName || "Instagram"}` : "Instagram is not connected. Connect it in Settings before publishing."}</p>
+        <p>Instagram feed posts require an image.</p>
       </section>
 
       <section style={{ marginTop: "36px" }}>
@@ -125,6 +135,13 @@ export default async function Publishing() {
                   <PublishingActions
                     contentItemId={item.id}
                     connectionId={facebookConnection.id}
+                  />
+                ) : null}
+                {instagramConnection && item.mediaUrl ? (
+                  <PublishingActions
+                    contentItemId={item.id}
+                    connectionId={instagramConnection.id}
+                    destination={`Instagram @${instagramConnection.accountName || "Instagram"}`}
                   />
                 ) : null}
               </div>
