@@ -25,39 +25,59 @@ export default function RenderCreativeButton({
     setStatus("Creating...");
 
     try {
-      const res = await fetch("/api/creative/render", {
+      const basePayload = {
+        campaignId,
+        contentItemId,
+        headline,
+        subheadline: undefined,
+        cta: "Discover More",
+        imageUrl,
+        textPosition,
+        format: "portrait" as const,
+      };
+
+      // Ask the server only to prepare the complete SVG. The browser then
+      // rasterizes that exact SVG, matching what the browser can display.
+      const prepareRes = await fetch("/api/creative/render", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          campaignId,
-          contentItemId,
-          headline,
-          subheadline: undefined,
-          cta: "Discover More",
-          imageUrl,
-          textPosition,
-          format: "portrait",
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...basePayload, prepareOnly: true }),
       });
+      const prepared = await prepareRes.json();
+      if (!prepareRes.ok || !prepared.svgDataUrl) {
+        throw new Error(prepared.error || "Creative preparation failed");
+      }
 
-      const result = await res.json();
+      const img = new Image();
+      img.decoding = "async";
+      img.src = prepared.svgDataUrl;
+      await img.decode();
 
-      if (!res.ok) {
-        throw new Error(
-          typeof result.error === "string"
-            ? result.error
-            : JSON.stringify(result.error)
-        );
+      const canvas = document.createElement("canvas");
+      canvas.width = 1080;
+      canvas.height = 1350;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas unavailable");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const browserRasterDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+
+      const saveRes = await fetch("/api/creative/render", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...basePayload, browserRasterDataUrl }),
+      });
+      const saved = await saveRes.json();
+      if (!saveRes.ok) {
+        throw new Error(saved.error || "Creative save failed");
       }
 
       setStatus("✓ Branded creative created");
       window.location.reload();
     } catch (error) {
-      setStatus(
-        error instanceof Error ? error.message : "Render failed"
-      );
+      setStatus(error instanceof Error ? error.message : "Render failed");
     }
   }
 
