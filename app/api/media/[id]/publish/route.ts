@@ -90,6 +90,16 @@ export async function GET(
             candidate.provider === "website"
         );
 
+      console.log("PUBLISH_ORIGINAL_IMAGE", {
+        creativeId: asset.id,
+        contentItemId: asset.contentItemId,
+        found: Boolean(originalImage),
+        imageId: originalImage?.id || null,
+        kind: originalImage?.kind || null,
+        provider: originalImage?.provider || null,
+        hasUrl: Boolean(originalImage?.url),
+      });
+
       if (originalImage?.url) {
         try {
           let originalBytes: Buffer;
