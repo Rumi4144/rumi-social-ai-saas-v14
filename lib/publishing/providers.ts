@@ -202,6 +202,11 @@ export async function publishToProvider(input: {
         "FACEBOOK_POST_INSPECT",
         JSON.stringify(inspectResult)
       );
+
+      console.log(
+        "FACEBOOK_ATTACHMENTS_JSON",
+        JSON.stringify(inspectResult?.attachments || null)
+      );
     }
 
     return {
