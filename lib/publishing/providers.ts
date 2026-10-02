@@ -104,7 +104,8 @@ export async function publishToProvider(input: {
 
       // Upload the image without publishing it as a standalone
       // Facebook photo. Then attach that photo to a Page feed post.
-      form.append("published", "false");
+      form.append("caption", input.caption || "");
+      form.append("published", "true");
       form.append("access_token", pageAccessToken);
 
       const uploadResponse = await fetch(
@@ -139,25 +140,7 @@ export async function publishToProvider(input: {
         };
       }
 
-      const feedBody = new URLSearchParams({
-        message: input.caption || "",
-        attached_media: JSON.stringify([
-          { media_fbid: String(uploadResult.id) }
-        ]),
-        access_token: pageAccessToken,
-      });
-
-      response = await fetch(
-        `https://graph.facebook.com/v23.0/${pageId}/feed`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: feedBody,
-          cache: "no-store",
-        }
-      );
+      response = uploadResponse;
     }
 
     const result = await response.json();
