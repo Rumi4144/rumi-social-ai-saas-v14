@@ -57,8 +57,84 @@ export async function GET(
     let renderSource = source;
     const sourceText = source.toString("utf8");
 
+    // For branded social creatives, locate the original photograph
+    // belonging to the same campaign/content item.
+    let originalImageDataUrl: string | null = null;
+
+    if (
+      asset.kind === "social_creative" &&
+      asset.campaignId &&
+      asset.contentItemId
+    ) {
+      const originalImage = await prisma.mediaAsset.findFirst({
+        where: {
+          campaignId: asset.campaignId,
+          contentItemId: asset.contentItemId,
+          status: "ready",
+          kind: "ai_image",
+          NOT: { id: asset.id },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      if (originalImage?.url) {
+        try {
+          let originalBytes: Buffer;
+          let originalType = "image/jpeg";
+
+          if (originalImage.url.startsWith("data:")) {
+            const match = originalImage.url.match(
+              /^data:([^;,]+)(?:;charset=[^;,]+)?;base64,(.+)$/s
+            );
+
+            if (match) {
+              originalType = match[1];
+              originalBytes = Buffer.from(match[2], "base64");
+
+              originalImageDataUrl =
+                `data:${originalType};base64,` +
+                originalBytes.toString("base64");
+            }
+          } else {
+            const originalResponse = await fetch(originalImage.url, {
+              cache: "no-store",
+              headers: {
+                "User-Agent": "Mozilla/5.0 RumiSocialAI/2.0",
+                Accept: "image/*",
+              },
+            });
+
+            if (originalResponse.ok) {
+              originalType =
+                originalResponse.headers.get("content-type") ||
+                "image/jpeg";
+
+              originalBytes = Buffer.from(
+                await originalResponse.arrayBuffer()
+              );
+
+              originalImageDataUrl =
+                `data:${originalType};base64,` +
+                originalBytes.toString("base64");
+            }
+          }
+        } catch (error) {
+          console.error("PUBLISH_ORIGINAL_IMAGE_ERROR", error);
+        }
+      }
+    }
+
     if (sourceText.trimStart().startsWith("<svg")) {
       let svg = sourceText;
+
+      if (originalImageDataUrl) {
+        svg = svg.replace(
+          /href=(["'])https?:\/\/[^"'<>]+\1/,
+          `href="${originalImageDataUrl}"`
+        );
+      }
 
       // Embed every remote SVG image before Resvg renders it.
       const hrefRegex = /href=(["'])(https?:\/\/[^"'<>]+)\1/g;
