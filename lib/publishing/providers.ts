@@ -102,15 +102,50 @@ export async function publishToProvider(input: {
         mediaType.includes("jpeg") ? "creative.jpg" : "creative.png"
       );
 
-      form.append("caption", input.caption || "");
-      form.append("published", "true");
+      // Upload the image without publishing it as a standalone
+      // Facebook photo. Then attach that photo to a Page feed post.
+      form.append("published", "false");
       form.append("access_token", pageAccessToken);
 
-      response = await fetch(
+      const uploadResponse = await fetch(
         `https://graph.facebook.com/v23.0/${pageId}/photos`,
         {
           method: "POST",
           body: form,
+          cache: "no-store",
+        }
+      );
+
+      const uploadResult = await uploadResponse.json();
+
+      if (!uploadResponse.ok || !uploadResult?.id) {
+        console.error("Facebook photo upload failed", uploadResult);
+
+        return {
+          ok: false,
+          code: uploadResponse.status,
+          error:
+            uploadResult?.error?.message ||
+            "FACEBOOK_PHOTO_UPLOAD_FAILED",
+        };
+      }
+
+      const feedBody = new URLSearchParams({
+        message: input.caption || "",
+        attached_media: JSON.stringify([
+          { media_fbid: String(uploadResult.id) }
+        ]),
+        access_token: pageAccessToken,
+      });
+
+      response = await fetch(
+        `https://graph.facebook.com/v23.0/${pageId}/feed`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: feedBody,
           cache: "no-store",
         }
       );
