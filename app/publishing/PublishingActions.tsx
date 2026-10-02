@@ -5,9 +5,11 @@ import { useState } from "react";
 export default function PublishingActions({
   contentItemId,
   connectionId,
+  destination = "Facebook Page",
 }: {
   contentItemId: string;
   connectionId: string;
+  destination?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -16,7 +18,7 @@ export default function PublishingActions({
   async function publishNow() {
     if (
       !confirm(
-        "Publish this content to the connected Facebook Page now?"
+        `Publish this content to ${destination} now?`
       )
     ) {
       return;
@@ -117,7 +119,7 @@ export default function PublishingActions({
         disabled={busy}
         onClick={publishNow}
       >
-        {busy ? "Working..." : "Publish Now"}
+        {busy ? "Working..." : `Publish to ${destination}`}
       </button>
 
       <div style={{ marginTop: "12px" }}>
