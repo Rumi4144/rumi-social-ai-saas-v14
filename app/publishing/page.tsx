@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 import PublishingActions from "./PublishingActions";
+import YouTubeUpload from "./YouTubeUpload";
 
 export default async function Publishing() {
   const ctx = await tenantContext();
@@ -35,6 +36,14 @@ export default async function Publishing() {
 
   const instagramConnection = await prisma.socialConnection.findFirst({
     where: { organizationId: ctx.organizationId, provider: "instagram", status: "connected" },
+  });
+
+  const youtubeConnection = await prisma.socialConnection.findFirst({
+    where: { organizationId: ctx.organizationId, provider: "youtube", status: "connected" },
+  });
+  const youtubeUploads = await prisma.job.findMany({
+    where: { organizationId: ctx.organizationId, type: "YOUTUBE_UPLOAD" },
+    orderBy: { createdAt: "desc" }, take: 10,
   });
 
   const recentJobs = await prisma.publishJob.findMany({
@@ -80,6 +89,22 @@ export default async function Publishing() {
         <h2>Instagram</h2>
         <p>{instagramConnection ? `Connected as @${instagramConnection.accountName || "Instagram"}` : "Instagram is not connected. Connect it in Settings before publishing."}</p>
         <p>Instagram feed posts require an image.</p>
+      </section>
+
+      <section style={{ marginTop: "24px" }}>
+        <h2>YouTube</h2>
+        {youtubeConnection ? <YouTubeUpload connectionId={youtubeConnection.id} accountName={youtubeConnection.accountName || "YouTube"} /> : <p>Connect YouTube in Settings before uploading a video.</p>}
+        {youtubeUploads.length ? <div className="queue" style={{ marginTop: 16 }}>
+          {youtubeUploads.map(upload => {
+            const payload = upload.payload as { title?: string };
+            const result = upload.result as { videoId?: string; privacy?: string } | null;
+            return <div className="qrow" key={upload.id}>
+              <span>{payload.title || "YouTube video"}</span>
+              <span>{upload.status === "succeeded" ? `Uploaded (${result?.privacy || "private"})` : upload.status}</span>
+              <span>{upload.error || (result?.videoId ? <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(result.videoId)}`} target="_blank" rel="noreferrer">View video</a> : `${upload.progress}%`)}</span>
+            </div>;
+          })}
+        </div> : null}
       </section>
 
       <section style={{ marginTop: "36px" }}>

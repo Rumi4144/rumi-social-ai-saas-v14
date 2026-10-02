@@ -1,0 +1,43 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const ts = require('../node_modules/typescript');
+const root = __dirname + '/../';
+function load(path, deps) {
+  const code = ts.transpileModule(fs.readFileSync(root + path, 'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+  const module = {exports:{}};
+  vm.runInNewContext(code, {module,exports:module.exports, require:n => { if (!(n in deps)) throw Error(n); return deps[n]; }, fetch:(...a)=>global.fetch(...a), Request,Response,URL,URLSearchParams,Uint8Array,Date,Number,JSON,AbortSignal,process,console:{log(){}} });
+  return module.exports;
+}
+let jobs = new Map(), calls = [], responses = [], tokenUpdates = [];
+const connection = {id:'conn',externalId:'channel',encryptedToken:JSON.stringify({accessToken:'token',expiresAt:Date.now()+3600000,refreshToken:'refresh'}),status:'connected'};
+const prisma = {socialConnection:{findFirst:async()=>connection,updateMany:async args=>tokenUpdates.push(args)},job:{findFirst:async({where})=> {const j=jobs.get(where.id);return j && j.organizationId===where.organizationId?j:null;},create:async({data})=> {if(jobs.has(data.id))throw Error('unique');jobs.set(data.id,{...data,progress:0});},update:async({where,data})=> {Object.assign(jobs.get(where.id),data);}}};
+const crypto = {encryptSecret:v=>v,decryptSecret:v=>v};
+const helper = load('lib/publishing/youtube.ts', {'@/lib/prisma':{prisma},'@/lib/security/crypto':crypto,'@/app/publishing/youtube-limits':{YOUTUBE_CHUNK_SIZE:3*1024*1024,YOUTUBE_MAX_SIZE:2*1024*1024*1024}});
+const route = load('app/api/publishing/youtube/route.ts', {'next/server':{NextResponse:{json:(body,init)=>new Response(JSON.stringify(body),{...init,headers:{...init?.headers,'Content-Type':'application/json'}})}},zod:require('../node_modules/zod'),'@/lib/auth/context':{tenantContext:async()=>({organizationId:'org'})},'@/lib/prisma':{prisma},'@/lib/security/crypto':crypto,'@/lib/publishing/youtube':helper});
+global.fetch = async(url, init) => {calls.push({url:String(url),init});if(!responses.length)throw Error('unexpected fetch');const next=responses.shift();if(next instanceof Error)throw next;return next;};
+const json = (v,status=200)=>new Response(JSON.stringify(v),{status});
+const id='1b3aa3f0-3333-4444-8888-fbb432320000';
+const input={uploadId:id,title:'Guitar video',description:'Demo',privacy:'private',madeForKids:false,containsSyntheticMedia:false,size:4,mimeType:'video/mp4'};
+const post=v=>route.POST(new Request('https://rumisocialai.com/api/publishing/youtube',{method:'POST',body:JSON.stringify(v)}));
+const put=(query,bytes=new Uint8Array([1,2,3,4]))=>route.PUT(new Request('https://rumisocialai.com/api/publishing/youtube?uploadId='+id+query,{method:'PUT',body:bytes}));
+(async()=>{
+  assert.equal((await post({...input,mimeType:'image/jpeg'})).status,400);assert.equal(calls.length,0);
+  assert.throws(()=>helper.youtubeUploadUrl('https://evil.example/upload/youtube/v3/videos'));
+  assert.throws(()=>helper.youtubeNextOffset('bytes=4-6',10));assert.equal(helper.youtubeNextOffset('bytes=0-2',4),3);
+  responses.push(json({items:[{id:'other'}]}));assert.equal((await post(input)).status,409);assert.equal(jobs.size,0);
+  responses.push(json({items:[{id:'channel'}]}),new Response(null,{status:200,headers:{location:'https://www.googleapis.com/upload/youtube/v3/videos?upload_id=test'}}));
+  assert.equal((await post(input)).status,200);assert.equal(jobs.get(id).status,'uploading');
+  const count=calls.length;await post(input);assert.equal(calls.length,count,'retry must reuse session');
+  const foreign={...jobs.get(id),organizationId:'other-org'};jobs.set(id,foreign);assert.equal((await put('&check=true')).status,404);jobs.set(id,{...foreign,organizationId:'org'});
+  responses.push(new Response(null,{status:308,headers:{range:'bytes=0-1'}}));assert.equal((await (await put('&offset=0')).json()).nextOffset,2,'recover already received bytes');
+  responses.push(new Response(null,{status:308}));assert.equal((await put('&offset=0',new Uint8Array([1]))).status,400,'reject malformed chunks');
+  responses.push(new Response(null,{status:308}),new Error('lost final response'));assert.equal((await put('&offset=0')).status,503);
+  responses.push(json({id:'video123',snippet:{channelId:'channel'},status:{privacyStatus:'private',uploadStatus:'uploaded'}}));
+  const recovered=await (await put('&check=true')).json();assert.equal(recovered.done,true);assert.equal(recovered.videoId,'video123');assert.equal(jobs.get(id).status,'succeeded');
+  const completedCalls=calls.length;await put('&offset=0');assert.equal(calls.length,completedCalls,'completed retry must not upload again');
+  connection.encryptedToken=JSON.stringify({accessToken:'old',expiresAt:1,refreshToken:'refresh'});process.env.YOUTUBE_CLIENT_ID='client';process.env.YOUTUBE_CLIENT_SECRET='secret';
+  responses.push(json({access_token:'fresh',expires_in:3600}));assert.equal(await helper.youtubeAccessToken(connection),'fresh');assert.equal(tokenUpdates.length,1);assert.equal(JSON.parse(tokenUpdates[0].data.encryptedToken).refreshToken,'refresh');
+  responses.push(json({error:'invalid_grant'},400));await assert.rejects(()=>helper.youtubeAccessToken(connection),/Reconnect/);
+  console.log('PASS: input validation, channel mismatch, session reuse, tenant isolation, partial resume, malformed chunk rejection, lost final response recovery, completed upload idempotency.');
+})().catch(e=>{console.error(e);process.exitCode=1});
