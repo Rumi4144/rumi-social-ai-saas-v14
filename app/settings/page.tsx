@@ -1,9 +1,11 @@
+import YouTubeDisconnect from "./YouTubeDisconnect";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ youtube?: string }> }) {
+  const query = await searchParams;
   const ctx = await tenantContext();
 
   const instagramConnection = await prisma.socialConnection.findFirst({
@@ -42,6 +44,8 @@ export default async function SettingsPage() {
     <>
       <div className="eyebrow">CONNECTIONS</div>
       <h1>Connect your business.</h1>
+      {query.youtube === "disconnected" ? <p role="status">YouTube disconnected. Its stored channel data and upload history were deleted. Your videos remain on YouTube.</p> : null}
+      {query.youtube === "revoke_manually" ? <p role="status">Stored YouTube data was deleted. Please also revoke Rumi Social AI access in <a href="https://security.google.com/settings/security/permissions" target="_blank" rel="noreferrer">Google security settings</a>.</p> : null}
 
       <div className="settingsgrid">
         {[
@@ -105,7 +109,7 @@ export default async function SettingsPage() {
                     : "Not connected"}
                 </p>
                 {youtubeConnection ? (
-                  <button type="button" disabled>Connected</button>
+                  <YouTubeDisconnect connectionId={youtubeConnection.id} />
                 ) : (
                   <a href="/api/social/youtube/connect">
                     <button type="button">Connect</button>

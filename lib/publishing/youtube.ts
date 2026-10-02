@@ -1,12 +1,13 @@
 import { decryptSecret, encryptSecret } from "@/lib/security/crypto";
 import { prisma } from "@/lib/prisma";
+import { deleteYouTubeData } from "./youtube-data";
 
 export { YOUTUBE_CHUNK_SIZE, YOUTUBE_MAX_SIZE } from "@/app/publishing/youtube-limits";
 
-export async function youtubeAccessToken(connection: { id: string; encryptedToken: string | null }) {
+export async function youtubeAccessToken(connection: { id: string; organizationId?: string; encryptedToken: string | null }, forceRefresh = false) {
   if (!connection.encryptedToken) throw new Error("Reconnect YouTube in Settings.");
   const bundle = JSON.parse(decryptSecret(connection.encryptedToken));
-  if (bundle.accessToken && Number(bundle.expiresAt) > Date.now() + 60000) return String(bundle.accessToken);
+  if (!forceRefresh && bundle.accessToken && Number(bundle.expiresAt) > Date.now() + 60000) return String(bundle.accessToken);
   if (!bundle.refreshToken) throw new Error("Your YouTube connection expired. Reconnect it in Settings.");
   if (!process.env.YOUTUBE_CLIENT_ID || !process.env.YOUTUBE_CLIENT_SECRET) throw new Error("YouTube credentials are not configured.");
   const response = await fetch("https://oauth2.googleapis.com/token", {
@@ -15,7 +16,10 @@ export async function youtubeAccessToken(connection: { id: string; encryptedToke
     body: new URLSearchParams({ client_id: process.env.YOUTUBE_CLIENT_ID, client_secret: process.env.YOUTUBE_CLIENT_SECRET, refresh_token: bundle.refreshToken, grant_type: "refresh_token" }),
   });
   const data = await response.json();
-  if (!response.ok || !data.access_token) throw new Error("Your YouTube connection expired. Reconnect it in Settings.");
+  if (!response.ok || !data.access_token) {
+    if (data.error === "invalid_grant" && connection.organizationId) await deleteYouTubeData({ ...connection, organizationId: connection.organizationId });
+    throw new Error("Your YouTube connection expired. Reconnect it in Settings.");
+  }
   const updated = { ...bundle, accessToken: data.access_token, refreshToken: data.refresh_token || bundle.refreshToken, expiresAt: Date.now() + Number(data.expires_in || 3600) * 1000 };
   // A refresh must not overwrite an account that was reconnected concurrently.
   await prisma.socialConnection.updateMany({ where: { id: connection.id, encryptedToken: connection.encryptedToken }, data: { encryptedToken: encryptSecret(JSON.stringify(updated)) } });

@@ -2,9 +2,14 @@ import { NextResponse } from "next/server";
 import { tenantContext } from "@/lib/auth/context";
 import { createYouTubeOAuthState } from "@/lib/social/oauth-state";
 
-export async function GET() {
+export async function GET(req: Request) {
+  return NextResponse.redirect(new URL("/settings/youtube", req.url));
+}
+
+export async function POST(req: Request) {
   try {
     const ctx = await tenantContext();
+    if ((await req.formData()).get("consent") !== "yes") return NextResponse.json({ error: "Accept the Privacy Policy and Terms before connecting YouTube." }, { status: 400 });
 
     const clientId = process.env.YOUTUBE_CLIENT_ID;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;

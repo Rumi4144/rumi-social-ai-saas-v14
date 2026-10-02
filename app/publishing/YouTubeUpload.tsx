@@ -9,6 +9,7 @@ export default function YouTubeUpload({ accountName, connectionId }: { accountNa
   const [description, setDescription] = useState("");
   const [privacy, setPrivacy] = useState("private");
   const [madeForKids, setMadeForKids] = useState(false);
+  const [certified, setCertified] = useState(false);
   const [synthetic, setSynthetic] = useState(false);
   const [uploadId, setUploadId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,6 +37,7 @@ export default function YouTubeUpload({ accountName, connectionId }: { accountNa
   }
 
   async function upload() {
+    if (!certified) { setMessage("Confirm the YouTube upload acknowledgment first."); return; }
     if (!file || !title.trim()) { setMessage("Choose a video and enter its title."); return; }
     if (!file.type.startsWith("video/") || file.size === 0 || file.size > YOUTUBE_MAX_SIZE) { setMessage("Choose a video file up to 2 GB."); return; }
     if (!uploadId && !confirm(`Upload “${title.trim()}” to ${accountName} with ${privacy} visibility?`)) return;
@@ -46,7 +48,7 @@ export default function YouTubeUpload({ accountName, connectionId }: { accountNa
     try {
       const started = await read(await fetch("/api/publishing/youtube", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uploadId: id, title, description, privacy, madeForKids, containsSyntheticMedia: synthetic, size: file.size, mimeType: file.type }),
+        body: JSON.stringify({ uploadId: id, title, description, privacy, madeForKids, containsSyntheticMedia: synthetic, size: file.size, mimeType: file.type, certified }),
       }));
       if (started.status === "succeeded") { setResult(started.result); setProgress(100); try { sessionStorage.removeItem(storageKey); } catch {} return; }
       let state = await read(await fetch(`/api/publishing/youtube?uploadId=${id}&check=true`, { method: "PUT" }));
@@ -86,7 +88,9 @@ export default function YouTubeUpload({ accountName, connectionId }: { accountNa
     </label>
     <label style={{ display: "block", marginTop: 12 }}><input type="checkbox" checked={madeForKids} disabled={busy || Boolean(uploadId)} onChange={e => setMadeForKids(e.target.checked)} /> This video is made for kids</label>
     <label style={{ display: "block", marginTop: 12 }}><input type="checkbox" checked={synthetic} disabled={busy || Boolean(uploadId)} onChange={e => setSynthetic(e.target.checked)} /> This video contains realistic altered or synthetic content</label>
-    <button type="button" onClick={upload} disabled={busy || !file || !title.trim() || Boolean(result)} style={{ marginTop: 16 }}>
+    <label style={{ display: "block", marginTop: 12 }}><input type="checkbox" checked={certified} disabled={busy} onChange={e => setCertified(e.target.checked)} /> I certify that this video complies with <a href="https://www.youtube.com/howyoutubeworks/policies/community-guidelines/" target="_blank" rel="noreferrer">YouTube’s Community Guidelines</a> and I have the rights to upload it. I agree to the <a href="/privacy" target="_blank">Privacy Policy</a>, <a href="/terms" target="_blank">Terms of Service</a>, and <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">YouTube Terms of Service</a>.</label>
+    <p><a href="/settings">Manage YouTube connection and delete stored data</a></p>
+    <button type="button" onClick={upload} disabled={busy || !file || !title.trim() || !certified || Boolean(result)} style={{ marginTop: 16 }}>
       {busy ? `Uploading… ${progress}%` : uploadId ? "Resume upload" : "Upload to YouTube"}
     </button>
     {uploadId && !busy && !result ? <button type="button" style={{ marginLeft: 12 }} onClick={() => { if (confirm("Start a separate upload? If the previous upload completed, this can create a duplicate video. Try Resume upload first.")) { setUploadId(null); setMessage(""); try { sessionStorage.removeItem(storageKey); } catch {} } }}>Reset upload</button> : null}

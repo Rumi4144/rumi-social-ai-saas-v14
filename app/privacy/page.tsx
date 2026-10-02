@@ -2,7 +2,7 @@ export default function PrivacyPage() {
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "60px 24px", lineHeight: 1.7 }}>
       <h1>Rumi Social AI Privacy Policy</h1>
-      <p><strong>Effective date:</strong> September 26, 2026</p>
+      <p><strong>Effective date:</strong> October 2, 2026</p>
 
       <p>
         This Privacy Policy explains how Rumi Social AI handles information when
@@ -50,13 +50,40 @@ export default function PrivacyPage() {
         functionality.
       </p>
 
-      <h2>6. YouTube Data</h2>
+      <h2>6. YouTube API Services and Data</h2>
       <p>
-        When a user connects YouTube, Rumi Social AI may process channel
-        information and authorization credentials permitted by the Google and
-        YouTube permissions the user approves. This information is used to
-        identify the connected channel and provide user-requested YouTube
-        publishing functionality.
+        Rumi Social AI uses YouTube API Services. When you authorize YouTube,
+        we receive your channel ID and channel name and store encrypted access
+        and refresh tokens. We use these to identify the channel you authorized
+        and upload videos only when you select a file, review its metadata and
+        visibility, and confirm the upload. We do not collect your Google password.
+      </p>
+      <p>
+        We send your selected video, title, description, visibility and content
+        declarations to Google/YouTube. Video chunks pass through our hosting
+        service to YouTube; the uploader does not save a copy of your video file
+        in our database. We store upload metadata and the returned video ID,
+        visibility and processing status in your workspace for up to 30 days.
+        Workspace members authorized by you can view that upload history.
+        We do not use YouTube API data to train AI models or sell it to advertisers.
+      </p>
+      <p>
+        Google handles information under the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
+        Our hosting and database providers process information as necessary to
+        operate the integration. We use session cookies to sign you in and
+        browser session storage to resume an upload; this stores file metadata
+        and upload details, not your Google password or authorization tokens.
+      </p>
+      <p>
+        In Settings, choose “Disconnect YouTube and delete data” to revoke access
+        and immediately delete the connected channel information, stored tokens
+        and upload history from Rumi Social AI. This does not delete videos
+        already uploaded to YouTube. Manage those videos in YouTube Studio.
+        You can also revoke access through <a href="https://security.google.com/settings/security/permissions">Google security settings</a>.
+        We periodically check authorization and delete stored YouTube data when
+        Google reports that the authorization is invalid. You can contact
+        <a href="mailto:rumi@rumiguitars.com">rumi@rumiguitars.com</a> for privacy
+        questions or deletion requests.
       </p>
 
       <h2>7. Sharing of Information</h2>
@@ -96,8 +123,8 @@ export default function PrivacyPage() {
 
       <h2>12. Contact</h2>
       <p>
-        Privacy questions or requests may be submitted through the contact
-        information provided by Rumi Social AI.
+        Privacy questions or deletion requests may be sent to
+        <a href="mailto:rumi@rumiguitars.com">rumi@rumiguitars.com</a>.
       </p>
     </main>
   );

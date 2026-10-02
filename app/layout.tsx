@@ -113,6 +113,11 @@ export default async function RootLayout({
         <main>
           <ScrollToTop />
           {children}
+          <footer style={{ padding: "24px", display: "flex", gap: "24px", flexWrap: "wrap" }}>
+            <Link href="/privacy">Privacy Policy</Link>
+            <Link href="/terms">Terms of Service</Link>
+            <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">YouTube Terms of Service</a>
+          </footer>
         </main>
       </body>
     </html>

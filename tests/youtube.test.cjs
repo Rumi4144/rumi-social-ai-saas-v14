@@ -9,19 +9,20 @@ function load(path, deps) {
   vm.runInNewContext(code, {module,exports:module.exports, require:n => { if (!(n in deps)) throw Error(n); return deps[n]; }, fetch:(...a)=>global.fetch(...a), Request,Response,URL,URLSearchParams,Uint8Array,Date,Number,JSON,AbortSignal,process,console:{log(){}} });
   return module.exports;
 }
-let jobs = new Map(), calls = [], responses = [], tokenUpdates = [];
+let jobs = new Map(), calls = [], responses = [], tokenUpdates = [], revokedPurges = 0;
 const connection = {id:'conn',externalId:'channel',encryptedToken:JSON.stringify({accessToken:'token',expiresAt:Date.now()+3600000,refreshToken:'refresh'}),status:'connected'};
 const prisma = {socialConnection:{findFirst:async()=>connection,updateMany:async args=>tokenUpdates.push(args)},job:{findFirst:async({where})=> {const j=jobs.get(where.id);return j && j.organizationId===where.organizationId?j:null;},create:async({data})=> {if(jobs.has(data.id))throw Error('unique');jobs.set(data.id,{...data,progress:0});},update:async({where,data})=> {Object.assign(jobs.get(where.id),data);}}};
 const crypto = {encryptSecret:v=>v,decryptSecret:v=>v};
-const helper = load('lib/publishing/youtube.ts', {'@/lib/prisma':{prisma},'@/lib/security/crypto':crypto,'@/app/publishing/youtube-limits':{YOUTUBE_CHUNK_SIZE:3*1024*1024,YOUTUBE_MAX_SIZE:2*1024*1024*1024}});
+const helper = load('lib/publishing/youtube.ts', {'./youtube-data':{deleteYouTubeData:async()=>{revokedPurges++;return true;}},'@/lib/prisma':{prisma},'@/lib/security/crypto':crypto,'@/app/publishing/youtube-limits':{YOUTUBE_CHUNK_SIZE:3*1024*1024,YOUTUBE_MAX_SIZE:2*1024*1024*1024}});
 const route = load('app/api/publishing/youtube/route.ts', {'next/server':{NextResponse:{json:(body,init)=>new Response(JSON.stringify(body),{...init,headers:{...init?.headers,'Content-Type':'application/json'}})}},zod:require('../node_modules/zod'),'@/lib/auth/context':{tenantContext:async()=>({organizationId:'org'})},'@/lib/prisma':{prisma},'@/lib/security/crypto':crypto,'@/lib/publishing/youtube':helper});
 global.fetch = async(url, init) => {calls.push({url:String(url),init});if(!responses.length)throw Error('unexpected fetch');const next=responses.shift();if(next instanceof Error)throw next;return next;};
 const json = (v,status=200)=>new Response(JSON.stringify(v),{status});
 const id='1b3aa3f0-3333-4444-8888-fbb432320000';
-const input={uploadId:id,title:'Guitar video',description:'Demo',privacy:'private',madeForKids:false,containsSyntheticMedia:false,size:4,mimeType:'video/mp4'};
+const input={certified:true,uploadId:id,title:'Guitar video',description:'Demo',privacy:'private',madeForKids:false,containsSyntheticMedia:false,size:4,mimeType:'video/mp4'};
 const post=v=>route.POST(new Request('https://rumisocialai.com/api/publishing/youtube',{method:'POST',body:JSON.stringify(v)}));
 const put=(query,bytes=new Uint8Array([1,2,3,4]))=>route.PUT(new Request('https://rumisocialai.com/api/publishing/youtube?uploadId='+id+query,{method:'PUT',body:bytes}));
 (async()=>{
+  assert.equal((await post({...input,certified:false})).status,400);
   assert.equal((await post({...input,mimeType:'image/jpeg'})).status,400);assert.equal(calls.length,0);
   assert.throws(()=>helper.youtubeUploadUrl('https://evil.example/upload/youtube/v3/videos'));
   assert.throws(()=>helper.youtubeNextOffset('bytes=4-6',10));assert.equal(helper.youtubeNextOffset('bytes=0-2',4),3);
@@ -39,5 +40,12 @@ const put=(query,bytes=new Uint8Array([1,2,3,4]))=>route.PUT(new Request('https:
   connection.encryptedToken=JSON.stringify({accessToken:'old',expiresAt:1,refreshToken:'refresh'});process.env.YOUTUBE_CLIENT_ID='client';process.env.YOUTUBE_CLIENT_SECRET='secret';
   responses.push(json({access_token:'fresh',expires_in:3600}));assert.equal(await helper.youtubeAccessToken(connection),'fresh');assert.equal(tokenUpdates.length,1);assert.equal(JSON.parse(tokenUpdates[0].data.encryptedToken).refreshToken,'refresh');
   responses.push(json({error:'invalid_grant'},400));await assert.rejects(()=>helper.youtubeAccessToken(connection),/Reconnect/);
-  console.log('PASS: input validation, channel mismatch, session reuse, tenant isolation, partial resume, malformed chunk rejection, lost final response recovery, completed upload idempotency.');
+  const revokedConnection={...connection,organizationId:'org'};
+  responses.push(json({error:'invalid_grant'},400));await assert.rejects(()=>helper.youtubeAccessToken(revokedConnection),/Reconnect/);assert.equal(revokedPurges,1);
+  responses.push(json({error:'temporarily_unavailable'},503));await assert.rejects(()=>helper.youtubeAccessToken(revokedConnection));assert.equal(revokedPurges,1,'transient errors must not delete data');
+  let deleteCount=0, purged=[];
+  const deletion=load('lib/publishing/youtube-data.ts',{'@/lib/prisma':{prisma:{$transaction:async fn=>fn({socialConnection:{deleteMany:async()=>({count:deleteCount})},job:{deleteMany:async args=>purged.push(args)}})}}});
+  assert.equal(await deletion.deleteYouTubeData(revokedConnection),false);assert.equal(purged.length,0,'reconnected authorization must survive');
+  deleteCount=1;assert.equal(await deletion.deleteYouTubeData(revokedConnection),true);assert.equal(purged[0].where.organizationId,'org');assert.equal(purged[0].where.payload.equals,'conn');
+  console.log('PASS: input validation, channel mismatch, session reuse, tenant isolation, partial resume, malformed chunk rejection, lost final response recovery, completed upload idempotency, token refresh, revoked-access deletion, transient-error preservation, reconnection-safe tenant-scoped purge.');
 })().catch(e=>{console.error(e);process.exitCode=1});

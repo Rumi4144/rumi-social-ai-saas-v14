@@ -9,6 +9,7 @@ export const maxDuration = 60;
 const schema = z.object({
   uploadId: z.string().uuid(), title: z.string().trim().min(1).max(100).refine(v => !/[<>]/.test(v)),
   description: z.string().max(5000).refine(v => !/[<>]/.test(v)),
+  certified: z.literal(true),
   privacy: z.enum(["private", "unlisted", "public"]), madeForKids: z.boolean(), containsSyntheticMedia: z.boolean(),
   size: z.number().int().positive().max(YOUTUBE_MAX_SIZE), mimeType: z.string().regex(/^video\/[a-zA-Z0-9.+-]+$/),
 });
