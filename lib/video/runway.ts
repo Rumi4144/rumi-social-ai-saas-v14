@@ -2,7 +2,8 @@ const base = "https://api.dev.runwayml.com/v1";
 export class RunwayError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
-export function runwayConfigured() { return Boolean(process.env.RUNWAY_API_KEY && process.env.BLOB_READ_WRITE_TOKEN); }
+function runwayApiKey() { return process.env.RUNWAY_PRODUCTION_API_KEY || process.env.RUNWAY_API_KEY; }
+export function runwayConfigured() { return Boolean(runwayApiKey() && process.env.BLOB_READ_WRITE_TOKEN); }
 export function runwayModel() {
   const model = process.env.RUNWAY_VIDEO_MODEL || "gen4.5";
   if (model !== "gen4.5" && model !== "gen4_turbo") throw new Error("Unsupported Runway model configuration.");
@@ -18,10 +19,10 @@ export function validImage(value: string) {
   } catch { return false; }
 }
 async function request(path: string, body?: object) {
-  if (!process.env.RUNWAY_API_KEY) throw new Error("Runway is not configured.");
+  if (!runwayApiKey()) throw new Error("Runway is not configured.");
   const response = await fetch(`${base}/${path}`, {
     method: body ? "POST" : "GET", cache: "no-store", signal: AbortSignal.timeout(20000),
-    headers: { Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`, "Content-Type": "application/json", "X-Runway-Version": "2024-11-06" },
+    headers: { Authorization: `Bearer ${runwayApiKey()}`, "Content-Type": "application/json", "X-Runway-Version": "2024-11-06" },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   if (!response.ok) {
