@@ -5,7 +5,7 @@ const ts = require('../node_modules/typescript');
 function load(path, deps) {
   const code = ts.transpileModule(fs.readFileSync(__dirname+'/../'+path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const module={exports:{}};
-  vm.runInNewContext(code,{module,exports:module.exports,require:n=>deps[n],fetch:(...a)=>global.fetch(...a),Request,Response,URL,Date,JSON,Math,Number,AbortSignal,TransformStream,process,console:{log(){}}});
+  vm.runInNewContext(code,{module,exports:module.exports,require:n=>deps[n],fetch:(...a)=>global.fetch(...a),Request,Response,URL,Date,JSON,Math,Number,AbortSignal,TransformStream,ReadableStream,Headers,process,console:{log(){}}});
   return module.exports;
 }
 const json = (data,status=200)=>new Response(JSON.stringify(data),{status});
@@ -32,7 +32,7 @@ const db={
 const prisma={...db,$transaction:async fn=>{const beforeJobs=new Map(Array.from(jobs,([k,v])=>[k,{...v}])),beforeBalance=balance,beforeLedger=[...ledger];try{return await fn(db)}catch(e){jobs=beforeJobs;balance=beforeBalance;ledger=beforeLedger;throw e}}};
 global.fetch=async(url,init)=>{calls.push({url:String(url),init});const response=replies.shift();if(response instanceof Error)throw response;if(!response)throw Error('Unexpected fetch');return response};
 const helper=load('lib/video/runway.ts',{});
-const storage={put:async(path,body,opts)=>{await new Response(body).arrayBuffer();stored.push({path,opts})},get:async()=>({statusCode:200,stream:new Response('video').body})};
+const storage={put:async(path,body,opts)=>{await new Response(body).arrayBuffer();stored.push({path,opts})},get:async()=>({statusCode:200,stream:new Response('video').body,blob:{size:5}})};
 const video=load('lib/video/jobs.ts',{'@/lib/prisma':{prisma},'@vercel/blob':storage,'./runway':helper});
 const context={tenantContext:async()=>({organizationId:org,role:'owner'})};
 const errors={apiError:(e)=>json({error:'Error'},e.message==='UNAUTHENTICATED'?401:500)};
@@ -63,6 +63,12 @@ const poll=()=>route.GET(new Request('https://rumisocialai.com/api/video/queue?j
   const count=calls.length;await poll();assert.equal(calls.length,count,'completed video never regenerated');
   org='other';assert.equal((await file.GET(new Request('https://rumisocialai.com/api/video/file?jobId='+id))).status,404);org='org';
   assert.equal((await file.GET(new Request('https://rumisocialai.com/api/video/file?jobId='+id))).status,200);
+  for (const [range,body,contentRange] of [['bytes=0-1','vi','bytes 0-1/5'],['bytes=2-','deo','bytes 2-4/5'],['bytes=-2','eo','bytes 3-4/5']]) {
+    const response=await file.GET(new Request('https://rumisocialai.com/api/video/file?jobId='+id,{headers:{range}}));
+    assert.equal(response.status,206);assert.equal(response.headers.get('content-range'),contentRange);assert.equal(await response.text(),body);
+  }
+  for (const range of ['bytes=5-','bytes=3-1','bytes=-0','bytes=0-1,3-4']) assert.equal((await file.GET(new Request('https://rumisocialai.com/api/video/file?jobId='+id,{headers:{range}}))).status,416);
+
   const rejectedId=id.slice(0,-1)+'2';replies.push(json({error:'invalid'},400));await post({...input,requestId:rejectedId});assert.equal(balance,60);assert.equal(jobs.get(rejectedId).status,'failed');
   await video.failVideo(jobs.get(rejectedId),'failure');assert.equal(balance,60,'refund exactly once');
   const uncertainId=id.slice(0,-1)+'3';replies.push(new Error('lost response'));await post({...input,requestId:uncertainId});assert.equal(jobs.get(uncertainId).status,'uncertain');assert.equal(balance,20);
