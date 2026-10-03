@@ -18,12 +18,18 @@ export default function Login() {
     setMsg("Signing in...");
 
     try {
-      await signIn("credentials", {
+      const result = await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password,
         callbackUrl: "/post-login",
-        redirect: true,
+        redirect: false,
       });
+      if (!result || result.error || !result.ok) {
+        setMsg(result?.error === "CredentialsSignin" ? "Incorrect email or password. Please try again." : "Unable to sign in. Please try again.");
+        setSigningIn(false);
+        return;
+      }
+      window.location.assign("/post-login");
     } catch {
       setMsg("Unable to sign in. Please try again.");
       setSigningIn(false);
@@ -38,8 +44,9 @@ export default function Login() {
         <h1>Welcome back.</h1>
         <p>Sign in to your Creative OS.</p>
 
-        <label>Email</label>
+        <label htmlFor="login-email">Email</label>
         <input
+          id="login-email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -47,8 +54,9 @@ export default function Login() {
           required
         />
 
-        <label>Password</label>
+        <label htmlFor="login-password">Password</label>
         <input
+          id="login-password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -71,7 +79,7 @@ export default function Login() {
           {signingIn ? "Signing in..." : "Sign in"}
         </button>
 
-        {msg && <p className="status">{msg}</p>}
+        {msg && <p className="status" role={signingIn ? "status" : "alert"}>{msg}</p>}
 
         <small>Protected workspace · encrypted provider credentials</small>
       </form>
