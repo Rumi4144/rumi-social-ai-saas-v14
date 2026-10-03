@@ -93,6 +93,14 @@ export default function PrivacyPage() {
         actions requested by the user.
       </p>
 
+      <p>
+        When you request AI video generation, we send your selected image and
+        motion prompt to Runway. We retain the prompt, generation status and
+        completed video in your workspace. Completed videos are stored in
+        private Vercel Blob storage and require workspace access to view or
+        download. You can contact rumi@rumiguitars.com to request deletion.
+      </p>
+
       <h2>8. Data Retention and Account Disconnection</h2>
       <p>
         Information is retained as reasonably necessary to provide the service,
