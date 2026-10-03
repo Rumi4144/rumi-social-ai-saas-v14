@@ -99,7 +99,7 @@ export default async function RootLayout({
                 <Link href="/admin" scroll={true}>
                   ★ Master Admin
                 </Link>
-                <Link href="/admin" scroll={true}>
+                <Link href="/api/admin/reset-workspace" prefetch={false} scroll={true}>
                   ← Return to Admin
                 </Link>
               </>
