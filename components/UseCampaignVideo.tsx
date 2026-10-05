@@ -1,17 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 export default function UseCampaignVideo({ assetId, contentItemId, selected }: { assetId: string; contentItemId: string; selected: boolean }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  async function choose() {
-    setBusy(true); setError("");
-    try {
-      const response = await fetch("/api/video/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assetId, contentItemId }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not select video.");
-      window.location.reload();
-    } catch (e) { setError(e instanceof Error ? e.message : "Could not select video."); }
-    finally { setBusy(false); }
-  }
-  return <div><button type="button" disabled={busy || selected} onClick={choose}>{selected ? "Video selected for publishing" : busy ? "Selecting…" : "Use video for this post"}</button><p>Approve this post again after choosing its video. Facebook will publish the clip; download it for other platforms.</p>{error && <p role="alert">{error}</p>}</div>;
+ const router=useRouter();const [busy,setBusy]=useState(false),[error,setError]=useState(""),[chosen,setChosen]=useState(selected),[blocked,setBlocked]=useState(false);const draftRequest=useRef("");
+ async function choose(){setBusy(true);setError("");setBlocked(false);try{
+  const response=await fetch("/api/video/select",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({assetId,contentItemId}),signal:AbortSignal.timeout(20000)});const data=await response.json();
+  if(!response.ok){setBlocked(response.status===409);throw new Error(data.error||"Could not select video.");}setChosen(true);router.refresh();
+ }catch(e){setError(e instanceof Error&&e.name!=="TimeoutError"?e.message:"Selection is taking longer than expected. Refresh to check the post, then try again.");}finally{setBusy(false);}}
+ async function newDraft(){setBusy(true);setError("");draftRequest.current ||=crypto.randomUUID();try{const response=await fetch("/api/video/draft",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({assetId,contentItemId,requestId:draftRequest.current}),signal:AbortSignal.timeout(60000)});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not create draft.");router.push(`/campaigns/${data.campaignId}#post-${data.contentItemId}`);router.refresh();}catch(e){setError(e instanceof Error?e.message:"Could not create draft.");}finally{setBusy(false);}}
+ return <div>{error&&<p role="alert" style={{padding:12,border:"1px solid #b42318",borderRadius:8}}>{error}</p>}<button type="button" disabled={busy||chosen} onClick={choose}>{chosen?"Video selected for publishing":busy?"Working…":"Use video for this post"}</button>{chosen&&<p role="status">Video selected. Review the caption and click Approve below, then open <a href="/publishing">Publishing</a>.</p>}{blocked&&<p><button type="button" disabled={busy} onClick={newDraft}>Create a new draft with this video</button> Reuses your finished clip without generation credits. Review and approve the new post before publishing.</p>}<p>Approve this post after choosing its video. Facebook will publish the clip; download it for other platforms.</p></div>;
 }

@@ -16,7 +16,7 @@ export async function POST(req: Request) {
       if (!item || !asset?.url) return { error: "Post or video not found.", status: 404 };
       if (asset.url.startsWith("data:video/webm") || (asset.metadata as { contentType?: string } | null)?.contentType === "video/webm") return { error: "Use an MP4 clip for Facebook publishing.", status: 400 };
       const active = await tx.publishJob.findFirst({ where: { contentItemId: item.id, status: { in: ["scheduled", "retry", "publishing", "published"] } } });
-      if (active || item.status === "published") return { error: "Cancel scheduled posts before changing media. Published posts cannot be replaced here.", status: 409 };
+      if (active || item.status === "published") return { error: active?.status === "published" || item.status === "published" ? "This post has already been published. Create a new draft to publish this video." : "This post already has a scheduled or active publishing entry. Create a new draft to use this video without changing that entry.", status: 409 };
       await tx.contentItem.update({ where: { id: item.id }, data: { mediaUrl: `/api/video/media/${asset.id}`, status: "draft" } });
       return { status: 200 };
     }, { isolationLevel: "Serializable" });

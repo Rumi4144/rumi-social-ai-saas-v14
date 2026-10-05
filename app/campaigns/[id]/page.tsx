@@ -170,7 +170,7 @@ export default async function Campaign({
               : "No Image";
 
           return (
-            <article className="card" key={item.id}>
+            <article className="card" key={item.id} id={`post-${item.id}`}>
               {videoAsset && <div style={{ marginBottom: 20 }}>
                 <video controls playsInline preload="metadata" src={`/api/video/media/${videoAsset.id}`} style={{ width: "100%", maxHeight: 600 }} />
                 <UseCampaignVideo assetId={videoAsset.id} contentItemId={item.id} selected={item.mediaUrl === `/api/video/media/${videoAsset.id}`} />
