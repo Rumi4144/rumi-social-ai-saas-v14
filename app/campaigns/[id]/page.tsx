@@ -8,6 +8,8 @@ import EditContentButton from "@/components/EditContentButton";
 import ApproveContentButton from "@/components/ApproveContentButton";
 import SchedulePostButton from "@/components/SchedulePostButton";
 import CampaignImageProcessor from "@/components/CampaignImageProcessor";
+import UseCampaignVideo from "@/components/UseCampaignVideo";
+import CampaignVideoTools from "@/components/CampaignVideoTools";
 
 export default async function Campaign({
   params,
@@ -27,7 +29,7 @@ export default async function Campaign({
   console.log("[CAMPAIGN PERF] tenantContext:", Date.now() - tenantStarted, "ms");
 
   const dataStarted = Date.now();
-  const [campaign, assets] = await Promise.all([
+  const [campaign, assets, videoJobs] = await Promise.all([
     prisma.campaign.findFirst({
       where: {
         id,
@@ -51,6 +53,7 @@ export default async function Campaign({
         createdAt: "desc",
       },
     }),
+    prisma.job.findMany({ where: { organizationId, type: "RUNWAY_VIDEO", status: { in: ["starting", "running", "saving", "uncertain"] }, payload: { path: ["campaignId"], equals: id } }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, payload: true } }),
   ]);
 
   console.log(
@@ -148,6 +151,8 @@ export default async function Campaign({
               : layoutSequence[index % layoutSequence.length];
 
           const displayAsset = brandedCreative || originalImage;
+          const videoAsset = itemAssets.find(asset => ["campaign_video", "ai_video"].includes(asset.kind));
+          const pendingVideo = videoJobs.find(job => (job.payload as { contentItemId?: string }).contentItemId === item.id);
 
         const storyNumber =
           item.type === "story"
@@ -166,6 +171,12 @@ export default async function Campaign({
 
           return (
             <article className="card" key={item.id}>
+              {videoAsset && <div style={{ marginBottom: 20 }}>
+                <video controls playsInline preload="metadata" src={`/api/video/media/${videoAsset.id}`} style={{ width: "100%", maxHeight: 600 }} />
+                <UseCampaignVideo assetId={videoAsset.id} contentItemId={item.id} selected={item.mediaUrl === `/api/video/media/${videoAsset.id}`} />
+                <a href={`/api/video/media/${videoAsset.id}`} target="_blank" rel="noopener noreferrer">Open / download video draft</a>
+                <p>Review this clip, then select it for Facebook publishing or download it for other platforms.</p>
+              </div>}
               {displayAsset?.url && (
                 <img
                   src={displayAsset.url}
@@ -219,6 +230,7 @@ export default async function Campaign({
           <h3>{item.headline || "Creative"}</h3>
 
               <p>{item.caption}</p>
+              <CampaignVideoTools campaignId={campaign.id} contentItemId={item.id} sourceAssetId={originalImage?.id} pendingJobId={pendingVideo?.id} />
 
               <div className="approval">
                 <ApproveContentButton

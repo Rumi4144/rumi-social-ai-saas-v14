@@ -1,3 +1,5 @@
+import { buildVisualConcept, buildVisualPlanPrompt, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "./visual-plan";
+
 type BrandVisualInput = {
   name: string;
   voice?: string | null;
@@ -17,6 +19,9 @@ type VisualDirectorInput = {
   headline?: string | null;
   visualDirection?: string | null;
   variationIndex?: number;
+  businessContext?: VisualBusinessContext;
+  visualConcept?: VisualConcept;
+  recentConcepts?: RecentVisualConcept[];
 };
 
 const treatments = [
@@ -84,6 +89,9 @@ export function buildVisualDirection(
     headline,
     visualDirection,
     variationIndex = 0,
+    businessContext = {},
+    visualConcept,
+    recentConcepts = [],
   } = input;
 
   const index = Math.abs(variationIndex);
@@ -106,7 +114,7 @@ export function buildVisualDirection(
     .join(", ");
 
   return `
-RUMI SOCIAL AI — VISUAL DIRECTOR V2
+RUMI SOCIAL AI — VISUAL DIRECTOR V3
 
 Create premium advertising imagery specifically for this brand and message.
 
@@ -133,6 +141,8 @@ Use ${composition}.
 
 ORIGINAL CREATIVE DIRECTION
 ${visualDirection || "Interpret the campaign message visually."}
+
+${buildVisualPlanPrompt({ businessContext, concept: visualConcept || buildVisualConcept({ businessContext, variationIndex, recentConcepts }), recentConcepts })}
 
 COLOR INTELLIGENCE
 Choose a palette appropriate to this specific brand, audience and message.

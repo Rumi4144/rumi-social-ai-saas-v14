@@ -4,10 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 import { apiError } from "@/lib/http/errors";
 import { createVideoTask, runwayConfigured, runwayModel, validImage, RunwayError } from "@/lib/video/runway";
+import { videoMotionPrompt } from "@/lib/video/clips";
 import { failVideo, refreshVideo, videoSummary } from "@/lib/video/jobs";
 
 export const maxDuration = 60;
-const S = z.object({ requestId: z.string().uuid(), campaignId: z.string().optional(), assetId: z.string().optional(),
+const S = z.object({ requestId: z.string().uuid(), campaignId: z.string().optional(), contentItemId: z.string().optional(), assetId: z.string().optional(),
   imageUrl: z.string().max(3_000_000).optional(), prompt: z.string().trim().min(10).max(1000),
   duration: z.union([z.literal(5), z.literal(10)]).default(5), ratio: z.enum(["720:1280", "1280:720"]).default("720:1280"), consent: z.literal(true),
 }).refine(v => Boolean(v.assetId || v.imageUrl));
@@ -32,8 +33,13 @@ export async function POST(req: Request) {
     }
     if (!validImage(imageUrl)) return reply({ error: "Use a public HTTPS image URL or a PNG, JPEG or WebP image under 2 MB." }, 400);
     if (p.campaignId && !await prisma.campaign.findFirst({ where: { id: p.campaignId, brand: { organizationId: ctx.organizationId } } })) return reply({ error: "Campaign not found." }, 404);
+    if (p.contentItemId) {
+      const item = await prisma.contentItem.findFirst({ where: { id: p.contentItemId, campaignId: p.campaignId, campaign: { brand: { organizationId: ctx.organizationId } } } });
+      const source = p.assetId && await prisma.mediaAsset.findFirst({ where: { id: p.assetId, organizationId: ctx.organizationId, campaignId: item?.campaignId, contentItemId: p.contentItemId, kind: "ai_image", status: "ready" } });
+      if (!p.campaignId || !item || !source) return reply({ error: "Choose this post's own source image." }, 404);
+    }
     const cost = p.duration === 10 ? 80 : 40;
-    const payload = { prompt: p.prompt, duration: p.duration, ratio: p.ratio, model: runwayModel(), cost, ...(p.campaignId ? { campaignId: p.campaignId } : {}), ...(p.assetId ? { assetId: p.assetId } : {}) };
+    const payload = { prompt: p.contentItemId ? videoMotionPrompt(p.prompt) : p.prompt, duration: p.duration, ratio: p.ratio, model: runwayModel(), cost, ...(p.campaignId ? { campaignId: p.campaignId } : {}), ...(p.assetId ? { assetId: p.assetId } : {}), ...(p.contentItemId ? { contentItemId: p.contentItemId } : {}) };
     const job = await prisma.$transaction(async tx => {
       const created = await tx.job.create({ data: { id: p.requestId, organizationId: ctx.organizationId, type: "RUNWAY_VIDEO", status: "starting", payload } });
       const spent = await tx.subscription.updateMany({ where: { organizationId: ctx.organizationId, credits: { gte: cost } }, data: { credits: { decrement: cost } } });

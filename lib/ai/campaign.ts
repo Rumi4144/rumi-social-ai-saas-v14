@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { buildVisualConcept, type RecentVisualConcept } from "./visual-plan";
 export type CampaignPackage = {
   title: string;
   strategy: string;
@@ -131,6 +132,7 @@ export async function generateCampaign(input: {
   brief: string;
   goal: string;
   days: number;
+  recentConcepts?: RecentVisualConcept[];
   dailyPlan?: Array<{
     day: number;
     date: string;
@@ -217,6 +219,15 @@ Preferred words: ${input.brand.preferredWords || ""}
 Banned words/claims: ${input.brand.bannedWords || ""}
 Visual rules: ${input.brand.visualRules || ""}
 Use the Brand Brain and business context as persistent background context.
+VISUAL SUBJECT PLANNING:
+Plan distinct primary subjects across daily posts as well as Stories. Do not make every post a product hero or treat a service benefit as an arbitrary physical object.
+${Array.from({ length: input.days }, (_, index) => {
+  const context = input.businessContext || {};
+  const concept = buildVisualConcept({ businessContext: context, variationIndex: index, recentConcepts: input.recentConcepts });
+  return `Day ${index + 1}: ${concept.subjectCategory} — ${concept.direction}`;
+}).join("\n")}
+Business context and recent concepts for this brand only: ${JSON.stringify({ business: input.businessContext || {}, recentConcepts: (input.recentConcepts || []).slice(-6) })}
+The subject plan is adapted to this business. For real-photo campaigns, describe the supplied photographs honestly; do not imply a new generated scene or product.
 The current brief and campaign goal determine this campaign's specific objective.
 Write each platform post natively for that platform rather than repeating one caption.
 Vary hooks, creative angles, captions, calls-to-action, and visual concepts while maintaining one coherent campaign strategy.

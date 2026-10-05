@@ -15,13 +15,15 @@ export async function processDuePublishJob() {
     return { status: "idle" as const };
   }
 
-  await prisma.publishJob.update({
-    where: { id: job.id },
+  const claim = await prisma.publishJob.updateMany({
+    where: { id: job.id, status: job.status },
     data: {
       status: "publishing",
       attempts: { increment: 1 },
     },
   });
+
+  if (claim.count !== 1) return { status: "idle" as const };
 
   const connection = await prisma.socialConnection.findUnique({
     where: { id: job.socialConnectionId },
@@ -31,7 +33,7 @@ export async function processDuePublishJob() {
     where: { id: job.contentItemId },
   });
 
-  if (!connection || !item) {
+  if (!connection || !item || connection.organizationId !== job.organizationId || (item.mediaUrl?.includes("/api/video/media/") && !["approved", "scheduled"].includes(item.status))) {
     await prisma.publishJob.update({
       where: { id: job.id },
       data: {
@@ -70,6 +72,9 @@ export async function processDuePublishJob() {
     externalAccountId: connection.externalId || "",
     caption: item.caption || "",
     mediaUrl: publishMediaUrl,
+    organizationId: job.organizationId,
+    contentItemId: item.id,
+    publishJobId: job.id,
   });
 
   await prisma.publishAttempt.create({
@@ -94,6 +99,8 @@ export async function processDuePublishJob() {
       },
     });
 
+    if (item.mediaUrl?.includes("/api/video/media/")) await prisma.contentItem.update({ where: { id: item.id }, data: { status: "published" } });
+
     return {
       status: "published" as const,
       jobId: job.id,
@@ -101,7 +108,7 @@ export async function processDuePublishJob() {
     };
   }
 
-  const status = attempt >= 4 ? "failed" : "retry";
+  const status = result.retryable === false || attempt >= 4 ? "failed" : "retry";
 
   // Do not burn through all retries in one cron invocation. When a publish
   // attempt can be retried, move its due time forward so the current cron

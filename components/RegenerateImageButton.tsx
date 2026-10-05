@@ -16,37 +16,9 @@ export default function RegenerateImageButton({
   async function regenerate() {
     setStatus("Generating...");
 
-    const prompt = `
-Create premium editorial product photography for this campaign:
-
-${headline}
-
-Create only the underlying photograph/artwork.
-
-ABSOLUTELY NO TEXT OR TYPOGRAPHY:
-no words, letters, numbers, dates, headlines, captions, labels,
-logos, brand marks, signatures, watermarks, signs, posters,
-packaging text, or UI elements.
-
-Do not render the campaign headline inside the image.
-Do not render Rumi Guitars or FE14 as text.
-Leave elegant negative space suitable for professional typography
-to be added later by the application.
-
-Show a refined classical guitar with realistic proportions,
-natural craftsmanship, sophisticated warm editorial lighting,
-museum-quality presentation, and an elegant luxury aesthetic.
-
-COMPOSITION:
-Position the primary product predominantly on the RIGHT side of the frame.
-Keep the complete product visually important and unobstructed.
-Reserve generous, visually calm NEGATIVE SPACE on the LEFT side for
-professional editorial typography that will be added later by the application.
-Do not place important product details in the left typography zone.
-Maintain balanced luxury-advertising composition and natural perspective.
-
-No people.
-`.trim();
+    const prompt = `Create a fresh, brand-relevant visual concept for this campaign message: ${headline}.
+Use the current business context and previous campaign subjects supplied by the server.
+Generate underlying photography or artwork only, with no text or branding; leave space for the existing creative layout.`;
 
     try {
       const res = await fetch("/api/creative/generate-image", {

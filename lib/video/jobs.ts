@@ -3,7 +3,7 @@ import { put } from "@vercel/blob";
 import { getVideoTask } from "./runway";
 import type { Job } from "@prisma/client";
 
-export type VideoPayload = { prompt: string; duration: 5 | 10; ratio: "720:1280" | "1280:720"; cost: number; model: string; campaignId?: string; assetId?: string; taskId?: string };
+export type VideoPayload = { prompt: string; duration: 5 | 10; ratio: "720:1280" | "1280:720"; cost: number; model: string; campaignId?: string; contentItemId?: string; assetId?: string; taskId?: string };
 export function videoSummary(job: Job) {
   const payload = job.payload as unknown as VideoPayload;
   return { id: job.id, status: job.status, progress: job.progress, error: job.error, prompt: payload.prompt,
@@ -47,7 +47,7 @@ export async function refreshVideo(job: Job) {
       await prisma.$transaction(async tx => {
         const done = await tx.job.updateMany({ where: { id: job.id, status: { in: ["running", "saving"] } }, data: { status: "succeeded", progress: 100, error: null, result: { pathname } } });
         if (done.count) await tx.mediaAsset.upsert({ where: { id: job.id }, update: {}, create: {
-          id: job.id, organizationId: job.organizationId, campaignId: p.campaignId, kind: "ai_video", provider: "runway", status: "ready",
+          id: job.id, organizationId: job.organizationId, campaignId: p.campaignId, contentItemId: p.contentItemId, kind: p.contentItemId ? "campaign_video" : "ai_video", provider: "runway", status: "ready",
           url: `/api/video/file?jobId=${job.id}`, prompt: p.prompt, metadata: { pathname, duration: p.duration, model: p.model, taskId: p.taskId },
         } });
       });

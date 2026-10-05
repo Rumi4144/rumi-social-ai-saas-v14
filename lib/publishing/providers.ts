@@ -1,4 +1,5 @@
 import { decryptSecret } from "@/lib/security/crypto";
+import { campaignVideoId, publishFacebookVideo } from "./facebook-video";
 import { publishInstagram } from "./instagram";
 
 export type PublishResult = {
@@ -6,6 +7,7 @@ export type PublishResult = {
   externalId?: string;
   code?: number;
   error?: string;
+  retryable?: boolean;
 };
 
 async function facebookJson(url: string, init?: RequestInit) {
@@ -21,6 +23,9 @@ export async function publishToProvider(input: {
   externalAccountId: string;
   caption: string;
   mediaUrl?: string | null;
+  organizationId?: string;
+  contentItemId?: string;
+  publishJobId?: string;
 }): Promise<PublishResult> {
   if (!input.token) return { ok: false, error: "MISSING_TOKEN" };
 
@@ -29,6 +34,7 @@ export async function publishToProvider(input: {
   catch { return { ok: false, error: "TOKEN_DECRYPT_FAILED" }; }
 
   if (input.platform.toLowerCase() === "instagram") {
+    if (campaignVideoId(input.mediaUrl)) return { ok: false, retryable: false, error: "Download this clip to post on Instagram. Automatic Instagram video publishing is not available yet." };
     return publishInstagram({ accessToken: decrypted, accountId: input.externalAccountId, caption: input.caption, mediaUrl: input.mediaUrl });
   }
 
@@ -52,6 +58,9 @@ export async function publishToProvider(input: {
     if (String(identity.result.id) !== String(pageId)) {
       return { ok: false, error: `FACEBOOK_PAGE_ID_MISMATCH:${identity.result.id}:${pageId}` };
     }
+
+    const videoId = campaignVideoId(input.mediaUrl);
+    if (videoId) return publishFacebookVideo({ ...input, pageId, pageAccessToken, assetId: videoId });
 
     // Text-only posts are straightforward Page feed posts.
     if (!input.mediaUrl) {

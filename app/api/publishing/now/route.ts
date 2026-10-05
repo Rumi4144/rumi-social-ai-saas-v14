@@ -64,6 +64,8 @@ export async function POST(req: Request) {
       );
     }
 
+    if (item.mediaUrl?.includes("/api/video/media/") && connection.provider.toLowerCase() !== "facebook") return NextResponse.json({ error: "Choose Facebook for automatic video publishing. Download the clip for other platforms." }, { status: 400 });
+
     const publishTime = new Date();
     const key = publishKey(
       item.id,
@@ -90,6 +92,9 @@ export async function POST(req: Request) {
       externalAccountId: connection.externalId || "",
       caption: item.caption || item.headline || "",
       mediaUrl: item.mediaUrl,
+      organizationId: ctx.organizationId,
+      contentItemId: item.id,
+      publishJobId: job.id,
     });
 
     await prisma.publishAttempt.create({

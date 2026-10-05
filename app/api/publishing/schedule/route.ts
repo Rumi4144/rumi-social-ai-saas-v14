@@ -64,6 +64,7 @@ export async function POST(req: Request) {
       });
 
       if (!connection) continue;
+      if (item.mediaUrl?.includes("/api/video/media/") && connection.provider.toLowerCase() !== "facebook") continue;
 
       const key = publishKey(item.id, connection.id, p.data.scheduledFor);
 
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
 
     if (jobs.length === 0) {
       return NextResponse.json(
-        { error: "No connected social accounts were selected." },
+        { error: "No supported connected accounts were selected. Video posts can currently be scheduled on Facebook." },
         { status: 400 },
       );
     }

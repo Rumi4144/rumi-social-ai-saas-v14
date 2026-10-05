@@ -137,7 +137,7 @@ export default async function Publishing() {
 
                 {item.mediaUrl ? (
                   <div style={{ marginTop: "16px" }}>
-                    <img
+                    {item.mediaUrl.includes("/api/video/media/") ? <video controls playsInline preload="metadata" src={item.mediaUrl} style={{ width: "100%", maxWidth: 520, borderRadius: 12 }} /> : <img
                       src={item.mediaUrl}
                       alt={item.headline || "Social media creative"}
                       style={{
@@ -147,9 +147,9 @@ export default async function Publishing() {
                         height: "auto",
                         borderRadius: "12px",
                       }}
-                    />
+                    />}
                     <p style={{ marginTop: "8px" }}>
-                      Image post
+                      {item.mediaUrl.includes("/api/video/media/") ? "Video post · Facebook" : "Image post"}
                     </p>
                   </div>
                 ) : (
@@ -162,7 +162,7 @@ export default async function Publishing() {
                     connectionId={facebookConnection.id}
                   />
                 ) : null}
-                {instagramConnection && item.mediaUrl ? (
+                {instagramConnection && item.mediaUrl && !item.mediaUrl.includes("/api/video/media/") ? (
                   <PublishingActions
                     contentItemId={item.id}
                     connectionId={instagramConnection.id}

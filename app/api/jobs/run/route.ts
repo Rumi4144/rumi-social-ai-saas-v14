@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
+import { recentBrandConcepts } from "@/lib/ai/visual-history";
 import { generateCampaign } from "@/lib/ai/campaign";
 import { renderSocialSvg } from "@/lib/render/svg";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
+import { buildVisualConcept, isSubjectCategory, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "@/lib/ai/visual-plan";
 import { imageToJpegDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
+
 
 export async function POST(req: Request) {
   const secret = req.headers.get("x-worker-secret");
@@ -30,6 +33,10 @@ export async function POST(req: Request) {
         organizationId,
       },
       select: {
+        id: true,
+        type: true,
+        status: true,
+        error: true,
         payload: true,
       },
     });
@@ -105,14 +112,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ status: "idle" });
   }
 
-  await prisma.job.update({
-    where: { id: job.id },
+  const claimed = await prisma.job.updateMany({
+    where: { id: job.id, organizationId, status: job.status },
     data: {
       status: "running",
       progress: 10,
       attempts: { increment: 1 },
     },
   });
+  if (claimed.count !== 1) return NextResponse.json({ status: "idle" });
 
   try {
     if (job.type === "GENERATE_IMAGE") {
@@ -128,12 +136,15 @@ export async function POST(req: Request) {
         sourceImageUrl?: string;
         photoSource?: "website" | "ai";
         textPosition?: "left" | "right" | "top";
+        visualConcept?: VisualConcept;
+        businessContext?: VisualBusinessContext;
+        recentConcepts?: RecentVisualConcept[];
       };
 
       const format = p.format || "portrait";
 
     const visualContentItem = await prisma.contentItem.findUnique({
-      where: { id: p.contentItemId },
+      where: { id: p.contentItemId, campaignId: p.campaignId, campaign: { brand: { organizationId: job.organizationId } } },
       include: {
         campaign: {
           include: {
@@ -149,6 +160,13 @@ export async function POST(req: Request) {
 
     const visualCampaign = visualContentItem.campaign;
     const visualBrand = visualCampaign.brand;
+    const recentConcepts = p.recentConcepts || await recentBrandConcepts(job.organizationId, visualBrand.id, job.createdAt);
+    const businessContext: VisualBusinessContext = {
+      ...p.businessContext,
+      industry: visualBrand.industry || p.businessContext?.industry,
+      description: visualBrand.description || p.businessContext?.description,
+      targetAudience: visualBrand.targetAudience || p.businessContext?.targetAudience,
+    };
 
     const visualDirectorPrompt = buildVisualDirection({
       brand: {
@@ -166,6 +184,9 @@ export async function POST(req: Request) {
       contentType: visualContentItem.type,
       headline: visualContentItem.headline,
       visualDirection: p.prompt,
+      businessContext,
+      visualConcept: isSubjectCategory(p.visualConcept?.subjectCategory) ? p.visualConcept : undefined,
+      recentConcepts,
       variationIndex: Math.abs(
         Array.from(visualContentItem.id).reduce(
           (sum, ch) => sum + ch.charCodeAt(0),
@@ -236,6 +257,7 @@ export async function POST(req: Request) {
           model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
           format,
           size,
+          subjectCategory: p.visualConcept?.subjectCategory || "unrecorded",
         },
       };
 
@@ -389,7 +411,7 @@ export async function POST(req: Request) {
     };
 
     const campaign = await prisma.campaign.findUnique({
-      where: { id: p.campaignId },
+      where: { id: p.campaignId, brand: { organizationId: job.organizationId } },
       include: { brand: true },
     });
 
@@ -397,25 +419,34 @@ export async function POST(req: Request) {
       throw new Error("CAMPAIGN_NOT_FOUND");
     }
 
+    const businessContext: VisualBusinessContext = {
+      businessType: p.brandContext?.businessType,
+      industry: campaign.brand.industry || p.brandContext?.industry,
+      description: campaign.brand.description || p.brandContext?.description,
+      targetAudience: campaign.brand.targetAudience || p.brandContext?.targetAudience,
+    };
+    const recentConcepts = await recentBrandConcepts(job.organizationId, campaign.brandId);
+
     const pack = await generateCampaign({
       brief: p.brief,
       goal: p.goal,
       days: p.days,
+      recentConcepts,
     dailyPlan: p.dailyPlan ?? [],
       brand: campaign.brand,
       businessContext: p.brandContext
         ? {
             businessType: p.brandContext.businessType,
-              industry: p.brandContext.industry,
-              description: p.brandContext.description,
-              targetAudience: p.brandContext.targetAudience,
+              industry: businessContext.industry,
+              description: businessContext.description,
+              targetAudience: businessContext.targetAudience,
               contentGoals: p.brandContext.contentGoals,
               postingFrequency: p.brandContext.postingFrequency,
               approvalRequired: p.brandContext.approvalRequired,
             website: p.brandContext.website,
             primaryGoal: p.brandContext.primaryGoal,
           }
-        : undefined,
+        : businessContext,
     });
 
     await prisma.$transaction(async (tx: any) => {
@@ -426,6 +457,7 @@ export async function POST(req: Request) {
       let imageJobsCreated = 0;
       let websitePhotoIndex = 0;
       let creativeLayoutIndex = 0;
+      const plannedConcepts = [...recentConcepts];
 
       const creativeLayouts: Array<"left" | "right" | "top"> = [
         "top",
@@ -441,6 +473,9 @@ export async function POST(req: Request) {
           : [];
 
       for (const x of pack.posts) {
+      const concept = buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });
+      const priorConcepts = plannedConcepts.slice(-6);
+      plannedConcepts.push({ subjectCategory: concept.subjectCategory, direction: `${concept.direction} Campaign direction: ${x.visualDirection}` });
       const scheduledDay = p.dailyPlan?.find(
         (day) => day.day === x.day
       );
@@ -478,6 +513,10 @@ export async function POST(req: Request) {
               payload: {
                 campaignId: campaign.id,
                 contentItemId: item.id,
+                businessContext,
+                visualConcept: concept,
+                recentConcepts: priorConcepts,
+                originalDirection: x.visualDirection,
                 sourceImageUrl:
                   p.photoSource === "website" && websitePhotos.length > 0
                     ? websitePhotos[websitePhotoIndex % websitePhotos.length]
@@ -526,14 +565,13 @@ Avoid seven variations of the same object centered in different rooms. Avoid rep
 
 The seven images should feel like one premium campaign with seven distinct chapters, not seven versions of the same advertisement.
 
-COMPOSITION: Position the primary product predominantly on the RIGHT side
-of the portrait frame. Keep the complete product visually important and
-unobstructed. Reserve generous, visually calm NEGATIVE SPACE on the LEFT
+COMPOSITION: Position the planned primary subject predominantly on the RIGHT side
+of the portrait frame. Do not turn a human, experience, or service concept into a product hero. Reserve generous, visually calm NEGATIVE SPACE on the LEFT
 side for professional editorial typography that Rumi Social AI will add
 later. Do not place important product details in the left typography zone.
 Maintain a balanced premium advertising composition and natural perspective.
 
-IMPORTANT: Generate ONLY the underlying photography/artwork. The final image must contain absolutely NO typography, words, letters, numbers, dates, captions, headlines, labels, logos, brand marks, signatures, watermarks, signs, posters, packaging text, or UI elements. Leave clean negative space where appropriate for Rumi Social AI to add professional typography later. Do not render the campaign title or content headline inside the image. No people unless explicitly required by the visual direction.`,
+IMPORTANT: Generate ONLY the underlying photography/artwork. The final image must contain absolutely NO typography, words, letters, numbers, dates, captions, headlines, labels, logos, brand marks, signatures, watermarks, signs, posters, packaging text, or UI elements. Leave clean negative space where appropriate for Rumi Social AI to add professional typography later. Do not render the campaign title or content headline inside the image. Use people when the planned subject requires a human or lifestyle experience; do not imply a real customer endorsement.`,
                 format: "portrait",
               },
             },
@@ -549,6 +587,9 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
       }
 
     for (const x of pack.stories) {
+      const concept = buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });
+      const priorConcepts = plannedConcepts.slice(-6);
+      plannedConcepts.push({ subjectCategory: concept.subjectCategory, direction: `${concept.direction} Campaign direction: ${x.visualDirection}` });
       const storyItem = await tx.contentItem.create({
         data: {
           campaignId: campaign.id,
@@ -567,6 +608,10 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
           payload: {
             campaignId: campaign.id,
             contentItemId: storyItem.id,
+            businessContext,
+            visualConcept: concept,
+            recentConcepts: priorConcepts,
+            originalDirection: x.visualDirection,
             photoSource: p.photoSource || "ai",
             sourceImageUrl:
               p.photoSource === "website" && websitePhotos.length > 0
@@ -584,6 +629,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
 Brand: ${campaign.brand.name}
 Campaign: ${pack.title}
 Story message: ${x.text}
+Original story direction: ${x.visualDirection}
 
 Create a visually compelling vertical scene that communicates the
 meaning and emotion of this specific story.
