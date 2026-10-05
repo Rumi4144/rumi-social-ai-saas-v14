@@ -9,8 +9,9 @@ type Source = { id: string; src: string; kind: "image" | "video"; contentItemId?
 type Post = { id: string; headline: string | null; caption: string | null };
 const empty: ReelProject = { brand: "", website: "", cta: "Explore more", color: "#132342", accent: "#dec184", style: "editorial", scenes: [], closingSeconds: 3 };
 
-export default function ReelEditor({ initialCampaignId, initialContentItemId }: { initialCampaignId: string; initialContentItemId: string }) {
-  const [campaigns, setCampaigns] = useState<{ id: string; title: string }[]>([]), [campaignId, setCampaignId] = useState(initialCampaignId);
+export default function ReelEditor({ initialCampaignId, initialContentItemId, initialCampaigns }: { initialCampaignId: string; initialContentItemId: string; initialCampaigns?: { id: string; title: string }[] }) {
+  const [campaigns, setCampaigns] = useState<{ id: string; title: string }[]>(initialCampaigns || []), [campaignId, setCampaignId] = useState(initialCampaignId);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(initialCampaigns === undefined), [loadingProject, setLoadingProject] = useState(false);
   const [organizationId, setOrganizationId] = useState(""), [posts, setPosts] = useState<Post[]>([]), [sources, setSources] = useState<Source[]>([]);
   const [project, setProject] = useState<ReelProject>(empty), [contentItemId, setContentItemId] = useState(initialContentItemId);
   const [music, setMusic] = useState(true), [originalAudio, setOriginalAudio] = useState(false), [musicFile, setMusicFile] = useState<File>(), [voiceFile, setVoiceFile] = useState<File>();
@@ -24,15 +25,26 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId }: 
   const ownUrl = (blob: Blob) => { const url = URL.createObjectURL(blob); localUrls.current.add(url); return url; };
   const finishPreview = () => { if (playTimer.current) clearInterval(playTimer.current); playTimer.current = undefined; media.current.forEach(item => { if (item instanceof HTMLVideoElement) item.pause(); }); setPreviewing(false); };
 
-  useEffect(() => { fetch("/api/reels/project").then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error); setCampaigns(data.campaigns); }).catch(error => setMessage(error.message)); return () => { controller.current?.abort(); if (playTimer.current) clearInterval(playTimer.current); localUrls.current.forEach(URL.revokeObjectURL); }; }, []);
+  async function refreshCampaigns() {
+    setLoadingCampaigns(true); setMessage("");
+    try {
+      const response = await fetch("/api/reels/project", { cache: "no-store", signal: AbortSignal.timeout(15000) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not load campaigns. Try again.");
+      setCampaigns(data.campaigns);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not load campaigns. Try again."); }
+    finally { setLoadingCampaigns(false); }
+  }
+  useEffect(() => { if (initialCampaigns === undefined) void refreshCampaigns(); return () => { controller.current?.abort(); if (playTimer.current) clearInterval(playTimer.current); localUrls.current.forEach(URL.revokeObjectURL); }; }, []);
   useEffect(() => {
-    if (!campaignId) return;
-    let disposed = false; finishPreview(); setMessage(""); setProject(empty); setSources([]); setPosts([]); setOrganizationId("");
-    fetch(`/api/reels/project?campaignId=${encodeURIComponent(campaignId)}`).then(async response => {
+    if (!campaignId) { setOrganizationId(""); setLoadingProject(false); return; }
+    let disposed = false; setLoadingProject(true); finishPreview(); setMessage(""); setProject(empty); setSources([]); setPosts([]); setOrganizationId("");
+    fetch(`/api/reels/project?campaignId=${encodeURIComponent(campaignId)}`, { cache: "no-store", signal: AbortSignal.timeout(15000) }).then(async response => {
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not load campaign."); if (disposed) return;
       setOrganizationId(data.organizationId); setSources(data.sources); setPosts(data.posts); setContentItemId(data.posts.some((post: Post) => post.id === initialContentItemId) ? initialContentItemId : data.posts[0]?.id || "");
       const first = data.sources.filter((source: Source) => source.kind === "image").slice(0, 4) as Source[];
       let next: ReelProject = { ...empty, brand: data.brand.name, color: data.brand.color, accent: data.brand.accent, website: data.brand.website, logo: data.brand.logo, scenes: first.map((source, index) => ({ id: crypto.randomUUID(), src: source.src, kind: source.kind, seconds: 4, headline: data.posts.find((post: Post) => post.id === source.contentItemId)?.headline?.slice(0, 120) || (index ? "Discover the details" : data.campaign.title.slice(0, 120)), detail: "" })) };
+      setProject(next); setLoadingProject(false);
       const draft = await loadDraft(`${data.organizationId}:${campaignId}`).catch(() => undefined); if (disposed) return;
       localFiles.current.clear(); setMusicFile(undefined); setVoiceFile(undefined); setMusic(true); setOriginalAudio(false);
       if (draft) {
@@ -44,7 +56,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId }: 
         setMessage("Your saved draft was restored.");
       }
       setProject(next);
-    }).catch(error => { if (!disposed) setMessage(error.message); });
+    }).catch(error => { if (!disposed) { setMessage(error.message || "Could not open campaign. Try again."); setLoadingProject(false); } });
     return () => { disposed = true; };
   }, [campaignId]);
   const sourceKey = project.scenes.map(scene => `${scene.kind}:${scene.src}`).join("|");
@@ -107,7 +119,10 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId }: 
     finally { setBusy(false); }
   }
   return <><div className="eyebrow">REEL EDITOR</div><h1>Make a finished reel.</h1><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p>
-    <label>Campaign<select value={campaignId} disabled={busy} onChange={event => setCampaignId(event.target.value)}><option value="">Choose campaign</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>
+    <label>Campaign<select value={campaignId} disabled={busy || loadingCampaigns} onChange={event => setCampaignId(event.target.value)}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>
+    {!organizationId && <p role="status">{loadingCampaigns ? "Loading your campaigns…" : loadingProject ? "Opening campaign…" : message}</p>}
+    {!loadingCampaigns && !campaigns.length && <section className="card"><h2>No campaigns available in this workspace</h2><p>Open an existing campaign from the Campaigns page, or create a campaign first to use its photos and save your reel.</p><a href="/campaigns">Open Campaigns</a> · <a href="/create">Create a campaign</a></section>}
+    {!organizationId && <button type="button" disabled={loadingCampaigns || loadingProject} onClick={refreshCampaigns}>Refresh campaigns</button>}
     {campaignId && organizationId && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 24, marginTop: 24 }}>
       <section className="card"><h2>Your scenes</h2><fieldset disabled={busy || previewing} style={{ border: 0, padding: 0 }}>
         <label>Visual style<select value={project.style} onChange={event => setProject({ ...project, style: event.target.value as ReelStyle })}><option value="editorial">Animated photo collage</option><option value="cinematic">Cinematic close-ups / presenter</option><option value="gallery">Framed photo gallery</option></select></label>
