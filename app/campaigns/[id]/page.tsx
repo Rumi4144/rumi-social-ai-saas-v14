@@ -230,6 +230,7 @@ export default async function Campaign({
           <h3>{item.headline || "Creative"}</h3>
 
               <p>{item.caption}</p>
+              <p><a href={`/studio/reels?campaignId=${campaign.id}&contentItemId=${item.id}`}>Make a finished reel for this post</a></p>
               <CampaignVideoTools campaignId={campaign.id} contentItemId={item.id} sourceAssetId={originalImage?.id} pendingJobId={pendingVideo?.id} />
 
               <div className="approval">

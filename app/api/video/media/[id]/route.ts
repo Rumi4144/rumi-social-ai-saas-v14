@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
+import { privateVideoResponse } from "@/lib/video/private-response";
+import { privateReelPath } from "@/lib/reels/storage";
 import { decodeClip } from "@/lib/video/clips";
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -22,7 +24,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       }
       return new NextResponse(new Uint8Array(clip.bytes), { headers: { ...headers, "Content-Length": String(clip.bytes.length) } });
     }
-    const meta = asset.metadata as { pathname?: string } | null;
+    const meta = asset.metadata as { pathname?: string; contentType?: string } | null;
+    if (meta?.pathname && asset.contentItemId && privateReelPath(meta.pathname, ctx.organizationId, asset.contentItemId)) return privateVideoResponse(_req, meta.pathname, meta.contentType === "video/webm" ? "video/webm" : "video/mp4", `reel-${asset.id}.${meta.contentType === "video/webm" ? "webm" : "mp4"}`);
     if (meta?.pathname === `runway/${ctx.organizationId}/${asset.id}.mp4`) return NextResponse.redirect(new URL(`/api/video/file?jobId=${asset.id}`, _req.url));
     const url = new URL(asset.url, _req.url);
     if (url.protocol !== "https:" || url.username || url.password) return new NextResponse("Invalid video", { status: 400 });
