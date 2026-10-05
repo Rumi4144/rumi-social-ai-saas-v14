@@ -74,3 +74,15 @@ body.public-page .loginbox {
     padding: 18px;
   }
 }
+
+.presenter-form > label { display:block; margin:18px 0 8px; }
+.presenter-form > input:not([type="file"]), .presenter-form > select, .presenter-form > textarea { display:block; width:100%; max-width:760px; box-sizing:border-box; padding:12px; }
+.presenter-form > textarea { min-height:96px; }
+.presenter-form > label:has(input[type="checkbox"]) { display:flex; gap:10px; align-items:flex-start; }
+.presenter-picker { margin:24px 0; padding:20px; border:1px solid #ddd; border-radius:16px; }
+.presenter-picker > select { margin:8px 12px; padding:10px; }
+.presenter-choices { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
+.presenter-choices article { border:1px solid #ddd; border-radius:12px; padding:14px; }
+.presenter-choices img { width:100%; height:200px; object-fit:contain; }
+.presenter-choices button { display:block; margin-top:12px; }
+.presenter-choices button[aria-pressed="true"] { outline:2px solid currentColor; }
