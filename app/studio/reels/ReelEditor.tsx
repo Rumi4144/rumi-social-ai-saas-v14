@@ -5,7 +5,8 @@ import { drawReel, type ReelMedia } from "@/lib/reels/draw";
 import { exportReel, loadReelMedia } from "@/lib/reels/export";
 import { frameAt, reelDuration, type ReelProject, type ReelScene, type ReelStyle } from "@/lib/reels/timeline";
 import { loadDraft, saveDraft } from "@/lib/reels/drafts";
-type Source = { id: string; src: string; kind: "image" | "video"; contentItemId?: string };
+import WeeklyReels from "./WeeklyReels";
+type Source = { id: string; src: string; kind: "image" | "video"; contentItemId?: string; seconds?: number };
 type Post = { id: string; headline: string | null; caption: string | null };
 const empty: ReelProject = { brand: "", website: "", cta: "Explore more", color: "#132342", accent: "#dec184", style: "editorial", scenes: [], closingSeconds: 3 };
 
@@ -72,7 +73,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   }, [project, music, originalAudio, musicFile, voiceFile]);
   useEffect(() => { if (!rendered) { setDownloadUrl(""); return; } const url = URL.createObjectURL(rendered); setDownloadUrl(url); return () => URL.revokeObjectURL(url); }, [rendered]);
   const changeScene = (index: number, patch: Partial<ReelScene>) => setProject(old => ({ ...old, scenes: old.scenes.map((scene, i) => i === index ? { ...scene, ...patch } : scene) }));
-  function addSource(source: Source) { if (project.scenes.length >= 6) return; setProject(old => ({ ...old, scenes: [...old.scenes, { id: crypto.randomUUID(), src: source.src, kind: source.kind, headline: "", detail: "", seconds: 4 }] })); }
+  function addSource(source: Source) { if (project.scenes.length >= 6) return; setProject(old => ({ ...old, scenes: [...old.scenes, { id: crypto.randomUUID(), src: source.src, kind: source.kind, headline: "", detail: "", seconds: source.seconds || 4 }] })); }
   function importFile(file?: File) {
     if (!file) return;
     if (file.size > 100_000_000 || !["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"].includes(file.type)) { setMessage("Choose a JPEG, PNG, WebP, MP4 or WebM file up to 100 MB."); return; }
@@ -127,10 +128,10 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       <section className="card"><h2>Your scenes</h2><fieldset disabled={busy || previewing} style={{ border: 0, padding: 0 }}>
         <label>Visual style<select value={project.style} onChange={event => setProject({ ...project, style: event.target.value as ReelStyle })}><option value="editorial">Animated photo collage</option><option value="cinematic">Cinematic close-ups / presenter</option><option value="gallery">Framed photo gallery</option></select></label>
         {project.scenes.map((scene, index) => <div key={scene.id} style={{ borderTop: "1px solid #7775", marginTop: 20, paddingTop: 14 }}><h3>Scene {index + 1}</h3>
-          <label>Photo or clip<select value={scene.src} onChange={event => { const source = sources.find(source => source.src === event.target.value); if (source) changeScene(index, { src: source.src, kind: source.kind }); }}><option value={scene.src}>Current {scene.kind}</option>{sources.map((source, i) => <option key={source.id} value={source.src}>{source.kind === "video" ? "Video clip" : "Photo"} {i + 1}</option>)}</select></label>
+          <label>Photo or clip<select value={scene.src} onChange={event => { const source = sources.find(source => source.src === event.target.value); if (source) changeScene(index, { src: source.src, kind: source.kind, seconds: source.seconds || 4 }); }}><option value={scene.src}>Current {scene.kind}</option>{sources.map((source, i) => <option key={source.id} value={source.src}>{source.kind === "video" ? "Video clip" : "Photo"} {i + 1}</option>)}</select></label>
           <label>Headline<input value={scene.headline} maxLength={120} onChange={event => changeScene(index, { headline: event.target.value })} /></label>
           <label>Supporting caption<textarea value={scene.detail} maxLength={160} onChange={event => changeScene(index, { detail: event.target.value })} /></label>
-          <label>Scene length<select value={scene.seconds} onChange={event => changeScene(index, { seconds: Number(event.target.value) })}>{[3,4,5,6,8,10].map(seconds => <option key={seconds} value={seconds}>{seconds} seconds</option>)}</select></label>
+          <label>Scene length<select value={scene.seconds} onChange={event => changeScene(index, { seconds: Number(event.target.value) })}>{[3,4,5,6,8,10,15].map(seconds => <option key={seconds} value={seconds}>{seconds} seconds</option>)}</select></label>
           <button type="button" disabled={index === 0} onClick={() => { const scenes = [...project.scenes]; [scenes[index - 1], scenes[index]] = [scenes[index], scenes[index - 1]]; setProject({ ...project, scenes }); }}>Move earlier</button> <button type="button" onClick={() => setProject({ ...project, scenes: project.scenes.filter((_, i) => i !== index) })}>Remove scene</button>
         </div>)}
         <p>Up to 6 scenes. Short clips loop to fill their scene.</p><button type="button" disabled={project.scenes.length >= 6 || !sources.length} onClick={() => addSource(sources[0])}>Add scene</button>
@@ -141,7 +142,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <h2>Sound</h2><label><input type="checkbox" checked={music} onChange={event => setMusic(event.target.checked)} /> Soft original background music</label><label><input type="checkbox" checked={originalAudio} onChange={event => setOriginalAudio(event.target.checked)} /> Keep audio from the video clips</label>
         <label>Your music<input type="file" accept="audio/*" onChange={event => { const file = event.target.files?.[0]; if (file && file.size > 20_000_000) { setMessage("Choose an audio file under 20 MB."); return; } setMusicFile(file); }} /></label>{musicFile && <><p>{musicFile.name}</p><button type="button" onClick={() => setMusicFile(undefined)}>Remove music</button></>}
         <label>Your recorded voiceover<input type="file" accept="audio/*" onChange={event => { const file = event.target.files?.[0]; if (file && file.size > 20_000_000) { setMessage("Choose a voiceover under 20 MB."); return; } setVoiceFile(file); }} /></label>{voiceFile && <><p>{voiceFile.name}</p><button type="button" onClick={() => setVoiceFile(undefined)}>Remove voiceover</button></>}
-        <p>Music is a background soundtrack, not a recording of the instrument. Presenter clips keep their uploaded performance; this editor does not generate or lip-sync a new presenter.</p>
+        <p>Music is a background soundtrack, not a recording of the instrument. Presenter clips keep their audio when “Keep audio” is selected. Create a new presenter in the AI presenter studio.</p>
         <button type="button" onClick={persist}>Save draft in this browser</button>
       </fieldset></section>
       <section className="card" style={{ alignSelf: "start", position: "sticky", top: 20 }}><h2>Preview · {reelDuration(project)} seconds</h2><canvas ref={canvas} width={1080} height={1920} style={{ width: "100%", maxWidth: 350, background: project.color, borderRadius: 12 }} /><p>1080 × 1920 · vertical reel</p>
@@ -153,5 +154,6 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <p role="status">{message}</p><a href={`/campaigns/${campaignId}`}>Return to campaign</a>
       </section>
     </div>}
+    {campaignId && organizationId && <><a href={`/studio/presenters?campaignId=${encodeURIComponent(campaignId)}`}>Create an AI presenter with a real product photo</a><WeeklyReels key={campaignId} project={project} campaignId={campaignId} organizationId={organizationId} music={music} originalAudio={originalAudio} musicFile={musicFile} voiceFile={voiceFile}/></>}
   </>;
 }

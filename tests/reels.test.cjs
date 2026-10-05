@@ -81,3 +81,15 @@ test('editor cannot load another workspace campaign or its images', async () => 
  const result=await api.GET(new Request('https://app.test/api/reels/project?campaignId=other-campaign'));
  assert.equal(result.status,404);assert.equal(where.brand.organizationId,'org-a');
 });
+test('weekly plan stays on seven calendar dates across daylight savings and rotates real sources',()=>{
+ const week=load('lib/reels/week.ts');
+ const project={brand:'Rumi',website:'https://example.test',style:'gallery',closingSeconds:3,scenes:[{id:'a',src:'/real-a',kind:'image',seconds:4,headline:'Actual A',detail:''},{id:'b',src:'/real-b',kind:'video',seconds:5,headline:'Actual B',detail:''}]};
+ const days=week.makeWeek(project,'2026-10-31');assert.equal(days.length,7);assert.equal(days[6].date,'2026-11-06');assert.equal(new Set(days.map(d=>d.headline)).size,7);assert.equal(new Set(days.map(d=>d.project.style)).size,3);assert.equal(days[1].project.scenes[0].src,'/real-b');assert.ok(days.every(d=>d.project.scenes.every(s=>['/real-a','/real-b'].includes(s.src))));assert.throws(()=>week.weekDates('2026-02-30'));assert.throws(()=>week.makeWeek({...project,scenes:[]},'2026-10-04'));
+});
+test('weekly creation claims once, makes seven draft posts, and refuses foreign campaigns',async()=>{
+ let claimed,created=0,scheduled=0;
+ const tx={job:{findFirst:async()=>claimed,create:async q=>{claimed={payload:q.data.payload};},update:async q=>{claimed.result=q.data.result;}},contentItem:{create:async q=>{assert.equal(q.data.status,'draft');assert.equal(q.data.platform,'facebook');created++;return{id:`day-${created}`};}},publishJob:{create:async()=>scheduled++}};
+ const api=load('app/api/reels/week/route.ts',{'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'org',role:'owner'})},'@/lib/prisma':{prisma:{campaign:{findFirst:async q=>q.where.id==='own'&&q.where.brand.organizationId==='org'?{id:'own'}:null},$transaction:async fn=>fn(tx)}},'@/lib/http/errors':{apiError:e=>{throw e;}}});
+ const p={requestId:'12345678-1234-4234-8234-123456789abc',campaignId:'own',startDate:'2026-10-04',days:Array.from({length:7},(_,i)=>({headline:`Day ${i}`,caption:'Grounded'}))};
+ const first=await api.POST({json:async()=>p});assert.equal(first.body.days.length,7);await api.POST({json:async()=>p});assert.equal(created,7);assert.equal(scheduled,0);const foreign=await api.POST({json:async()=>({...p,campaignId:'foreign'})});assert.equal(foreign.status,404);
+});

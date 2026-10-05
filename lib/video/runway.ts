@@ -42,3 +42,14 @@ export async function getVideoTask(id: string): Promise<{ status: string; progre
   if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error("Invalid Runway task.");
   return request(`tasks/${id}`);
 }
+export async function createPresenterPortrait(look: string) {
+  const data=await request("text_to_image",{model:"gen4_image",ratio:"1080:1920",promptText:look});
+  if(typeof data.id!=="string"||!/^[a-f0-9-]{36}$/i.test(data.id))throw new Error("Runway did not confirm the portrait task.");
+  return {id:data.id as string};
+}
+export async function createPresenterVideo(input:{characterImage:string;productImage:string;productInfo:string;concept:string;duration:5|10|15}){
+ const data=await request("recipes/product_ugc",{version:"2026-06",characterImage:{uri:input.characterImage},productImage:{uri:input.productImage},productInfo:input.productInfo,userConcept:input.concept,duration:input.duration,ratio:"720:1280",audio:true});
+ if(typeof data.id!=="string"||!/^[a-f0-9-]{36}$/i.test(data.id))throw new Error("Runway did not confirm the presenter task.");
+ return {id:data.id as string};
+}
+export function validRunwayOutput(value:string){try{const u=new URL(value);return u.protocol==="https:"&&!u.username&&!u.password&&[".cloudfront.net",".amazonaws.com",".runwayml.com",".runway.com"].some(host=>u.hostname.endsWith(host));}catch{return false;}}
