@@ -119,7 +119,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     finally { setBusy(false); }
   }
   return <><div className="eyebrow">REEL EDITOR</div><h1>Make a finished reel.</h1><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p>
-    <label>Campaign<select value={campaignId} disabled={busy || loadingCampaigns} onChange={event => setCampaignId(event.target.value)}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>
+    <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingCampaigns} onChange={event => setCampaignId(event.target.value)}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>
     {!organizationId && <p role="status">{loadingCampaigns ? "Loading your campaigns…" : loadingProject ? "Opening campaign…" : message}</p>}
     {!loadingCampaigns && !campaigns.length && <section className="card"><h2>No campaigns available in this workspace</h2><p>Open an existing campaign from the Campaigns page, or create a campaign first to use its photos and save your reel.</p><a href="/campaigns">Open Campaigns</a> · <a href="/create">Create a campaign</a></section>}
     {!organizationId && <button type="button" disabled={loadingCampaigns || loadingProject} onClick={refreshCampaigns}>Refresh campaigns</button>}
