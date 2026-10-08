@@ -86,3 +86,40 @@ body.public-page .loginbox {
 .presenter-choices img { width:100%; height:200px; object-fit:contain; }
 .presenter-choices button { display:block; margin-top:12px; }
 .presenter-choices button[aria-pressed="true"] { outline:2px solid currentColor; }
+/* Application navigation and mobile layout: override desktop shell offsets. */
+.application-sidebar .navigation-content { display:flex; flex-direction:column; min-height:100%; }
+.mobile-menu-toggle { display:none; }
+.grid > *, .plans > *, .promise > *, .studio > *, .campaignitems > * { min-width:0; }
+.promise h2, .hero h1, .card h3 { overflow-wrap:anywhere; }
+@media (max-width:900px) {
+  body > aside.application-sidebar { position:sticky; inset:auto; top:0; z-index:50; width:100%; height:auto; padding:0; overflow:visible; }
+  .mobile-menu-toggle { display:flex; align-items:center; justify-content:space-between; gap:16px; width:100%; min-height:56px; padding:16px 20px; border:0; background:#11151b; color:white; font:inherit; font-weight:700; cursor:pointer; }
+  .mobile-menu-toggle span { font-size:14px; font-weight:500; }
+  .application-sidebar .navigation-content { display:none; min-height:0; }
+  .application-sidebar .navigation-content.is-open { display:flex; padding:20px; max-height:calc(100dvh - 56px); overflow-y:auto; }
+  .application-sidebar nav { margin-top:20px; }
+  body.authenticated > main { margin-left:0; width:100%; min-width:0; padding:20px; }
+  .studio { grid-template-columns:minmax(0,1fr); }
+  .approval, .steps, .usagehero { flex-wrap:wrap; }
+  .grid, .plans, .assetgrid, .settingsgrid, .systemgrid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:600px) {
+  body.authenticated > main { padding:16px; }
+  .grid, .plans, .assetgrid, .settingsgrid, .systemgrid, .goalgrid { grid-template-columns:minmax(0,1fr); }
+  .hero, .form, .controls, .onboardcard, .usagehero { padding:20px; }
+  .hero h1 { font-size:clamp(28px,8vw,36px); }
+  .landing { width:100%; padding:0; margin:0; }
+  .landing nav { padding:20px; gap:12px; flex-wrap:wrap; }
+  .landing nav a { margin-left:12px; }
+  .landhero { padding:48px 20px 28px; }
+  .landhero h1 { font-size:clamp(36px,10vw,58px); line-height:1.05; overflow-wrap:anywhere; }
+  .landhero p { font-size:17px; }
+  .promise { margin:32px 20px; padding:24px; gap:16px; grid-template-columns:minmax(0,1fr); }
+  .promise h2 { font-size:clamp(28px,8vw,36px); line-height:1.15; margin:12px 0; }
+  .promise p { margin:0; }
+  .flow { margin:24px 20px; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .landing .demolink { display:inline-block; margin:16px 0 0; }
+  .approval { flex-wrap:wrap; }
+  main img, main video, main canvas { max-width:100%; }
+  main input, main select, main textarea { min-width:0; max-width:100%; }
+}
