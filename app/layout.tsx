@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 import SignOutButton from "@/components/SignOutButton";
 import ScrollToTop from "@/components/ScrollToTop";
+import MobileNavigation from "@/components/MobileNavigation";
 export const metadata = {
   title: "Rumi Social AI",
   description: "AI campaign operating system",
@@ -41,7 +42,7 @@ export default async function RootLayout({
     <html lang="en">
       <body className={session?.user ? "authenticated" : "public-page"}>
         {session?.user && (
-        <aside>
+        <MobileNavigation>
           <div className="logo">
             RUMI <b>SOCIAL AI</b>
             <small>CREATIVE OS</small>
@@ -108,7 +109,7 @@ export default async function RootLayout({
             {session?.user && <SignOutButton />}
           </nav>
           <div className="sidefoot">Standalone SaaS V2 · Beta</div>
-        </aside>
+        </MobileNavigation>
         )}
         <main>
           <ScrollToTop />
