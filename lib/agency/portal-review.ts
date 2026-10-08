@@ -1,4 +1,4 @@
-import {isWeeklyVideo} from "@/lib/campaigns/formats";
+function isWeeklyVideo(type:string){return ["weekly_photo_reel","weekly_reel","weekly_video","weekly_presenter"].includes(type);}
 export type ReviewItem={id:string;headline:string|null;caption:string|null;platform:string;type:string;mediaUrl:string|null};
 export function portalMedia(item:ReviewItem):{kind:"image"|"video"|"none";url:string|null;blocked:boolean}{
  const url=item.mediaUrl;
