@@ -6,6 +6,7 @@ import { exportReel, loadReelMedia } from "@/lib/reels/export";
 import { frameAt, reelDuration, type ReelProject, type ReelScene, type ReelStyle } from "@/lib/reels/timeline";
 import { loadDraft, saveDraft } from "@/lib/reels/drafts";
 import WeeklyReels from "./WeeklyReels";
+import {reelDraftKey,selectedPostProject,matchingDraft} from "@/lib/reels/post-context";
 type Source = { id: string; src: string; kind: "image" | "video"; contentItemId?: string; seconds?: number };
 type Post = { id: string; headline: string | null; caption: string | null };
 const empty: ReelProject = { brand: "", website: "", cta: "Explore more", color: "#132342", accent: "#dec184", style: "editorial", scenes: [], closingSeconds: 3 };
@@ -15,6 +16,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const [loadingCampaigns, setLoadingCampaigns] = useState(initialCampaigns === undefined), [loadingProject, setLoadingProject] = useState(false);
   const [organizationId, setOrganizationId] = useState(""), [posts, setPosts] = useState<Post[]>([]), [sources, setSources] = useState<Source[]>([]);
   const [project, setProject] = useState<ReelProject>(empty), [contentItemId, setContentItemId] = useState(initialContentItemId);
+  const [requestedPostId,setRequestedPostId]=useState(initialContentItemId);
   const [music, setMusic] = useState(true), [originalAudio, setOriginalAudio] = useState(false), [musicFile, setMusicFile] = useState<File>(), [voiceFile, setVoiceFile] = useState<File>();
   const [rendering, setRendering] = useState(false);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [progress, setProgress] = useState(0), [previewing, setPreviewing] = useState(false);
@@ -22,7 +24,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const canvas = useRef<HTMLCanvasElement>(null), media = useRef<ReelMedia[]>([]), logo = useRef<HTMLImageElement | undefined>(undefined), playTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const controller = useRef<AbortController | undefined>(undefined), localFiles = useRef(new Map<string, Blob>()), localUrls = useRef(new Set<string>());
   const request = useRef<{ pathname: string; blob: Blob } | undefined>(undefined);
-  const draftKey = `${organizationId}:${campaignId}`;
+  const draftKey = reelDraftKey(organizationId,campaignId,contentItemId);
   const ownUrl = (blob: Blob) => { const url = URL.createObjectURL(blob); localUrls.current.add(url); return url; };
   const finishPreview = () => { if (playTimer.current) clearInterval(playTimer.current); playTimer.current = undefined; media.current.forEach(item => { if (item instanceof HTMLVideoElement) item.pause(); }); setPreviewing(false); };
 
@@ -37,29 +39,31 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     finally { setLoadingCampaigns(false); }
   }
   useEffect(() => { if (initialCampaigns === undefined) void refreshCampaigns(); return () => { controller.current?.abort(); if (playTimer.current) clearInterval(playTimer.current); localUrls.current.forEach(URL.revokeObjectURL); }; }, []);
+  useEffect(()=>{setCampaignId(initialCampaignId);setRequestedPostId(initialContentItemId);},[initialCampaignId,initialContentItemId]);
   useEffect(() => {
     if (!campaignId) { setOrganizationId(""); setLoadingProject(false); return; }
-    let disposed = false; setLoadingProject(true); finishPreview(); setMessage(""); setProject(empty); setSources([]); setPosts([]); setOrganizationId("");
-    fetch(`/api/reels/project?campaignId=${encodeURIComponent(campaignId)}`, { cache: "no-store", signal: AbortSignal.timeout(15000) }).then(async response => {
+    let disposed = false; setLoadingProject(true); finishPreview(); setMessage(""); setProject(empty); setSources([]); setPosts([]); setOrganizationId(""); setContentItemId(""); setRendered(undefined); setSavedAsset(""); request.current=undefined;
+    fetch(`/api/reels/project?campaignId=${encodeURIComponent(campaignId)}${requestedPostId?`&contentItemId=${encodeURIComponent(requestedPostId)}`:""}`, { cache: "no-store", signal: AbortSignal.timeout(15000) }).then(async response => {
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not load campaign."); if (disposed) return;
-      setOrganizationId(data.organizationId); setSources(data.sources); setPosts(data.posts); setContentItemId(data.posts.some((post: Post) => post.id === initialContentItemId) ? initialContentItemId : data.posts[0]?.id || "");
-      const first = data.sources.filter((source: Source) => source.kind === "image").slice(0, 4) as Source[];
-      let next: ReelProject = { ...empty, brand: data.brand.name, color: data.brand.color, accent: data.brand.accent, website: data.brand.website, logo: data.brand.logo, scenes: first.map((source, index) => ({ id: crypto.randomUUID(), src: source.src, kind: source.kind, seconds: 4, headline: data.posts.find((post: Post) => post.id === source.contentItemId)?.headline?.slice(0, 120) || (index ? "Discover the details" : data.campaign.title.slice(0, 120)), detail: "" })) };
-      setProject(next); setLoadingProject(false);
-      const draft = await loadDraft(`${data.organizationId}:${campaignId}`).catch(() => undefined); if (disposed) return;
+      const context=selectedPostProject(data,requestedPostId);
+      let next=context.project;
+      const stored = await loadDraft(reelDraftKey(data.organizationId,campaignId,context.post.id)).catch(() => undefined);
+      if(disposed)return;
+      const draft=matchingDraft(stored,context.post.id);
       localFiles.current.clear(); setMusicFile(undefined); setVoiceFile(undefined); setMusic(true); setOriginalAudio(false);
       if (draft) {
         const restored = new Map<string, string>();
         draft.files.forEach(([old, file]) => { const url = ownUrl(file); restored.set(old, url); localFiles.current.set(url, file); });
         next = { ...draft.project, scenes: draft.project.scenes.map(scene => ({ ...scene, src: restored.get(scene.src) || scene.src })), logo: restored.get(draft.project.logo || "") || draft.project.logo };
         setMusic(draft.music); setOriginalAudio(draft.originalAudio); setMusicFile(draft.musicFile); setVoiceFile(draft.voiceFile);
-        if (data.posts.some((post: Post) => post.id === draft.contentItemId)) setContentItemId(draft.contentItemId);
+
         setMessage("Your saved draft was restored.");
       }
-      setProject(next);
+      setSources(data.sources);setPosts(data.posts);setContentItemId(context.post.id);setProject(next);setOrganizationId(data.organizationId);setLoadingProject(false);
+      if(!next.scenes.length)setMessage("This post has no ready matching photo or clip. Finish its photo in the campaign or upload media for this post.");
     }).catch(error => { if (!disposed) { setMessage(error.message || "Could not open campaign. Try again."); setLoadingProject(false); } });
     return () => { disposed = true; };
-  }, [campaignId]);
+  }, [campaignId,requestedPostId]);
   const sourceKey = project.scenes.map(scene => `${scene.kind}:${scene.src}`).join("|");
   useEffect(() => {
     finishPreview();
@@ -120,7 +124,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     finally { setBusy(false); }
   }
   return <><div className="eyebrow">REEL EDITOR</div><h1>Make a finished reel.</h1><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p>
-    <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingCampaigns} onChange={event => setCampaignId(event.target.value)}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>
+    <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingCampaigns} onChange={event => {setRequestedPostId("");setCampaignId(event.target.value);}}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>
     {!organizationId && <p role="status">{loadingCampaigns ? "Loading your campaigns…" : loadingProject ? "Opening campaign…" : message}</p>}
     {!loadingCampaigns && !campaigns.length && <section className="card"><h2>No campaigns available in this workspace</h2><p>Open an existing campaign from the Campaigns page, or create a campaign first to use its photos and save your reel.</p><a href="/campaigns">Open Campaigns</a> · <a href="/create">Create a campaign</a></section>}
     {!organizationId && <button type="button" disabled={loadingCampaigns || loadingProject} onClick={refreshCampaigns}>Refresh campaigns</button>}
@@ -149,7 +153,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <button type="button" disabled={busy || !project.scenes.length} onClick={preview}>{previewing ? "Stop preview" : "Preview visuals"}</button> <button type="button" disabled={busy || !project.scenes.length || !project.brand.trim()} onClick={render}>Export finished reel</button>
         {rendering && <><progress max={100} value={progress} aria-label="Reel export progress" /><button type="button" onClick={() => controller.current?.abort()}>Cancel export</button></>}
         {downloadUrl && <div style={{ marginTop: 20 }}><video controls playsInline src={downloadUrl} style={{ width: "100%", maxWidth: 350 }} /><p><a href={downloadUrl} download={`finished-reel.${rendered?.type === "video/mp4" ? "mp4" : "webm"}`}>Download finished reel</a></p>
-          <label>Save to campaign post<select value={contentItemId} disabled={busy} onChange={event => { setContentItemId(event.target.value); request.current = undefined; setSavedAsset(""); }}>{posts.map(post => <option key={post.id} value={post.id}>{post.headline || "Untitled post"}</option>)}</select></label><button type="button" disabled={busy || !contentItemId || !!savedAsset} onClick={save}>{savedAsset ? "Saved to campaign" : "Save finished reel to campaign"}</button>
+          <label>Save to campaign post<select value={contentItemId} disabled={busy} onChange={event => { setRequestedPostId(event.target.value); request.current = undefined; setSavedAsset(""); }}>{posts.map(post => <option key={post.id} value={post.id}>{post.headline || "Untitled post"}</option>)}</select></label><button type="button" disabled={busy || !contentItemId || !!savedAsset} onClick={save}>{savedAsset ? "Saved to campaign" : "Save finished reel to campaign"}</button>
         </div>}
         <p role="status">{message}</p><a href={`/campaigns/${campaignId}`}>Return to campaign</a>
       </section>
