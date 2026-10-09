@@ -48,7 +48,7 @@ export async function createPresenterPortrait(look: string) {
   return {id:data.id as string};
 }
 export async function createPresenterVideo(input:{characterImage:string;productImage:string;productInfo:string;concept:string;duration:5|10|15}){
- const data=await request("recipes/product_ugc",{version:"2026-06",characterImage:{uri:input.characterImage},productImage:{uri:input.productImage},productInfo:input.productInfo,userConcept:input.concept,duration:input.duration,ratio:"720:1280",audio:true});
+ const data=await request("recipes/product_ugc",{version:"2026-06",characterImage:{uri:input.characterImage},productImage:{uri:input.productImage},productInfo:input.productInfo.slice(0,2500),userConcept:input.concept.slice(0,3500),duration:input.duration,ratio:"720:1280",audio:true});
  if(typeof data.id!=="string"||!/^[a-f0-9-]{36}$/i.test(data.id))throw new Error("Runway did not confirm the presenter task.");
  return {id:data.id as string};
 }
