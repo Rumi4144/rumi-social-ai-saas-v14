@@ -1,3 +1,4 @@
+import RestoreCalendarButton from "@/components/RestoreCalendarButton";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 import { notFound } from "next/navigation";
@@ -86,6 +87,7 @@ export default async function Campaign({
       <div className="eyebrow">CAMPAIGN · {campaign.status.toUpperCase()}</div>
 
       <h1>{campaign.title}</h1>
+      {campaign.items.some(item => item.status === "draft" && !item.scheduledFor) && <RestoreCalendarButton campaignId={campaign.id} />}
 
       <p>
         {campaign.brand.name} · Goal: {campaign.goal}
@@ -228,6 +230,7 @@ export default async function Campaign({
           ) : null}
 
           <h3>{item.headline || "Creative"}</h3>
+          {item.scheduledFor && <p>Planned date: {item.scheduledFor.toISOString().slice(0, 10)}</p>}
 
               <p>{item.caption}</p>
               <p><a href={`/studio/reels?campaignId=${campaign.id}&contentItemId=${item.id}`}>Make a finished reel for this post</a></p>
