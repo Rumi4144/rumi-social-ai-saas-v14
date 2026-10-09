@@ -26,9 +26,24 @@ async function request(path: string, body?: object) {
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   if (!response.ok) {
-    const message = response.status === 401 || response.status === 403 ? "Runway credentials need attention. Contact your administrator." :
+    let message = response.status === 401 || response.status === 403 ? "Runway credentials need attention. Contact your administrator." :
       response.status === 429 ? "Runway is busy or out of API credits. Try later." :
       response.status === 400 ? "Runway rejected the image or prompt. Check your input." : "Runway could not complete this request.";
+    if(response.status===400){
+      try{
+        const detail=await response.json();
+        if(typeof detail.error==="string"){
+          const key=runwayApiKey();
+          const reason=(key?detail.error.split(key).join("[credential removed]"):detail.error)
+            .replace(/data:[^\s"']+/gi,"[image data removed]")
+            .replace(/https?:\/\/[^\s"']+/gi,"[asset URL removed]")
+            .replace(/Bearer\s+[^\s"']+/gi,"[credential removed]")
+            .replace(/[\x00-\x1f\x7f]/g," ").slice(0,600).trim();
+          if(reason)message=`Runway rejected this request: ${reason}`;
+        }
+      }catch{/* A missing JSON explanation keeps the generic message. */}
+      console.warn("RUNWAY_INPUT_REJECTED",JSON.stringify({endpoint:path,status:400,fields:Object.keys(body||{})}));
+    }
     throw new RunwayError(response.status, message);
   }
   return response.json();
