@@ -13,13 +13,15 @@ export async function GET(req:Request){try{
  let hostname="";try{hostname=new URL(campaign.brand.websiteUrl||"").hostname;}catch{}
  // Only the known Rumi public catalog is fetched; never request arbitrary tenant URLs.
  if(["rumiguitars.com","www.rumiguitars.com"].includes(hostname)){
+  try{
   const response=await fetch("https://rumiguitars.com/wp-json/wc/store/v1/products?per_page=30&stock_status=instock",{cache:"no-store",redirect:"error",signal:AbortSignal.timeout(15000)});
   if(!response.ok){if(products.length)return reply({products});return reply({error:"Rumi’s website catalog is temporarily unavailable. Try again."},502);}
   const catalog=await response.json();
-  if(Array.isArray(catalog))for(const item of catalog){const image=item.images?.[0]?.src;const name=plain(item.name);if(!/guitar/i.test(name)||typeof image!=="string"||!image.startsWith("https://rumiguitars.com/"))continue;
+  if(Array.isArray(catalog))for(const item of catalog){const image=item.images?.[0]?.src;const name=plain(item.name);if(!name||typeof image!=="string"||!image.startsWith("https://rumiguitars.com/"))continue;
    if(products.some(p=>p.sourceUrl===item.permalink))continue;
-   products.push({id:`website-${item.id}`,name,description:plain(item.short_description).slice(0,1800),imageUrl:image,sourceUrl:item.permalink,websiteOnly:true});
+   products.push({id:`website-${item.id}`,name,description:[plain(item.short_description),plain(item.description),...(Array.isArray(item.attributes)?item.attributes.map((a:any)=>`${plain(a.name)}: ${(a.terms||[]).map((t:any)=>plain(t.name)).filter(Boolean).join(", ")}`):[])].filter(Boolean).filter((value,index,list)=>list.indexOf(value)===index).join("\n\n").slice(0,8000),imageUrl:image,sourceUrl:item.permalink,websiteOnly:true});
   }
+  }catch{if(!products.length)return reply({error:"Rumi’s website catalog is temporarily unavailable. Try again."},502);}
  }
  return reply({products});
  }catch(error){return apiError(error,"Could not load website products.");}}
