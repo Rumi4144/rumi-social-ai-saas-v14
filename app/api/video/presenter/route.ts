@@ -8,7 +8,7 @@ import { presenterCost, presenterConcept, PRESENTER_LOOKS } from "@/lib/presente
 import { startPresenter, type PresenterPayload } from "@/lib/presenter/jobs";
 import { failVideo, refreshVideo, videoSummary } from "@/lib/video/jobs";
 export const maxDuration=60;
-const S=z.object({requestId:z.string().uuid(),campaignId:z.string().min(1),contentItemId:z.string().min(1),productId:z.string().optional(),productImage:z.string().max(2_000_000).optional(),productName:z.string().trim().min(1).max(180),productDetails:z.string().max(1800).default(""),characterImage:z.string().max(2_000_000).optional(),look:z.enum(["woman","man","neutral"]).default("neutral"),script:z.string().trim().min(10).max(500),duration:z.union([z.literal(5),z.literal(10),z.literal(15)]).default(10),consent:z.literal(true)});
+const S=z.object({requestId:z.string().uuid(),campaignId:z.string().min(1),contentItemId:z.string().min(1),productId:z.string().optional(),productImage:z.string().max(2_000_000).optional(),productName:z.string().trim().min(1).max(180),productDetails:z.string().max(8000).default(""),characterImage:z.string().max(2_000_000).optional(),look:z.enum(["woman","man","neutral"]).default("neutral"),script:z.string().trim().min(10).max(500),duration:z.union([z.literal(5),z.literal(10),z.literal(15)]).default(10),consent:z.literal(true)});
 const reply=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{"Cache-Control":"no-store"}});
 const summary=(job:Parameters<typeof videoSummary>[0])=>({...videoSummary(job),campaignId:(job.payload as unknown as PresenterPayload).campaignId,contentItemId:(job.payload as unknown as PresenterPayload).contentItemId});
 const isPresenter=(payload:unknown)=>(payload as {mode?:string})?.mode==="presenter";
