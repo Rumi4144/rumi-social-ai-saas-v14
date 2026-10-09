@@ -9,6 +9,20 @@ import { buildVisualConcept, isSubjectCategory, type VisualBusinessContext, type
 import { imageToJpegDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
 
 
+function calendarDraftPlan(plan: Array<{day:number;date:string}>|undefined,days:number): Map<number,Date> {
+ if(!Number.isInteger(days)||days<1||days>31)throw new Error("The campaign needs its complete planned calendar. No dates were changed to today.");
+ const dates=new Map<number,Date>(),seenDates=new Set<string>();
+ if(plan===undefined||(Array.isArray(plan)&&plan.length===0))return dates;
+ if(!Array.isArray(plan)||plan.length!==days)throw new Error("The campaign needs its complete planned calendar. No dates were changed to today.");
+ for(const item of plan){
+  if(!Number.isInteger(item.day)||item.day<1||item.day>days||dates.has(item.day)||!/^\d{4}-\d{2}-\d{2}$/.test(item.date))throw new Error("The campaign contains a missing, duplicate or invalid planned day.");
+  const value=new Date(item.date+"T12:00:00Z");
+  if(!Number.isFinite(value.getTime())||value.toISOString().slice(0,10)!==item.date||seenDates.has(item.date))throw new Error("Choose valid, distinct campaign calendar dates.");
+  dates.set(item.day,value);seenDates.add(item.date);
+ }
+ return dates;
+}
+
 export async function POST(req: Request) {
   const secret = req.headers.get("x-worker-secret");
 
@@ -419,6 +433,8 @@ export async function POST(req: Request) {
       throw new Error("CAMPAIGN_NOT_FOUND");
     }
 
+    const plannedDates=calendarDraftPlan(p.dailyPlan,p.days);
+
     const businessContext: VisualBusinessContext = {
       businessType: p.brandContext?.businessType,
       industry: campaign.brand.industry || p.brandContext?.industry,
@@ -449,6 +465,7 @@ export async function POST(req: Request) {
         : businessContext,
     });
 
+    if(plannedDates.size&&pack.posts.some(post=>!plannedDates.has(post.day)))throw new Error("A campaign post does not match its planned calendar day.");
     await prisma.$transaction(async (tx: any) => {
       await tx.contentItem.deleteMany({
         where: { campaignId: campaign.id },
@@ -491,6 +508,7 @@ export async function POST(req: Request) {
           data: {
             campaignId: campaign.id,
             type: x.type,
+            scheduledFor: plannedDates.get(x.day)||null,
             platform: publishingPlatforms.join(","),
             headline: x.headline,
             caption: x.caption,
@@ -594,6 +612,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
         data: {
           campaignId: campaign.id,
           type: "story",
+          scheduledFor: plannedDates.get(x.frame)||plannedDates.get(1)||null,
           platform: "instagram",
           headline: x.text.length > 90 ? `${x.text.slice(0, 87)}...` : x.text,
           caption: x.text,
@@ -663,6 +682,7 @@ Leave intentional negative space for Rumi Social AI typography.`,
         data: {
           campaignId: campaign.id,
           type: "reel",
+          scheduledFor: plannedDates.get(1)||null,
           platform: "instagram",
           headline: pack.reel.hook,
           caption: pack.reel.voiceover,
