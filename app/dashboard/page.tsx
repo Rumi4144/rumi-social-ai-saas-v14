@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { tenantContext } from "@/lib/auth/context";
+import { studioPageContext } from "@/lib/studio/page-context";
+import StudioRecovery from "@/components/StudioRecovery";
 import { prisma } from "@/lib/prisma";
 
 export default async function Dashboard() {
-  const ctx = await tenantContext();
+  const { context: ctx, recovery } = await studioPageContext();
+  if (!ctx) return <StudioRecovery recovery={recovery!} />;
 
   const [campaigns, scheduled, published, sub, approval, onboarding] =
     await Promise.all([

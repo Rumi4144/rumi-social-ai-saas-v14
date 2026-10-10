@@ -16,10 +16,6 @@ export async function currentUserId() {
 export async function tenantContext(requestedOrg?: string) {
   const userId = await currentUserId();
 
-  if (!requestedOrg) {
-    const cookieStore = await cookies();
-    requestedOrg = cookieStore.get("adminWorkspace")?.value;
-  }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -30,6 +26,13 @@ export async function tenantContext(requestedOrg?: string) {
 
   if (!user) {
     throw new Error("UNAUTHENTICATED");
+  }
+
+  // Only administrators may inherit an administrator workspace selection.
+  // Normal sign-ins must not inherit a cookie left by a previous admin session.
+  if (!requestedOrg && user.isSuperAdmin) {
+    const cookieStore = await cookies();
+    requestedOrg = cookieStore.get("adminWorkspace")?.value;
   }
 
   const memberships = await prisma.membership.findMany({
