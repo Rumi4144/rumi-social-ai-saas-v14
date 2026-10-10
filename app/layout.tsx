@@ -9,6 +9,7 @@ import MobileNavigation from "@/components/MobileNavigation";
 export const metadata = {
   title: "Rumi Social AI",
   description: "AI campaign operating system",
+  icons: { icon: "/rumi-social-icon.png", shortcut: "/rumi-social-icon.png", apple: "/rumi-social-icon.png" },
 };
 export default async function RootLayout({
   children,
@@ -44,6 +45,7 @@ export default async function RootLayout({
         {session?.user && (
         <MobileNavigation>
           <div className="logo">
+            <img src="/rumi-social-icon.png" alt="Rumi Social AI" width={64} height={64} style={{ display: "block", borderRadius: 12, marginBottom: 12 }} />
             RUMI <b>SOCIAL AI</b>
             <small>CREATIVE OS</small>
             {workspaceName && (
