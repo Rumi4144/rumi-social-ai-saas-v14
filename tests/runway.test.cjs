@@ -5,7 +5,7 @@ const ts = require('../node_modules/typescript');
 function load(path, deps) {
   const code = ts.transpileModule(fs.readFileSync(__dirname+'/../'+path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const module={exports:{}};
-  vm.runInNewContext(code,{module,exports:module.exports,require:n=>deps[n],fetch:(...a)=>global.fetch(...a),Request,Response,URL,Date,JSON,Math,Number,AbortSignal,TransformStream,ReadableStream,Headers,process,console:{log(){}}});
+  vm.runInNewContext(code,{module,exports:module.exports,require:n=>deps[n],fetch:(...a)=>global.fetch(...a),Request,Response,URL,Date,JSON,Math,Number,AbortSignal,TransformStream,ReadableStream,Headers,process,console:{log(){},warn(){}}});
   return module.exports;
 }
 const json = (data,status=200)=>new Response(JSON.stringify(data),{status});

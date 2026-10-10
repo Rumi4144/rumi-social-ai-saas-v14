@@ -1,1 +1,10 @@
-export default function Team(){return <><div className="eyebrow">TEAM & ACCESS · V7</div><div className="pagehead"><div><h1>People, roles and client access.</h1><p>Control who can create, approve, publish and manage billing.</p></div><button className="button">+ Invite teammate</button></div><div className="rolegrid">{[["Owner","Everything, including billing and security"],["Admin","Workspace, campaigns, publishing and team"],["Editor","Create and edit campaigns"],["Member","Create and collaborate"],["Viewer","Read-only access"]].map(x=><div className="card"><h3>{x[0]}</h3><p>{x[1]}</p></div>)}</div><section className="queue"><div className="qrow head"><b>Member</b><b>Role</b><b>Status</b><b>Last active</b><b></b></div><div className="qrow"><span>Workspace Owner</span><span>Owner</span><span className="state approved">Active</span><span>Now</span><button>•••</button></div><div className="qrow"><span>Creative Team</span><span>Editor</span><span className="state scheduled">Active</span><span>Today</span><button>•••</button></div></section></>}
+import { prisma } from "@/lib/prisma";
+import { studioPageContext } from "@/lib/studio/page-context";
+import StudioRecovery from "@/components/StudioRecovery";
+export const dynamic = "force-dynamic";
+export default async function Team() {
+  const { context: ctx, recovery } = await studioPageContext();
+  if (!ctx) return <StudioRecovery recovery={recovery!} />;
+  const members = await prisma.membership.findMany({ where: { organizationId: ctx.organizationId }, select: { id: true, role: true, user: { select: { name: true } } } });
+  return <><div className="eyebrow">TEAM & ACCESS</div><h1>Workspace members.</h1><p>Members and roles assigned to {ctx.organization.name}. Contact your workspace administrator to change access.</p><section className="queue">{members.map(member=><div className="qrow" key={member.id}><span>{member.user.name || "Workspace member"}</span><span>{member.role}</span></div>)}</section>{!members.length && <p>No members are assigned to this workspace yet.</p>}</>;
+}

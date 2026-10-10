@@ -1,1 +1,10 @@
-export default function P(){return <><div className="eyebrow">PERFORMANCE INTELLIGENCE</div><h1>Know what works. Make more of it.</h1><div className="grid">{[["Reach","84.2K"],["Engagement","6.8%"],["Clicks","2,481"],["Published","37"]].map(x=><div className="card"><span className="eyebrow">{x[0]}</span><div className="metric">{x[1]}</div></div>)}</div><div className="insight"><span>AI INSIGHT</span><h2>Craftsmanship-led videos are outperforming promotional graphics.</h2><p>Increase detail-focused Reels in the next campaign cycle.</p><button className="button">Apply insight</button></div></>}
+import { prisma } from "@/lib/prisma";
+import { studioPageContext } from "@/lib/studio/page-context";
+import StudioRecovery from "@/components/StudioRecovery";
+export const dynamic = "force-dynamic";
+export default async function Analytics() {
+  const { context: ctx, recovery } = await studioPageContext();
+  if (!ctx) return <StudioRecovery recovery={recovery!} />;
+  const counts = await Promise.all(["published", "scheduled", "failed"].map(status => prisma.publishJob.count({ where: { organizationId: ctx.organizationId, status } })));
+  return <><div className="eyebrow">WORKSPACE ACTIVITY</div><h1>Your publishing activity.</h1><div className="grid">{["Published", "Scheduled", "Failed"].map((name,i)=><div className="card" key={name}><span className="eyebrow">{name}</span><div className="metric">{counts[i]}</div></div>)}</div><p>These counts come from your workspace’s publishing records. Social reach, engagement and click reporting are not connected yet.</p></>;
+}
