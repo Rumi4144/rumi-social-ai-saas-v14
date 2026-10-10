@@ -100,7 +100,7 @@ export default function SchedulePostButton({
           );
         }
 
-        const list = Array.isArray(data.connections) ? data.connections : [];
+        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => ["facebook", "instagram"].includes(connection.provider.toLowerCase()));
 
         setConnections(list);
 
@@ -221,6 +221,7 @@ export default function SchedulePostButton({
           }}
         >
           <strong>Schedule Post</strong>
+          <p>YouTube videos use Publishing Center’s YouTube uploader. TikTok publishing setup is not complete yet.</p>
 
           <div style={{ marginTop: 12 }}>
             {loading && <p>Loading connected accounts...</p>}

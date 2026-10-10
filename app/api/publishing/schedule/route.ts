@@ -64,6 +64,7 @@ export async function POST(req: Request) {
       });
 
       if (!connection) continue;
+      if (!["facebook", "instagram"].includes(connection.provider.toLowerCase())) continue;
       if (item.mediaUrl?.includes("/api/video/media/") && connection.provider.toLowerCase() !== "facebook") continue;
 
       const key = publishKey(item.id, connection.id, p.data.scheduledFor);
