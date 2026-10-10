@@ -1,3 +1,4 @@
+import { campaignVideoId } from "@/lib/publishing/facebook-video";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
@@ -5,9 +6,11 @@ import { publishKey } from "@/lib/publishing/idempotency";
 import { publishToProvider } from "@/lib/publishing/providers";
 import { z } from "zod";
 
+export const maxDuration = 60;
 const S = z.object({
   contentItemId: z.string(),
   socialConnectionId: z.string(),
+  youtube: z.object({ certified: z.literal(true), madeForKids: z.boolean(), containsSyntheticMedia: z.boolean() }).optional(),
 });
 
 export async function POST(req: Request) {
@@ -66,6 +69,7 @@ export async function POST(req: Request) {
 
     if (item.mediaUrl?.includes("/api/video/media/") && connection.provider.toLowerCase() !== "facebook") return NextResponse.json({ error: "Choose Facebook for automatic video publishing. Download the clip for other platforms." }, { status: 400 });
 
+    if (connection.provider === "youtube" && (!parsed.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
     const publishTime = new Date();
     const key = publishKey(
       item.id,
@@ -73,7 +77,8 @@ export async function POST(req: Request) {
       publishTime.toISOString()
     );
 
-    const job = await prisma.publishJob.create({
+    const job = await prisma.$transaction(async tx => {
+    const job = await tx.publishJob.create({
       data: {
         organizationId: ctx.organizationId,
         contentItemId: item.id,
@@ -84,6 +89,10 @@ export async function POST(req: Request) {
         attempts: 1,
         idempotencyKey: key,
       },
+    });
+
+    if (connection.provider === "youtube") await tx.job.create({ data: { id: `youtube_settings_${job.id}`, organizationId: ctx.organizationId, type: "YOUTUBE_CAMPAIGN_SETTINGS", status: "ready", payload: { ...parsed.data.youtube!, connectionId: connection.id } } });
+    return job;
     });
 
     const result = await publishToProvider({

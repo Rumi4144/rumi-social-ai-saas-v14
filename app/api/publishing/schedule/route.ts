@@ -1,3 +1,4 @@
+import { campaignVideoId } from "@/lib/publishing/facebook-video";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { publishKey } from "@/lib/publishing/idempotency";
@@ -9,6 +10,7 @@ const S = z.object({
   contentItemId: z.string(),
   socialConnectionIds: z.array(z.string()).min(1),
   scheduledFor: z.string().datetime(),
+  youtube: z.object({ certified: z.literal(true), madeForKids: z.boolean(), containsSyntheticMedia: z.boolean() }).optional(),
 });
 
 export async function POST(req: Request) {
@@ -52,6 +54,8 @@ export async function POST(req: Request) {
       );
     }
 
+    const youtubeSelected = await prisma.socialConnection.findFirst({ where: { id: { in: p.data.socialConnectionIds }, organizationId: ctx.organizationId, provider: "youtube", status: "connected" } });
+    if (youtubeSelected && (!p.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
     const jobs = [];
 
     for (const cid of p.data.socialConnectionIds) {
@@ -64,12 +68,13 @@ export async function POST(req: Request) {
       });
 
       if (!connection) continue;
-      if (!["facebook", "instagram"].includes(connection.provider.toLowerCase())) continue;
-      if (item.mediaUrl?.includes("/api/video/media/") && connection.provider.toLowerCase() !== "facebook") continue;
+      if (!["facebook", "instagram", "youtube"].includes(connection.provider.toLowerCase())) continue;
+      if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "youtube"].includes(connection.provider.toLowerCase())) continue;
 
       const key = publishKey(item.id, connection.id, p.data.scheduledFor);
 
-      const job = await prisma.publishJob.upsert({
+      const job = await prisma.$transaction(async tx => {
+      const job = await tx.publishJob.upsert({
         where: {
           idempotencyKey: key,
         },
@@ -83,13 +88,16 @@ export async function POST(req: Request) {
           idempotencyKey: key,
         },
       });
+      if (connection.provider === "youtube") await tx.job.upsert({ where: { id: `youtube_settings_${job.id}` }, update: {}, create: { id: `youtube_settings_${job.id}`, organizationId: ctx.organizationId, type: "YOUTUBE_CAMPAIGN_SETTINGS", status: "ready", payload: { ...p.data.youtube!, connectionId: connection.id } } });
+      return job;
+      });
 
       jobs.push(job);
     }
 
     if (jobs.length === 0) {
       return NextResponse.json(
-        { error: "No supported connected accounts were selected. Video posts can currently be scheduled on Facebook." },
+        { error: "No supported connected accounts were selected. Video posts can be scheduled on Facebook or uploaded privately to YouTube." },
         { status: 400 },
       );
     }

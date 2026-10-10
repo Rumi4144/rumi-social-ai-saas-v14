@@ -11,14 +11,18 @@ export default function PublishingActions({
   connectionId: string;
   destination?: string;
 }) {
+  const isYouTube = destination.startsWith("YouTube");
+  const [certified,setCertified]=useState(false),[madeForKids,setMadeForKids]=useState(false),[synthetic,setSynthetic]=useState(true);
+  const youtube = isYouTube ? { certified, madeForKids, containsSyntheticMedia: synthetic } : undefined;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
 
   async function publishNow() {
+    if (isYouTube && !certified) { setMessage("Confirm YouTube upload settings first."); return; }
     if (
       !confirm(
-        `Publish this content to ${destination} now?`
+        `${isYouTube ? "Upload this video privately to" : "Publish this content to"} ${destination} now?`
       )
     ) {
       return;
@@ -34,7 +38,7 @@ export default function PublishingActions({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          contentItemId,
+          contentItemId, youtube,
           socialConnectionId: connectionId,
         }),
       });
@@ -61,6 +65,7 @@ export default function PublishingActions({
   }
 
   async function schedulePost() {
+    if (isYouTube && !certified) { setMessage("Confirm YouTube upload settings first."); return; }
     if (!scheduledFor) {
       setMessage("Choose a future date and time.");
       return;
@@ -83,7 +88,7 @@ export default function PublishingActions({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          contentItemId,
+          contentItemId, youtube,
           socialConnectionIds: [connectionId],
           scheduledFor: date.toISOString(),
         }),
@@ -114,12 +119,13 @@ export default function PublishingActions({
 
   return (
     <div style={{ marginTop: "16px" }}>
+      {isYouTube && <div><p>YouTube uploads are private pending API audit. Uses this post’s selected video, headline and caption.</p><label><input type="checkbox" checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> Made for kids</label><label><input type="checkbox" checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Realistic altered or synthetic content</label><label><input type="checkbox" checked={certified} onChange={e=>setCertified(e.target.checked)} /> I authorize the private upload, have rights to this video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
       <button
         type="button"
         disabled={busy}
         onClick={publishNow}
       >
-        {busy ? "Working..." : `Publish to ${destination}`}
+        {busy ? "Working..." : `${isYouTube ? "Upload privately to" : "Publish to"} ${destination}`}
       </button>
 
       <div style={{ marginTop: "12px" }}>

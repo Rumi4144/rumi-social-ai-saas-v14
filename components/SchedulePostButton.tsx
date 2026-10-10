@@ -22,13 +22,18 @@ export default function SchedulePostButton({
   contentItemId,
   initialStatus,
   initialScheduledFor,
+  isVideo = false,
 }: {
   contentItemId: string;
   initialStatus: string;
   initialScheduledFor?: string | null;
+  isVideo?: boolean;
 }) {
   const router = useRouter();
 
+  const [youtubeCertified, setYoutubeCertified] = useState(false);
+  const [madeForKids, setMadeForKids] = useState(false);
+  const [synthetic, setSynthetic] = useState(true);
   const [open, setOpen] = useState(false);
   const schedulePanelRef = useRef<HTMLDivElement>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -100,7 +105,7 @@ export default function SchedulePostButton({
           );
         }
 
-        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => ["facebook", "instagram"].includes(connection.provider.toLowerCase()));
+        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "youtube"] : ["facebook", "instagram"]).includes(connection.provider.toLowerCase()));
 
         setConnections(list);
 
@@ -121,6 +126,8 @@ export default function SchedulePostButton({
     loadConnections();
   }, [open, connections.length]);
 
+  const youtubeSelected = connections.some(c => c.provider === "youtube" && selected.includes(c.id));
+
   function toggleConnection(id: string) {
     setSelected((current) =>
       current.includes(id)
@@ -140,6 +147,7 @@ export default function SchedulePostButton({
       return;
     }
 
+    if (youtubeSelected && !youtubeCertified) { setError("Confirm the YouTube upload settings."); return; }
     setBusy(true);
     setError("");
 
@@ -155,6 +163,7 @@ export default function SchedulePostButton({
           contentItemId,
           socialConnectionIds: selected,
           scheduledFor: isoTime,
+          ...(youtubeSelected ? { youtube: { certified: youtubeCertified, madeForKids, containsSyntheticMedia: synthetic } } : {}),
         }),
       });
 
@@ -221,7 +230,7 @@ export default function SchedulePostButton({
           }}
         >
           <strong>Schedule Post</strong>
-          <p>YouTube videos use Publishing Center’s YouTube uploader. TikTok publishing setup is not complete yet.</p>
+          <p>Select a destination for this post. TikTok publishing setup is not complete yet.</p>
 
           <div style={{ marginTop: 12 }}>
             {loading && <p>Loading connected accounts...</p>}
@@ -249,6 +258,7 @@ export default function SchedulePostButton({
             ))}
           </div>
 
+          {youtubeSelected && <div><p>YouTube uploads are private while this API project awaits audit. The selected video, post headline and caption will be uploaded at the scheduled time.</p><label><input type="checkbox" checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> This video is made for kids</label><label><input type="checkbox" checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Contains realistic altered or synthetic content</label><label><input type="checkbox" checked={youtubeCertified} onChange={e=>setYoutubeCertified(e.target.checked)} /> I authorize this private YouTube upload, have rights to the video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
           <input
             type="datetime-local"
             value={scheduledFor}

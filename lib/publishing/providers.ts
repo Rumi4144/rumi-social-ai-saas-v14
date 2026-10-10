@@ -1,3 +1,4 @@
+import { publishYouTubeCampaign } from "./youtube-campaign";
 import { decryptSecret } from "@/lib/security/crypto";
 import { campaignVideoId, publishFacebookVideo } from "./facebook-video";
 import { publishInstagram } from "./instagram";
@@ -27,6 +28,11 @@ export async function publishToProvider(input: {
   contentItemId?: string;
   publishJobId?: string;
 }): Promise<PublishResult> {
+  if (input.platform.toLowerCase() === "youtube") {
+    const assetId = campaignVideoId(input.mediaUrl);
+    if (!assetId) return { ok: false, retryable: false, error: "Select a campaign video before publishing to YouTube." };
+    return publishYouTubeCampaign({ ...input, assetId });
+  }
   if (!input.token) return { ok: false, error: "MISSING_TOKEN" };
 
   let decrypted: string;
