@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+export const resetSender = () => (process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM || process.env.MAIL_FROM || "").trim();
 export const resetHash = (token: string) => createHash("sha256").update(token).digest("hex");
 export async function resetPassword(token: string, password: string) {
   const hash = resetHash(token);
@@ -25,7 +26,7 @@ export async function sendPasswordReset(email: string) {
   const base = new URL(process.env.NEXT_PUBLIC_APP_URL || "https://rumisocialai.com");
   const url = new URL("/reset-password", base); url.searchParams.set("token", token);
   try {
-    const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: process.env.RESEND_FROM_EMAIL, to: [email], subject: "Reset your Rumi Social AI password", text: `Use this link to reset your password:\n\n${url}\n\nThe link expires in 30 minutes and can be used once. If you did not request this, ignore this email.` }), signal: AbortSignal.timeout(10000) });
+    const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: resetSender(), to: [email], subject: "Reset your Rumi Social AI password", text: `Use this link to reset your password:\n\n${url}\n\nThe link expires in 30 minutes and can be used once. If you did not request this, ignore this email.` }), signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw new Error("EMAIL_DELIVERY_FAILED");
   } catch {
     await prisma.passwordResetToken.deleteMany({ where: { tokenHash } });
