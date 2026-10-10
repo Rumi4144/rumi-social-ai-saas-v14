@@ -32,6 +32,7 @@ export default function SchedulePostButton({
   const router = useRouter();
 
   const [youtubeCertified, setYoutubeCertified] = useState(false);
+  const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("public");
   const [madeForKids, setMadeForKids] = useState(false);
   const [synthetic, setSynthetic] = useState(true);
   const [open, setOpen] = useState(false);
@@ -163,7 +164,7 @@ export default function SchedulePostButton({
           contentItemId,
           socialConnectionIds: selected,
           scheduledFor: isoTime,
-          ...(youtubeSelected ? { youtube: { certified: youtubeCertified, madeForKids, containsSyntheticMedia: synthetic } } : {}),
+          ...(youtubeSelected ? { youtube: { certified: youtubeCertified, privacy, madeForKids, containsSyntheticMedia: synthetic } } : {}),
         }),
       });
 
@@ -258,7 +259,7 @@ export default function SchedulePostButton({
             ))}
           </div>
 
-          {youtubeSelected && <div><p>YouTube uploads are private while this API project awaits audit. The selected video, post headline and caption will be uploaded at the scheduled time.</p><label><input type="checkbox" checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> This video is made for kids</label><label><input type="checkbox" checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Contains realistic altered or synthetic content</label><label><input type="checkbox" checked={youtubeCertified} onChange={e=>setYoutubeCertified(e.target.checked)} /> I authorize this private YouTube upload, have rights to the video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
+          {youtubeSelected && <div><p>The selected video, post headline and caption will be uploaded at the scheduled time.</p><label>Visibility <select value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label><input type="checkbox" checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> This video is made for kids</label><label><input type="checkbox" checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Contains realistic altered or synthetic content</label><label><input type="checkbox" checked={youtubeCertified} onChange={e=>setYoutubeCertified(e.target.checked)} /> I authorize this YouTube upload with the selected visibility, have rights to the video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
           <input
             type="datetime-local"
             value={scheduledFor}

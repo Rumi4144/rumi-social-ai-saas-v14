@@ -177,7 +177,7 @@ export default async function Campaign({
                 <video controls playsInline preload="metadata" src={`/api/video/media/${videoAsset.id}`} style={{ width: "100%", maxHeight: 600 }} />
                 <UseCampaignVideo assetId={videoAsset.id} contentItemId={item.id} selected={item.mediaUrl === `/api/video/media/${videoAsset.id}`} />
                 <a href={`/api/video/media/${videoAsset.id}`} target="_blank" rel="noopener noreferrer">Open / download video draft</a>
-                <p>Review this clip, then select it for Facebook publishing or private YouTube upload. Download it for other platforms.</p>
+                <p>Review this clip, then select it for Facebook publishing or YouTube upload. Download it for other platforms.</p>
               </div>}
               {displayAsset?.url && (
                 <img

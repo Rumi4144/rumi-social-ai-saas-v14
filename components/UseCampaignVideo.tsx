@@ -13,5 +13,5 @@ export default function UseCampaignVideo({ assetId, contentItemId, selected }: {
     } catch (e) { setError(e instanceof Error ? e.message : "Could not select video."); }
     finally { setBusy(false); }
   }
-  return <div><button type="button" disabled={busy || selected} onClick={choose}>{selected ? "Video selected for publishing" : busy ? "Selecting…" : "Use video for this post"}</button><p>Approve this post again after choosing its video. Facebook can publish the clip; YouTube can upload it privately. Download it for other platforms.</p>{error && <p role="alert">{error}</p>}</div>;
+  return <div><button type="button" disabled={busy || selected} onClick={choose}>{selected ? "Video selected for publishing" : busy ? "Selecting…" : "Use video for this post"}</button><p>Approve this post again after choosing its video. Facebook can publish the clip; YouTube can upload it with your chosen visibility. Download it for other platforms.</p>{error && <p role="alert">{error}</p>}</div>;
 }

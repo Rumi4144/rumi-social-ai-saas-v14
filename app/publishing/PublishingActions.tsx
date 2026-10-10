@@ -12,8 +12,9 @@ export default function PublishingActions({
   destination?: string;
 }) {
   const isYouTube = destination.startsWith("YouTube");
+  const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("public");
   const [certified,setCertified]=useState(false),[madeForKids,setMadeForKids]=useState(false),[synthetic,setSynthetic]=useState(true);
-  const youtube = isYouTube ? { certified, madeForKids, containsSyntheticMedia: synthetic } : undefined;
+  const youtube = isYouTube ? { certified, privacy, madeForKids, containsSyntheticMedia: synthetic } : undefined;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
@@ -22,7 +23,7 @@ export default function PublishingActions({
     if (isYouTube && !certified) { setMessage("Confirm YouTube upload settings first."); return; }
     if (
       !confirm(
-        `${isYouTube ? "Upload this video privately to" : "Publish this content to"} ${destination} now?`
+        `${isYouTube ? `Upload this ${privacy} video to` : "Publish this content to"} ${destination} now?`
       )
     ) {
       return;
@@ -119,13 +120,13 @@ export default function PublishingActions({
 
   return (
     <div style={{ marginTop: "16px" }}>
-      {isYouTube && <div><p>YouTube uploads are private pending API audit. Uses this post’s selected video, headline and caption.</p><label><input type="checkbox" checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> Made for kids</label><label><input type="checkbox" checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Realistic altered or synthetic content</label><label><input type="checkbox" checked={certified} onChange={e=>setCertified(e.target.checked)} /> I authorize the private upload, have rights to this video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
+      {isYouTube && <div><p>Uses this post’s selected video, headline and caption.</p><label>Visibility <select value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label><input type="checkbox" checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> Made for kids</label><label><input type="checkbox" checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Realistic altered or synthetic content</label><label><input type="checkbox" checked={certified} onChange={e=>setCertified(e.target.checked)} /> I authorize the upload with the selected visibility, have rights to this video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
       <button
         type="button"
         disabled={busy}
         onClick={publishNow}
       >
-        {busy ? "Working..." : `${isYouTube ? "Upload privately to" : "Publish to"} ${destination}`}
+        {busy ? "Working..." : `${isYouTube ? "Upload to" : "Publish to"} ${destination}`}
       </button>
 
       <div style={{ marginTop: "12px" }}>

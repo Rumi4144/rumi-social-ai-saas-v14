@@ -190,10 +190,10 @@ export default async function Publishing() {
                   {job.scheduledFor.toLocaleString()}
                 </span>
                 <span className={`state ${job.status}`}>
-                  {job.platform === "youtube" && job.status === "published" ? "uploaded privately" : job.status}
+                  {job.platform === "youtube" && job.status === "published" ? "uploaded" : job.status}
                 </span>
                 <span>
-                  {job.platform === "youtube" && job.status === "published" && job.externalPostId ? <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(job.externalPostId)}`} target="_blank" rel="noreferrer">View private video</a> : job.lastError || job.externalPostId || "—"}
+                  {job.platform === "youtube" && job.status === "published" && job.externalPostId ? <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(job.externalPostId)}`} target="_blank" rel="noreferrer">View video</a> : job.lastError || job.externalPostId || "—"}
                 </span>
               </div>
             ))}

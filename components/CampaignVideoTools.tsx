@@ -53,7 +53,7 @@ export default function CampaignVideoTools({ campaignId, contentItemId, sourceAs
   }
 
   return <details style={{ marginTop: 16 }}><summary>Add a video to this post</summary>
-    <p>Attach a real clip or make a short AI video from this post’s source image. Review the clip, then choose Use video for this post to publish or schedule it on Facebook, or upload it privately to YouTube. Instagram video posting is available by downloading the clip.</p>
+    <p>Attach a real clip or make a short AI video from this post’s source image. Review the clip, then choose Use video for this post to publish or schedule it on Facebook, or upload it to YouTube. Instagram video posting is available by downloading the clip.</p>
     <label>Real clip · MP4 / WebM, up to 3 MB · no AI credits<input type="file" accept="video/mp4,video/webm" disabled={busy} onChange={event => upload(event.target.files?.[0])} /></label>
     {sourceAssetId && <><label>AI video motion<textarea value={prompt} maxLength={800} disabled={busy || !!jobId} onChange={event => setPrompt(event.target.value)} /></label>
       <label>Length<select value={duration} disabled={busy || !!jobId} onChange={event => setDuration(Number(event.target.value) as 5 | 10)}><option value={5}>5 seconds · 40 credits</option><option value={10}>10 seconds · 80 credits</option></select></label>

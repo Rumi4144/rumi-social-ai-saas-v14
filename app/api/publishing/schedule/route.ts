@@ -10,7 +10,7 @@ const S = z.object({
   contentItemId: z.string(),
   socialConnectionIds: z.array(z.string()).min(1),
   scheduledFor: z.string().datetime(),
-  youtube: z.object({ certified: z.literal(true), madeForKids: z.boolean(), containsSyntheticMedia: z.boolean() }).optional(),
+  youtube: z.object({ certified: z.literal(true), privacy: z.enum(["public", "unlisted", "private"]).default("private"), madeForKids: z.boolean(), containsSyntheticMedia: z.boolean() }).optional(),
 });
 
 export async function POST(req: Request) {
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
 
     if (jobs.length === 0) {
       return NextResponse.json(
-        { error: "No supported connected accounts were selected. Video posts can be scheduled on Facebook or uploaded privately to YouTube." },
+        { error: "No supported connected accounts were selected. Video posts can be scheduled on Facebook or uploaded to YouTube." },
         { status: 400 },
       );
     }

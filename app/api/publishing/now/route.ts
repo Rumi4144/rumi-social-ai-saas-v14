@@ -10,7 +10,7 @@ export const maxDuration = 60;
 const S = z.object({
   contentItemId: z.string(),
   socialConnectionId: z.string(),
-  youtube: z.object({ certified: z.literal(true), madeForKids: z.boolean(), containsSyntheticMedia: z.boolean() }).optional(),
+  youtube: z.object({ certified: z.literal(true), privacy: z.enum(["public", "unlisted", "private"]).default("private"), madeForKids: z.boolean(), containsSyntheticMedia: z.boolean() }).optional(),
 });
 
 export async function POST(req: Request) {
