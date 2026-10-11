@@ -11,3 +11,9 @@ export function presenterPostPrefill(post:PresenterPost,products:PresenterProduc
  const image=product?.imageUrl||(/^https:\/\//i.test(post.mediaUrl||"")&&/\.(png|jpe?g|webp)(?:[?#]|$)/i.test(post.mediaUrl||"")?post.mediaUrl:"");
  return {productId:product?.id||"",name:(product?.name||title).slice(0,180),details:details.slice(0,8000),script,image:image||""};
 }
+
+export function presenterCampaignChoices(products:(PresenterProduct & {sourceUrl?:string|null;websiteOnly?:boolean})[],posts:PresenterPost[]){
+ const choices=products.map(p=>({...p,name:p.name,description:p.description||"",imageUrl:p.imageUrl||"",sourceUrl:p.sourceUrl||undefined}));
+ for(const post of posts){if(!post.headline?.trim()||choices.some(p=>key(p.name)===key(post.headline!)))continue;const filled=presenterPostPrefill(post,[]);choices.push({id:`post-${post.id}`,name:filled.name,description:filled.details,imageUrl:filled.image,sourceUrl:undefined,websiteOnly:true});}
+ return choices;
+}

@@ -9,7 +9,7 @@ export async function GET(req:Request){try{
  if(!campaignId)return reply({error:"Choose a campaign first."},400);
  const campaign=await prisma.campaign.findFirst({where:{id:campaignId,brand:{organizationId:ctx.organizationId}},select:{brandId:true,brand:{select:{websiteUrl:true}}}});
  if(!campaign)return reply({error:"Campaign not found."},404);
- const products: {id:string;name:string;description:string|null;imageUrl:string|null;sourceUrl:string|null;websiteOnly?:boolean}[]=await prisma.product.findMany({where:{brandId:campaign.brandId,imageUrl:{not:null}},select:{id:true,name:true,description:true,imageUrl:true,sourceUrl:true},take:100});
+ const products: {id:string;name:string;description:string|null;imageUrl:string|null;sourceUrl:string|null;websiteOnly?:boolean}[]=await prisma.product.findMany({where:{brandId:campaign.brandId},select:{id:true,name:true,description:true,imageUrl:true,sourceUrl:true},take:100});
  let hostname="";try{hostname=new URL(campaign.brand.websiteUrl||"").hostname;}catch{}
  // Only the known Rumi public catalog is fetched; never request arbitrary tenant URLs.
  if(["rumiguitars.com","www.rumiguitars.com"].includes(hostname)){
