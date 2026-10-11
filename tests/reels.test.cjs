@@ -188,7 +188,7 @@ test('every music style produces distinct, finite audio with safe peaks and fade
   assert.ok(peak<=.801);assert.ok(Math.sqrt(energy/samples.length)>.02,`${style.value} should be audible`);
   fingerprints.add(require('node:crypto').createHash('sha256').update(Buffer.from(samples.buffer)).digest('hex'));
  }
- assert.equal(fingerprints.size,10);
+ assert.equal(fingerprints.size,11);
  assert.throws(()=>music.musicSamples('jazz',Infinity));assert.throws(()=>music.musicSamples('jazz',181));
 });
 test('old audio drafts migrate while current choices and disabled music are respected', () => {

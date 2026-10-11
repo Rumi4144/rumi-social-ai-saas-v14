@@ -2,6 +2,7 @@ export const MUSIC_STYLES = [
   { value: "ambient", label: "Soft ambient", description: "Warm, slow chords for a calm background." },
   { value: "flamenco", label: "Flamenco", description: "Spanish-style guitar plucks, rhythmic strums and light hand percussion." },
   { value: "classical", label: "Classical", description: "Gentle fingerpicked arpeggios with a flowing melody." },
+  { value: "fingerpicking", label: "Fingerpicking guitar", description: "Gentle acoustic-style picking with alternating bass notes and a flowing melody." },
   { value: "jazz", label: "Jazz", description: "Relaxed swing with mellow keys, walking bass and soft brushes." },
   { value: "country", label: "Country", description: "Bright picking, alternating bass and a steady country rhythm." },
   { value: "blues", label: "Blues", description: "A laid-back guitar shuffle with warm bass and bluesy fills." },
@@ -33,7 +34,7 @@ type Note = { at: number; length: number; midi: number; instrument: Instrument; 
 // Short original arrangements, synthesized locally without songs, samples or external services.
 export function musicScore(style: MusicStyle, duration: number): Note[] {
   const notes: Note[] = [];
-  const bpm = { ambient: 72, flamenco: 112, classical: 84, jazz: 94, country: 108, blues: 88, bossa: 116, folk: 96, piano: 66, pop: 120 }[style];
+  const bpm = { ambient: 72, flamenco: 112, classical: 84, fingerpicking: 78, jazz: 94, country: 108, blues: 88, bossa: 116, folk: 96, piano: 66, pop: 120 }[style];
   const beat = 60 / bpm, beatsPerBar = style === "flamenco" ? 6 : style === "folk" ? 3 : 4, barLength = beat * beatsPerBar;
   const add = (at: number, midi: number, length: number, instrument: Instrument, level = 1) => {
     if (at < duration) notes.push({ at, midi, length: Math.min(length, duration - at), instrument, level });
@@ -42,6 +43,7 @@ export function musicScore(style: MusicStyle, duration: number): Note[] {
     ambient: [[48, 55, 64], [45, 52, 60], [41, 48, 57], [43, 50, 59]],
     flamenco: [[45, 52, 57, 60, 64], [43, 50, 55, 59, 62], [41, 48, 53, 57, 60], [40, 47, 52, 56, 59]],
     classical: [[40, 52, 55, 59, 64], [36, 48, 55, 60, 64], [43, 50, 55, 59, 62], [38, 50, 54, 57, 62]],
+    fingerpicking: [[38, 45, 50, 54, 57, 64], [43, 50, 55, 59, 62, 67], [47, 54, 59, 62, 66, 69], [45, 52, 57, 61, 64, 69]],
     jazz: [[36, 55, 58, 62, 65], [41, 57, 63, 67, 72], [34, 53, 57, 60, 62], [39, 55, 58, 62, 65]],
     country: [[43, 55, 59, 62, 67], [36, 55, 60, 64, 67], [38, 54, 57, 62, 66], [43, 55, 59, 62, 67]],
     blues: [
@@ -70,6 +72,13 @@ export function musicScore(style: MusicStyle, duration: number): Note[] {
     } else if (style === "classical") {
       [0, 2, 3, 4, 1, 3, 2, 4].forEach((string, pulse) => add(start + pulse * beat / 2, chord[string], beat * 1.8, "guitar", string === 0 ? 1 : .75));
       [0, 1.5, 3].forEach((pulse, index) => add(start + pulse * beat, chord[4] + [0, 2, 0][index], beat * 1.2, "guitar", .5));
+    } else if (style === "fingerpicking") {
+      // Thumb notes alternate beneath separately picked upper strings, with occasional pinched pairs.
+      [0, 1, 0, 1].forEach((string, pulse) => add(start + pulse * beat, chord[string], beat * 1.5, "guitar", .9));
+      (bar % 2 ? [3, 5, 4, 2] : [4, 3, 5, 3]).forEach((string, pulse) =>
+        add(start + (pulse + .5) * beat, chord[string], beat * 1.8, "guitar", .72));
+      [0, 2].forEach((pulse, index) => add(start + pulse * beat + .012, chord[index ? 4 : 5], beat * 1.9, "guitar", .55));
+      if (bar % 2) add(start + beat * 3.75, chord[4], beat * .65, "guitar", .4);
     } else if (style === "jazz") {
       [0, 4, 7, 9].forEach((interval, pulse) => add(start + pulse * beat, chord[0] + interval, beat * .8, "bass", .8));
       [.66, 2, 3.66].forEach(pulse => chord.slice(1).forEach(midi => add(start + pulse * beat, midi, beat * 1.1, "keys", .35)));
