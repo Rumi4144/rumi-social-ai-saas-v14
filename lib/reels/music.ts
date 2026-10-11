@@ -1,5 +1,6 @@
 export const MUSIC_STYLES = [
   { value: "ambient", label: "Soft ambient", description: "Warm, slow chords for a calm background." },
+  { value: "soft-acoustic", label: "Soft acoustic guitar", description: "Slow, mellow guitar-style picking with space between notes for a peaceful background." },
   { value: "flamenco", label: "Flamenco", description: "Spanish-style guitar plucks, rhythmic strums and light hand percussion." },
   { value: "classical", label: "Classical", description: "Gentle fingerpicked arpeggios with a flowing melody." },
   { value: "fingerpicking", label: "Fingerpicking guitar", description: "Gentle acoustic-style picking with alternating bass notes and a flowing melody." },
@@ -28,19 +29,20 @@ export function musicSettings(input: MusicSettings) {
   };
 }
 
-type Instrument = "guitar" | "bright" | "keys" | "piano" | "bass" | "pad" | "kick" | "tap" | "brush";
+type Instrument = "guitar" | "soft-guitar" | "bright" | "keys" | "piano" | "bass" | "pad" | "kick" | "tap" | "brush";
 type Note = { at: number; length: number; midi: number; instrument: Instrument; level: number };
 
 // Short original arrangements, synthesized locally without songs, samples or external services.
 export function musicScore(style: MusicStyle, duration: number): Note[] {
   const notes: Note[] = [];
-  const bpm = { ambient: 72, flamenco: 112, classical: 84, fingerpicking: 78, jazz: 94, country: 108, blues: 88, bossa: 116, folk: 96, piano: 66, pop: 120 }[style];
+  const bpm = { ambient: 72, "soft-acoustic": 64, flamenco: 112, classical: 84, fingerpicking: 78, jazz: 94, country: 108, blues: 88, bossa: 116, folk: 96, piano: 66, pop: 120 }[style];
   const beat = 60 / bpm, beatsPerBar = style === "flamenco" ? 6 : style === "folk" ? 3 : 4, barLength = beat * beatsPerBar;
   const add = (at: number, midi: number, length: number, instrument: Instrument, level = 1) => {
     if (at < duration) notes.push({ at, midi, length: Math.min(length, duration - at), instrument, level });
   };
   const progressions: Record<MusicStyle, number[][]> = {
     ambient: [[48, 55, 64], [45, 52, 60], [41, 48, 57], [43, 50, 59]],
+    "soft-acoustic": [[43, 50, 55, 59, 62], [40, 47, 52, 55, 59], [48, 55, 60, 64, 67], [38, 45, 50, 54, 57]],
     flamenco: [[45, 52, 57, 60, 64], [43, 50, 55, 59, 62], [41, 48, 53, 57, 60], [40, 47, 52, 56, 59]],
     classical: [[40, 52, 55, 59, 64], [36, 48, 55, 60, 64], [43, 50, 55, 59, 62], [38, 50, 54, 57, 62]],
     fingerpicking: [[38, 45, 50, 54, 57, 64], [43, 50, 55, 59, 62, 67], [47, 54, 59, 62, 66, 69], [45, 52, 57, 61, 64, 69]],
@@ -62,6 +64,10 @@ export function musicScore(style: MusicStyle, duration: number): Note[] {
     if (style === "ambient") {
       chord.forEach(midi => add(start, midi, barLength + .4, "pad", .4));
       add(start + beat * 2, chord[2] + 12, beat * 1.8, "keys", .28);
+    } else if (style === "soft-acoustic") {
+      [0, 2].forEach((pulse, index) => add(start + pulse * beat, chord[index], beat * 2.5, "soft-guitar", .7));
+      [2, 3, 4, 3].forEach((string, index) => add(start + (index + .5) * beat, chord[string], beat * 2.2, "soft-guitar", .55));
+      add(start + beat * 3, chord[4], beat * 1.8, "soft-guitar", .4);
     } else if (style === "flamenco") {
       add(start, chord[0], beat * 2, "guitar", 1.1);
       add(start + beat * 3, chord[0] + 7, beat * 1.5, "guitar", .9);
@@ -132,12 +138,14 @@ export function musicSamples(style: MusicStyle, duration: number, sampleRate = 2
   for (const [index, note] of musicScore(style, duration).entries()) {
     const offset = Math.round(note.at * sampleRate), length = Math.min(Math.ceil(note.length * sampleRate), samples.length - offset);
     const frequency = 440 * 2 ** ((note.midi - 69) / 12);
+    const plucked = note.instrument === "guitar" || note.instrument === "bright" || note.instrument === "soft-guitar";
     let seed = (index + 1) * 7919, priorNoise = 0;
     const noise = () => { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; return (seed >>> 0) / 2147483648 - 1; };
     // A damped vibrating string provides a plucked timbre instead of a plain tone.
     const string = new Float32Array(Math.max(2, Math.round(sampleRate / frequency)));
-    if (note.instrument === "guitar" || note.instrument === "bright") {
-      for (let i = 0; i < string.length; i++) { priorNoise = priorNoise * .3 + noise() * .7; string[i] = priorNoise; }
+    if (plucked) {
+      const smoothing = note.instrument === "soft-guitar" ? .75 : .3;
+      for (let i = 0; i < string.length; i++) { priorNoise = priorNoise * smoothing + noise() * (1 - smoothing); string[i] = priorNoise; }
       const mean = string.reduce((sum, value) => sum + value, 0) / string.length;
       for (let i = 0; i < string.length; i++) string[i] -= mean;
     }
@@ -145,12 +153,12 @@ export function musicSamples(style: MusicStyle, duration: number, sampleRate = 2
       const t = i / sampleRate, endFade = Math.min(1, (length - 1 - i) / (sampleRate * .06));
       const phase = 2 * Math.PI * frequency * t;
       let value = 0;
-      if (note.instrument === "guitar" || note.instrument === "bright") {
+      if (plucked) {
         const position = i % string.length;
         value = string[position];
         const damping = note.instrument === "bright" ? .995 : .997;
         string[position] = damping * (string[position] + string[(position + 1) % string.length]) * .5;
-        value *= 1.6 * Math.min(1, t / .003);
+        value *= 1.6 * Math.min(1, t / (note.instrument === "soft-guitar" ? .018 : .003));
       } else if (note.instrument === "keys") {
         value = (Math.sin(phase) + .3 * Math.sin(phase * 2) * Math.exp(-t * 4) + .14 * Math.sin(phase * 3) * Math.exp(-t * 7)) * Math.exp(-t * 2) * Math.min(1, t / .008) * .28;
       } else if (note.instrument === "piano") {
@@ -171,7 +179,8 @@ export function musicSamples(style: MusicStyle, duration: number, sampleRate = 2
   }
   let peak = 0, energy = 0;
   for (const sample of samples) { peak = Math.max(peak, Math.abs(sample)); energy += sample * sample; }
-  const scale = Math.min(.8 / (peak || 1), .14 / (Math.sqrt(energy / samples.length) || 1));
+  const targetLevel = style === "soft-acoustic" ? .09 : .14;
+  const scale = Math.min(.8 / (peak || 1), targetLevel / (Math.sqrt(energy / samples.length) || 1));
   const fadeIn = Math.min(.08, duration / 4) * sampleRate, fadeOut = Math.min(.7, duration / 4) * sampleRate;
   for (let i = 0; i < samples.length; i++) samples[i] *= scale * Math.min(1, i / fadeIn, (samples.length - 1 - i) / fadeOut);
   return samples;
