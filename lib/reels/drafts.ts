@@ -1,6 +1,7 @@
 import type { ReelProject } from "./timeline";
 import type { ReelSource } from "./post-context";
-export type ReelDraft = { project: ReelProject; sources?: ReelSource[]; files: [string, Blob][]; musicFile?: File; voiceFile?: File; music: boolean; originalAudio: boolean; contentItemId: string };
+import type { MusicSettings } from "./music";
+export type ReelDraft = MusicSettings & { project: ReelProject; sources?: ReelSource[]; files: [string, Blob][]; voiceFile?: File; originalAudio: boolean; contentItemId: string };
 function database(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("social-reel-drafts", 1);

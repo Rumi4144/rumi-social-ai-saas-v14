@@ -177,3 +177,53 @@ test('multiple uploads validate every file, preserve order and respect library a
  const result=library.appendScenes(project,[{id:'a',src:'new-a',kind:'image'},{id:'b',src:'new-b',kind:'image'}],()=> 'new-id');
  assert.equal(result.scenes.length,6);assert.equal(result.scenes[5].src,'new-a');assert.equal(project.scenes.length,5);
 });
+
+test('every music style produces distinct, finite audio with safe peaks and faded edges', () => {
+ const music=load('lib/reels/music.ts'), fingerprints=new Set();
+ for (const style of music.MUSIC_STYLES) {
+  const samples=music.musicSamples(style.value,7,8000);
+  assert.equal(samples.length,56000);assert.equal(Math.abs(samples[0]),0);assert.equal(Math.abs(samples.at(-1)),0);
+  let peak=0,energy=0;
+  for (const value of samples) {assert.ok(Number.isFinite(value));peak=Math.max(peak,Math.abs(value));energy+=value*value;}
+  assert.ok(peak<=.801);assert.ok(Math.sqrt(energy/samples.length)>.02,`${style.value} should be audible`);
+  fingerprints.add(require('node:crypto').createHash('sha256').update(Buffer.from(samples.buffer)).digest('hex'));
+ }
+ assert.equal(fingerprints.size,5);
+ assert.throws(()=>music.musicSamples('jazz',Infinity));assert.throws(()=>music.musicSamples('jazz',181));
+});
+test('old audio drafts migrate while current choices and disabled music are respected', () => {
+ const music=load('lib/reels/music.ts');
+ assert.equal(music.musicSettings({music:true}).musicStyle,'ambient');
+ const legacy=music.musicSettings({music:false,musicFile:{}});assert.equal(legacy.musicStyle,'custom');assert.equal(legacy.music,true);
+ const current=music.musicSettings({music:false,musicStyle:'jazz',musicFile:{},musicVolume:60});
+ assert.equal(current.music,false);assert.equal(current.musicStyle,'jazz');assert.equal(current.musicVolume,60);
+ assert.equal(music.musicSettings({music:true,musicVolume:Infinity}).musicVolume,35);
+ assert.equal(music.musicSettings({music:true,musicVolume:500}).musicVolume,100);
+});
+function musicContext() {
+ const nodes=[], levels=[];
+ const context={currentTime:10,state:'running',decoded:0,createBuffer:(_,length)=>({getChannelData:()=>new Float32Array(length)}),decodeAudioData:async()=>{context.decoded++;return{duration:1};},createBufferSource:()=>{const node={started:[],stops:[],disconnected:false,connect:other=>other,disconnect(){this.disconnected=true;},start(at){this.started.push(at);},stop(at){this.stops.push(at);}};nodes.push(node);return node;},createGain:()=>({connect:other=>other,disconnect(){},gain:{setValueAtTime(value,at){levels.push([value,at]);},linearRampToValueAtTime(value,at){levels.push([value,at]);}}})};
+ return {context,nodes,levels};
+}
+test('music prepares before recording, then starts at the selected volume and stops on cancellation', async () => {
+ const music=load('lib/reels/music.ts'), {context,nodes,levels}=musicContext(), controller=new AbortController();
+ const begin=await music.prepareMusic(context,{}, {music:true,musicStyle:'flamenco',musicVolume:55},3,controller.signal);
+ assert.equal(nodes.length,0);const stop=begin();assert.deepEqual(nodes[0].started,[10]);assert.ok(levels.some(([level])=>level===.55));
+ assert.equal(nodes[0].loop,false);assert.equal(nodes[0].stops[0],13);
+ controller.abort();assert.equal(nodes[0].disconnected,true);const stops=nodes[0].stops.length;stop();assert.equal(nodes[0].stops.length,stops);
+});
+test('disabled music is silent and an uploaded file never overrides a selected built-in style', async () => {
+ const music=load('lib/reels/music.ts'), {context,nodes}=musicContext();
+ const file={arrayBuffer:async()=>{throw Error('must not read unused upload');}};
+ for (const settings of [{music:false,musicStyle:'custom',musicFile:file},{music:true,musicStyle:'jazz',musicVolume:0}]) (await music.prepareMusic(context,{},settings,3))();
+ assert.equal(nodes.length,0);
+ const stop=await music.startMusic(context,{}, {music:true,musicStyle:'country',musicFile:file},3);assert.equal(context.decoded,0);assert.equal(nodes.length,1);stop();
+});
+test('custom music loops, requires a file, and cancelled decoding cannot start late playback', async () => {
+ const music=load('lib/reels/music.ts'), {context,nodes}=musicContext();
+ await assert.rejects(music.startMusic(context,{}, {music:true,musicStyle:'custom'},3),/Choose your music file/);
+ const file={arrayBuffer:async()=>new ArrayBuffer(1)};
+ const stop=await music.startMusic(context,{}, {music:true,musicStyle:'custom',musicFile:file},3);assert.equal(nodes[0].loop,true);stop();
+ const controller=new AbortController();context.decodeAudioData=async()=>{controller.abort();return{};};
+ await music.startMusic(context,{}, {music:true,musicStyle:'custom',musicFile:file},3,controller.signal);assert.equal(nodes.length,1);
+});

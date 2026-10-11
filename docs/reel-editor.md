@@ -2,7 +2,13 @@
 
 Open Creative Studio → Finished reels, or “Make a finished reel for this post” inside a campaign. The editor combines up to six photos or video clips into a 1080 × 1920 reel with editable scene captions, fades, six visual layouts, and a brand closing screen. Upload presenter clips to use their existing performance; this feature does not generate or lip-sync presenters.
 
-Use “Save draft in this browser” before leaving. Drafts, including imported files, are saved locally by workspace, campaign and post. They do not transfer between browsers. “Export finished reel” records the timeline in real time; keep the tab visible. MP4 is preferred when the browser supports it; otherwise the editor exports WebM, which can be downloaded but cannot be selected for Facebook publishing. Music and voiceover uploads are optional. The built-in synth soundtrack is original background music, not an instrument recording.
+Use “Save draft in this browser” before leaving. Drafts, including imported files, are saved locally by workspace, campaign and post. They do not transfer between browsers. “Export finished reel” records the timeline in real time; keep the tab visible. MP4 is preferred when the browser supports it; otherwise the editor exports WebM, which can be downloaded but cannot be selected for Facebook publishing. Music and voiceover uploads are optional.
+
+## Music
+
+Under Sound, enable “Add background music” and choose Flamenco, Classical, Jazz, Country, Soft ambient, or Upload my music. The built-in arrangements are synthesized original instrumentals, not recordings of the displayed instrument or licensed commercial songs. Each genre has its own harmony, rhythm and instrument sounds. “Listen to music” plays a 12-second sample at the selected volume. It stops when the selection changes, the page is hidden, or export begins. The visual preview remains silent; watch the finished export for the full mix with voiceover and clip audio.
+
+Music selection and volume are saved in the post’s browser draft and used by both single-reel and weekly exports. Turning background music off silences both built-in and uploaded music while preserving voiceover and the separate clip-audio choice. A retained upload does not override a selected built-in style. Older drafts restore their previous music behavior. No music service, extra credits or API keys are required.
 
 Watch the exported reel, then save it to a campaign post. Private Vercel Blob uploads use the existing Blob configuration, with signed callbacks, ownership checks and a 100 MB limit. No database migration, generation credits or automatic publication is involved. Selecting the video and approving/scheduling the post remain separate campaign actions.
 

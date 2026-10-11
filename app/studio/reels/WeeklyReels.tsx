@@ -4,7 +4,8 @@ import { upload } from "@vercel/blob/client";
 import { makeWeek, type WeekDay } from "@/lib/reels/week";
 import { exportReel } from "@/lib/reels/export";
 import { REEL_STYLES, reelDuration, type ReelProject, type ReelStyle } from "@/lib/reels/timeline";
-export default function WeeklyReels({project,campaignId,organizationId,music,originalAudio,musicFile,voiceFile}:{project:ReelProject;campaignId:string;organizationId:string;music:boolean;originalAudio:boolean;musicFile?:File;voiceFile?:File}){
+import type { MusicSettings } from "@/lib/reels/music";
+export default function WeeklyReels({project,campaignId,organizationId,music,musicStyle,musicVolume,originalAudio,musicFile,voiceFile}:MusicSettings & {project:ReelProject;campaignId:string;organizationId:string;originalAudio:boolean;voiceFile?:File}){
  const [start,setStart]=useState(()=>new Date().toLocaleDateString("en-CA",{timeZone:"America/New_York"})),[days,setDays]=useState<WeekDay[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[progress,setProgress]=useState(0);
  const requestId=useRef(""),controller=useRef<AbortController | undefined>(undefined),urls=useRef<string[]>([]),snapshot=useRef<WeekDay[]>([]);
  useEffect(()=>()=>{controller.current?.abort();urls.current.forEach(URL.revokeObjectURL);},[]);
@@ -26,7 +27,7 @@ export default function WeeklyReels({project,campaignId,organizationId,music,ori
     if(day.pathname){const response=await fetch(`/api/reels/upload?pathname=${encodeURIComponent(day.pathname)}`);const data=response.ok?await response.json():{};if(data.assetId){work[i]={...day,assetId:data.assetId};snapshot.current=[...work];setDays([...work]);continue;}}
     const canvas=document.createElement("canvas");canvas.width=1080;canvas.height=1920;
     const dayProject={...day.project,scenes:day.project.scenes.map((scene,j)=>j===0?{...scene,headline:day.headline}:scene)};
-    const blob=await exportReel({project:dayProject,canvas,audioContext:audio,audioFile:musicFile,voiceFile,music,originalAudio,signal:controller.current.signal,progress:value=>setProgress(Math.round((i*100+value)/7))});
+    const blob=await exportReel({project:dayProject,canvas,audioContext:audio,audioFile:musicFile,voiceFile,music,musicStyle,musicVolume,originalAudio,signal:controller.current.signal,progress:value=>setProgress(Math.round((i*100+value)/7))});
     const ext=blob.type==="video/mp4"?"mp4":"webm",downloadUrl=URL.createObjectURL(blob);urls.current.push(downloadUrl);
     const pathname=day.pathname||`reels/${organizationId}/${day.contentItemId}/${crypto.randomUUID()}.${ext}`;
     work[i]={...day,downloadUrl,pathname};snapshot.current=[...work];setDays([...work]);

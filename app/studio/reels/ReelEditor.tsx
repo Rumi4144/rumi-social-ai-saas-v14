@@ -6,6 +6,8 @@ import { exportReel, loadReelMedia } from "@/lib/reels/export";
 import { REEL_STYLES, frameAt, reelDuration, type ReelProject, type ReelScene, type ReelStyle } from "@/lib/reels/timeline";
 import { loadDraft, saveDraft } from "@/lib/reels/drafts";
 import WeeklyReels from "./WeeklyReels";
+import MusicControls from "./MusicControls";
+import { DEFAULT_MUSIC_VOLUME, musicSettings, type MusicChoice } from "@/lib/reels/music";
 import styles from "./ReelEditor.module.css";
 import { appendScenes, mergeSources, restoreLibrary, uploadSelection } from "@/lib/reels/source-library";
 import {reelDraftKey,selectedPostProject,matchingDraft,type ReelSource} from "@/lib/reels/post-context";
@@ -20,6 +22,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const [project, setProject] = useState<ReelProject>(empty), [contentItemId, setContentItemId] = useState(initialContentItemId);
   const [requestedPostId,setRequestedPostId]=useState(initialContentItemId);
   const [music, setMusic] = useState(true), [originalAudio, setOriginalAudio] = useState(false), [musicFile, setMusicFile] = useState<File>(), [voiceFile, setVoiceFile] = useState<File>();
+  const [musicStyle, setMusicStyle] = useState<MusicChoice>("ambient"), [musicVolume, setMusicVolume] = useState(DEFAULT_MUSIC_VOLUME);
   const [loadingPhotos, setLoadingPhotos] = useState(false), [photoMessage, setPhotoMessage] = useState(""), [productUrl, setProductUrl] = useState("");
   const photoController = useRef<AbortController | undefined>(undefined);
   const [rendering, setRendering] = useState(false);
@@ -56,13 +59,14 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       const stored = await loadDraft(reelDraftKey(data.organizationId,campaignId,context.post.id)).catch(() => undefined);
       if(disposed)return;
       const draft=matchingDraft(stored,context.post.id);
-      localFiles.current.clear(); setMusicFile(undefined); setVoiceFile(undefined); setMusic(true); setOriginalAudio(false);
+      localFiles.current.clear(); setMusicFile(undefined); setVoiceFile(undefined); setMusic(true); setMusicStyle("ambient"); setMusicVolume(DEFAULT_MUSIC_VOLUME); setOriginalAudio(false);
       if (draft) {
         const restored = new Map<string, string>();
         draft.files.forEach(([old, file]) => { const url = ownUrl(file); restored.set(old, url); localFiles.current.set(url, file); });
         next = { ...draft.project, scenes: draft.project.scenes.map(scene => ({ ...scene, src: restored.get(scene.src) || scene.src })), logo: restored.get(draft.project.logo || "") || draft.project.logo };
         library = mergeSources(library, restoreLibrary(draft, restored, context.post.id));
-        setMusic(draft.music); setOriginalAudio(draft.originalAudio); setMusicFile(draft.musicFile); setVoiceFile(draft.voiceFile);
+        const sound = musicSettings(draft);
+        setMusic(sound.music); setMusicStyle(sound.musicStyle); setMusicVolume(sound.musicVolume); setOriginalAudio(draft.originalAudio); setMusicFile(draft.musicFile); setVoiceFile(draft.voiceFile);
 
         setMessage("Your saved draft was restored.");
       }
@@ -81,7 +85,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   useEffect(() => {
     setRendered(undefined); setSavedAsset(""); request.current = undefined; finishPreview();
     if (canvas.current && media.current.length === project.scenes.length && project.scenes.length) drawReel(canvas.current.getContext("2d")!, project, media.current, 0.8, logo.current);
-  }, [project, music, originalAudio, musicFile, voiceFile]);
+  }, [project, music, musicStyle, musicVolume, originalAudio, musicFile, voiceFile]);
   useEffect(() => { if (!rendered) { setDownloadUrl(""); return; } const url = URL.createObjectURL(rendered); setDownloadUrl(url); return () => URL.revokeObjectURL(url); }, [rendered]);
   const changeScene = (index: number, patch: Partial<ReelScene>) => setProject(old => ({ ...old, scenes: old.scenes.map((scene, i) => i === index ? { ...scene, ...patch } : scene) }));
   function addSource(source: Source) {
@@ -120,7 +124,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   }
   async function persist() {
     try {
-      await saveDraft(draftKey, { project, sources, files: [...localFiles.current.entries()].filter(([src]) => sources.some(source => source.src === src) || project.scenes.some(scene => scene.src === src) || project.logo === src), music, originalAudio, musicFile, voiceFile, contentItemId });
+      await saveDraft(draftKey, { project, sources, files: [...localFiles.current.entries()].filter(([src]) => sources.some(source => source.src === src) || project.scenes.some(scene => scene.src === src) || project.logo === src), music, musicStyle, musicVolume, originalAudio, musicFile, voiceFile, contentItemId });
       setMessage("Draft saved in this browser, including your photo library and uploaded files.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save draft."); }
   }
@@ -139,7 +143,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     finishPreview(); setBusy(true); setRendering(true); setMessage("Exporting your reel. Keep this tab visible until it finishes."); setProgress(0);
     let audio: AudioContext | undefined; controller.current = new AbortController();
     const visibility = () => { if (document.hidden) controller.current?.abort(); }; document.addEventListener("visibilitychange", visibility);
-    try { audio = new AudioContext(); await audio.resume(); const blob = await exportReel({ project, canvas: canvas.current!, audioContext: audio, audioFile: musicFile, voiceFile, music, originalAudio, signal: controller.current.signal, progress: setProgress }); setRendered(blob); setProgress(100); setMessage(blob.type === "video/mp4" ? "Your finished MP4 is ready. Watch it before saving or publishing." : "Your finished WebM is ready to download. For Facebook MP4 export, use a recent Chrome or Safari browser."); }
+    try { audio = new AudioContext(); await audio.resume(); const blob = await exportReel({ project, canvas: canvas.current!, audioContext: audio, audioFile: musicFile, voiceFile, music, musicStyle, musicVolume, originalAudio, signal: controller.current.signal, progress: setProgress }); setRendered(blob); setProgress(100); setMessage(blob.type === "video/mp4" ? "Your finished MP4 is ready. Watch it before saving or publishing." : "Your finished WebM is ready to download. For Facebook MP4 export, use a recent Chrome or Safari browser."); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Export failed."); }
     finally { document.removeEventListener("visibilitychange", visibility); await audio?.close(); controller.current = undefined; setRendering(false); setBusy(false); }
   }
@@ -195,8 +199,8 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <h2>Closing screen</h2><label>Brand name<input value={project.brand} maxLength={80} onChange={event => setProject({ ...project, brand: event.target.value })} /></label><label>Call to action<input value={project.cta} maxLength={70} onChange={event => setProject({ ...project, cta: event.target.value })} /></label><label>Website<input value={project.website} maxLength={140} onChange={event => setProject({ ...project, website: event.target.value })} /></label>
         <label>Brand color<input type="color" value={/^#[a-f0-9]{6}$/i.test(project.color) ? project.color : "#132342"} onChange={event => setProject({ ...project, color: event.target.value })} /></label><label>Accent color<input type="color" value={/^#[a-f0-9]{6}$/i.test(project.accent) ? project.accent : "#dec184"} onChange={event => setProject({ ...project, accent: event.target.value })} /></label>
         <label>Upload brand logo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => { const file = event.target.files?.[0]; if (!file || file.size > 5_000_000 || !["image/png","image/jpeg","image/webp"].includes(file.type)) { setMessage("Choose a PNG, JPEG or WebP logo under 5 MB."); return; } const src = ownUrl(file); localFiles.current.set(src, file); setProject({ ...project, logo: src }); }} /></label>{project.logo && <button type="button" onClick={() => setProject({ ...project, logo: undefined })}>Remove logo</button>}
-        <h2>Sound</h2><label><input type="checkbox" checked={music} onChange={event => setMusic(event.target.checked)} /> Soft original background music</label><label><input type="checkbox" checked={originalAudio} onChange={event => setOriginalAudio(event.target.checked)} /> Keep audio from the video clips</label>
-        <label>Your music<input type="file" accept="audio/*" onChange={event => { const file = event.target.files?.[0]; if (file && file.size > 20_000_000) { setMessage("Choose an audio file under 20 MB."); return; } setMusicFile(file); }} /></label>{musicFile && <><p>{musicFile.name}</p><button type="button" onClick={() => setMusicFile(undefined)}>Remove music</button></>}
+        <h2>Sound</h2><MusicControls key={contentItemId} music={music} musicStyle={musicStyle} musicVolume={musicVolume} musicFile={musicFile} disabled={busy || previewing || loadingPhotos} onMusic={setMusic} onStyle={setMusicStyle} onVolume={setMusicVolume} onFile={setMusicFile} />
+        <label><input type="checkbox" checked={originalAudio} onChange={event => setOriginalAudio(event.target.checked)} /> Keep audio from the video clips</label>
         <label>Your recorded voiceover<input type="file" accept="audio/*" onChange={event => { const file = event.target.files?.[0]; if (file && file.size > 20_000_000) { setMessage("Choose a voiceover under 20 MB."); return; } setVoiceFile(file); }} /></label>{voiceFile && <><p>{voiceFile.name}</p><button type="button" onClick={() => setVoiceFile(undefined)}>Remove voiceover</button></>}
         <p>Music is a background soundtrack, not a recording of the instrument. Presenter clips keep their audio when “Keep audio” is selected. Create a new presenter in the AI presenter studio.</p>
         <button type="button" onClick={persist}>Save draft in this browser</button>
@@ -210,6 +214,6 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <p role="status">{message}</p><a href={`/campaigns/${campaignId}`}>Return to campaign</a>
       </section>
     </div>}
-    {campaignId && organizationId && <><a href={`/studio/presenters?campaignId=${encodeURIComponent(campaignId)}`}>Create an AI presenter with a real product photo</a><WeeklyReels key={campaignId} project={project} campaignId={campaignId} organizationId={organizationId} music={music} originalAudio={originalAudio} musicFile={musicFile} voiceFile={voiceFile}/></>}
+    {campaignId && organizationId && <><a href={`/studio/presenters?campaignId=${encodeURIComponent(campaignId)}`}>Create an AI presenter with a real product photo</a><WeeklyReels key={campaignId} project={project} campaignId={campaignId} organizationId={organizationId} music={music} musicStyle={musicStyle} musicVolume={musicVolume} originalAudio={originalAudio} musicFile={musicFile} voiceFile={voiceFile}/></>}
   </div>;
 }
