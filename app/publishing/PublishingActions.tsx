@@ -52,7 +52,7 @@ export default function PublishingActions({
         );
       }
 
-      setMessage("Published successfully.");
+      setMessage(data.pending ? data.message || "The platform is processing this post. Check publishing history." : "Published successfully.");
       window.location.reload();
     } catch (error) {
       setMessage(

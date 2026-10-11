@@ -46,6 +46,8 @@ export default async function Publishing() {
     orderBy: { createdAt: "desc" }, take: 10,
   });
 
+  const googleConnection = await prisma.socialConnection.findFirst({ where: { organizationId: ctx.organizationId, provider: "google_business", status: "connected" } });
+
   const recentJobs = await prisma.publishJob.findMany({
     where: {
       organizationId: ctx.organizationId,
@@ -107,6 +109,8 @@ export default async function Publishing() {
         </div> : null}
       </section>
 
+      <section style={{ marginTop: "24px" }}><h2>Google Business Profile</h2><p>{googleConnection ? `Connected as ${googleConnection.accountName || "Business location"}` : "Connect your business location in Settings before publishing."}</p><p>Text and photo posts are supported. Google may review posts before displaying them.</p><a href="/settings/google-business">Manage Google connection</a></section>
+
       <section style={{ marginTop: "36px" }}>
         <h2>Approved content</h2>
 
@@ -156,6 +160,7 @@ export default async function Publishing() {
                   <p>Text-only post</p>
                 )}
 
+                {googleConnection && !item.mediaUrl?.includes("/api/video/media/") ? <PublishingActions contentItemId={item.id} connectionId={googleConnection.id} destination={`Google Business Profile · ${googleConnection.accountName || "Business location"}`} /> : null}
                 {facebookConnection ? (
                   <PublishingActions
                     contentItemId={item.id}
@@ -185,7 +190,7 @@ export default async function Publishing() {
           <div className="queue">
             {recentJobs.map((job) => (
               <div className="qrow" key={job.id}>
-                <span>{job.platform}</span>
+                <span>{job.platform === "google_business" ? "Google Business Profile" : job.platform}</span>
                 <span>
                   {job.scheduledFor.toLocaleString()}
                 </span>

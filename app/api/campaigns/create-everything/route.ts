@@ -26,6 +26,7 @@ const S = z.object({
           "linkedin",
           "tiktok",
           "youtube",
+          "google_business",
         ])
       ),
     })

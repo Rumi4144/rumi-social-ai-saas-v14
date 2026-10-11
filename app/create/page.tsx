@@ -14,6 +14,7 @@ export default function Create() {
     "linkedin",
     "tiktok",
     "youtube",
+    "google_business",
   ] as const;
 
   const [dailyPlatforms, setDailyPlatforms] = useState<
@@ -702,7 +703,7 @@ export default function Create() {
               const specialDay = specialDayForDate(dateForDay(day));
 
               const platformNames = selected.map((platform) =>
-                platform === "linkedin"
+                platform === "google_business" ? "Google Business Profile" : platform === "linkedin"
                   ? "LinkedIn"
                   : platform === "youtube"
                   ? "YouTube"
@@ -828,7 +829,7 @@ export default function Create() {
                               }}
                             />
 
-                            {platform === "linkedin"
+                            {platform === "google_business" ? "Google Business Profile" : platform === "linkedin"
                               ? "LinkedIn"
                               : platform === "youtube"
                               ? "YouTube"

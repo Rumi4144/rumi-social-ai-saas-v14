@@ -188,6 +188,7 @@ ${scheduleContext}
 Treat the DAILY PUBLISHING PLAN as authoritative scheduling context.
 For each numbered campaign day, create EXACTLY ONE primary social post.
 That single daily post must be suitable for distribution to ALL platforms selected for that day.
+When google_business is selected, create a text/photo Business Profile update and keep the complete caption, including links, under 1,500 characters. Do not promise video distribution to Google Business Profile.
 Do NOT create duplicate Facebook, Instagram, LinkedIn, or other platform-specific versions of the same day's post.
 The selected platforms are publishing destinations for the daily post, not instructions to create additional posts.
 For a 7-day campaign, return EXACTLY 7 primary posts: one post for each campaign day.

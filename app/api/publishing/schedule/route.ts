@@ -1,3 +1,4 @@
+import { googleBusinessPost } from "@/lib/publishing/google-business";
 import { campaignVideoId } from "@/lib/publishing/facebook-video";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -56,6 +57,8 @@ export async function POST(req: Request) {
 
     const youtubeSelected = await prisma.socialConnection.findFirst({ where: { id: { in: p.data.socialConnectionIds }, organizationId: ctx.organizationId, provider: "youtube", status: "connected" } });
     if (youtubeSelected && (!p.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
+    const googleSelected = await prisma.socialConnection.findFirst({ where: { id: { in: p.data.socialConnectionIds }, organizationId: ctx.organizationId, provider: "google_business", status: "connected" } });
+    if (googleSelected) { try { googleBusinessPost(item.caption || item.headline || "", item.mediaUrl); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "This post is not supported by Google Business Profile." }, { status: 400 }); } }
     const jobs = [];
 
     for (const cid of p.data.socialConnectionIds) {
@@ -68,7 +71,7 @@ export async function POST(req: Request) {
       });
 
       if (!connection) continue;
-      if (!["facebook", "instagram", "youtube"].includes(connection.provider.toLowerCase())) continue;
+      if (!["facebook", "instagram", "youtube", "google_business"].includes(connection.provider.toLowerCase())) continue;
       if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube"].includes(connection.provider.toLowerCase())) continue;
 
       const key = publishKey(item.id, connection.id, p.data.scheduledFor);

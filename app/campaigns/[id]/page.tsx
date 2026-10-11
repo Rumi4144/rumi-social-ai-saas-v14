@@ -211,7 +211,7 @@ export default async function Campaign({
               {item.platform
                 .split(",")
                 .map((platform: string) =>
-                  platform.charAt(0).toUpperCase() + platform.slice(1)
+                  platform === "google_business" ? "Google Business Profile" : platform.charAt(0).toUpperCase() + platform.slice(1)
                 )
                 .join(" · ")}
               </span>

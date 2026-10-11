@@ -1,3 +1,4 @@
+import { googleBusinessPost } from "@/lib/publishing/google-business";
 import { campaignVideoId } from "@/lib/publishing/facebook-video";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -70,6 +71,7 @@ export async function POST(req: Request) {
     if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube"].includes(connection.provider.toLowerCase())) return NextResponse.json({ error: "Choose Facebook, Instagram or YouTube for automatic video publishing. Download the clip for other platforms." }, { status: 400 });
 
     if (connection.provider === "youtube" && (!parsed.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
+    if (connection.provider === "google_business") { try { googleBusinessPost(item.caption || item.headline || "", item.mediaUrl); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "This post is not supported by Google Business Profile." }, { status: 400 }); } }
     const publishTime = new Date();
     const key = publishKey(
       item.id,
@@ -116,6 +118,13 @@ export async function POST(req: Request) {
         error: result.error,
       },
     });
+
+    if (result.pending) {
+      const retryAt = new Date(Date.now() + 5 * 60 * 1000);
+      await prisma.publishJob.update({ where: { id: job.id }, data: { status: "retry", scheduledFor: retryAt, lastError: result.error } });
+      await prisma.contentItem.update({ where: { id: item.id }, data: { status: "scheduled", scheduledFor: retryAt } });
+      return NextResponse.json({ ok: true, pending: true, jobId: job.id, message: result.error }, { status: 202 });
+    }
 
     if (!result.ok) {
       await prisma.publishJob.update({

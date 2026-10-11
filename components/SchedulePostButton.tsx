@@ -106,7 +106,7 @@ export default function SchedulePostButton({
           );
         }
 
-        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "instagram", "youtube"] : ["facebook", "instagram"]).includes(connection.provider.toLowerCase()));
+        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "instagram", "youtube"] : ["facebook", "instagram", "google_business"]).includes(connection.provider.toLowerCase()));
 
         setConnections(list);
 
@@ -232,6 +232,7 @@ export default function SchedulePostButton({
         >
           <strong>Schedule Post</strong>
           <p>Select a destination for this post. TikTok publishing setup is not complete yet.</p>
+          {isVideo && <p>Google Business Profile is available for text and photo posts. Choose a photo for a Google post.</p>}
 
           <div style={{ marginTop: 12 }}>
             {loading && <p>Loading connected accounts...</p>}
@@ -253,7 +254,7 @@ export default function SchedulePostButton({
                   checked={selected.includes(connection.id)}
                   onChange={() => toggleConnection(connection.id)}
                 />{" "}
-                {connection.provider}
+                {connection.provider === "google_business" ? "Google Business Profile" : connection.provider}
                 {connection.accountName ? ` · ${connection.accountName}` : ""}
               </label>
             ))}
