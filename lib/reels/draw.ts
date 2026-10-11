@@ -1,4 +1,4 @@
-import { frameAt, safeColor, wrappedLines, REEL_WIDTH as W, REEL_HEIGHT as H, type ReelProject } from "./timeline";
+import { distinctSceneIndexes, frameAt, safeColor, wrappedLines, REEL_WIDTH as W, REEL_HEIGHT as H, type ReelProject } from "./timeline";
 export type ReelMedia = HTMLImageElement | HTMLVideoElement;
 function dimensions(media: ReelMedia) { return media instanceof HTMLVideoElement ? [media.videoWidth, media.videoHeight] : [media.naturalWidth, media.naturalHeight]; }
 function picture(ctx: CanvasRenderingContext2D, media: ReelMedia | undefined, x: number, y: number, width: number, height: number, progress: number, contain = false) {
@@ -38,6 +38,34 @@ export function drawReel(ctx: CanvasRenderingContext2D, project: ReelProject, me
     text(ctx, project.brand, 72, 145, 36, 930, accent, 1);
     const height = text(ctx, scene.headline, 78, 1450, 76, 920, "#ffffff", 2, "left", true);
     text(ctx, scene.detail, 78, 1480 + height, 40, 920, accent, 2);
+  } else if (project.style === "spotlight") {
+    const glow = ctx.createRadialGradient(540, 780, 50, 540, 780, 850);
+    glow.addColorStop(0, "rgba(255,255,255,.22)"); glow.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    text(ctx, project.brand, 540, 145, 38, 930, accent, 1, "center");
+    picture(ctx, media[frame.index], 80, 240, 920, 1000, frame.progress, true);
+    const height = text(ctx, scene.headline, 540, 1390, 76, 920, "#ffffff", 3, "center");
+    text(ctx, scene.detail, 540, 1420 + height, 38, 900, "#ffffff", 3, "center");
+    text(ctx, project.cta, 540, 1830, 40, 900, accent, 1, "center");
+  } else if (project.style === "minimal") {
+    ctx.fillStyle = "#f8f7f2"; ctx.fillRect(0, 0, W, H);
+    text(ctx, project.brand, 76, 142, 36, 930, "#17212c", 1);
+    picture(ctx, media[frame.index], 60, 225, 960, 1020, frame.progress, true);
+    ctx.fillStyle = accent; ctx.fillRect(76, 1300, 170, 6);
+    const height = text(ctx, scene.headline, 76, 1420, 72, 920, "#17212c", 3);
+    text(ctx, scene.detail, 76, 1450 + height, 38, 920, "#394452", 3);
+    text(ctx, project.cta, 76, 1830, 40, 920, "#17212c", 1);
+  } else if (project.style === "split") {
+    text(ctx, project.brand, 72, 140, 38, 936, accent, 1);
+    const height = text(ctx, scene.headline, 72, 260, 70, 936, "#ffffff", 3);
+    const indexes = distinctSceneIndexes(project.scenes, frame.index, 2);
+    if (indexes.length > 1) {
+      picture(ctx, media[indexes[0]], 28, 540, 500, 950, frame.progress, true);
+      picture(ctx, media[indexes[1]], 552, 540, 500, 950, frame.progress, true);
+      ctx.fillStyle = accent; ctx.fillRect(539, 570, 2, 890);
+    } else picture(ctx, media[frame.index], 40, 540, 1000, 950, frame.progress, true);
+    text(ctx, scene.detail, 72, Math.max(1580, 300 + height), 42, 936, "#ffffff", 3);
+    text(ctx, project.cta, 72, 1830, 42, 936, accent, 1);
   } else {
     // A moving photo collage with a stable caption panel, like the supplied examples.
     ctx.fillStyle = "#edf0e5"; ctx.fillRect(0, 0, W, 510);
@@ -45,9 +73,16 @@ export function drawReel(ctx: CanvasRenderingContext2D, project: ReelProject, me
     const height = text(ctx, scene.headline, 64, 245, 70, 940, bg, 2, "left", true);
     text(ctx, scene.detail, 64, 270 + height, 36, 940, bg, 2);
     const drift = Math.sin(frame.progress * Math.PI) * 32;
-    picture(ctx, media[frame.index], 22, 534, 650, 970, frame.progress);
-    picture(ctx, media[(frame.index + 1) % media.length], 694, 534 - drift, 364, 470, frame.progress);
-    picture(ctx, media[(frame.index + media.length - 1) % media.length], 694, 1026 + drift, 364, 478, frame.progress);
+    const indexes = distinctSceneIndexes(project.scenes, frame.index);
+    if (indexes.length === 1) picture(ctx, media[frame.index], 22, 534, 1036, 970, frame.progress, true);
+    else if (indexes.length === 2) {
+      picture(ctx, media[indexes[0]], 22, 534, 506, 970, frame.progress, true);
+      picture(ctx, media[indexes[1]], 552, 534, 506, 970, frame.progress, true);
+    } else {
+      picture(ctx, media[indexes[0]], 22, 534, 650, 970, frame.progress);
+      picture(ctx, media[indexes[1]], 694, 534 - drift, 364, 470, frame.progress);
+      picture(ctx, media[indexes[2]], 694, 1026 + drift, 364, 478, frame.progress);
+    }
     text(ctx, project.cta, 64, 1650, 48, 940, accent, 2);
   }
   if (!frame.closing && frame.elapsed < 0.4) { ctx.fillStyle = bg; ctx.globalAlpha = 1 - frame.elapsed / 0.4; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }

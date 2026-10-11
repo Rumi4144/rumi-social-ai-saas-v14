@@ -3,11 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { drawReel, type ReelMedia } from "@/lib/reels/draw";
 import { exportReel, loadReelMedia } from "@/lib/reels/export";
-import { frameAt, reelDuration, type ReelProject, type ReelScene, type ReelStyle } from "@/lib/reels/timeline";
+import { REEL_STYLES, frameAt, reelDuration, type ReelProject, type ReelScene, type ReelStyle } from "@/lib/reels/timeline";
 import { loadDraft, saveDraft } from "@/lib/reels/drafts";
 import WeeklyReels from "./WeeklyReels";
-import {reelDraftKey,selectedPostProject,matchingDraft} from "@/lib/reels/post-context";
-type Source = { id: string; src: string; kind: "image" | "video"; contentItemId?: string; seconds?: number };
+import styles from "./ReelEditor.module.css";
+import { appendScenes, mergeSources, restoreLibrary, uploadSelection } from "@/lib/reels/source-library";
+import {reelDraftKey,selectedPostProject,matchingDraft,type ReelSource} from "@/lib/reels/post-context";
+type Source = ReelSource;
 type Post = { id: string; headline: string | null; caption: string | null };
 const empty: ReelProject = { brand: "", website: "", cta: "Explore more", color: "#132342", accent: "#dec184", style: "editorial", scenes: [], closingSeconds: 3 };
 
@@ -18,6 +20,8 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const [project, setProject] = useState<ReelProject>(empty), [contentItemId, setContentItemId] = useState(initialContentItemId);
   const [requestedPostId,setRequestedPostId]=useState(initialContentItemId);
   const [music, setMusic] = useState(true), [originalAudio, setOriginalAudio] = useState(false), [musicFile, setMusicFile] = useState<File>(), [voiceFile, setVoiceFile] = useState<File>();
+  const [loadingPhotos, setLoadingPhotos] = useState(false), [photoMessage, setPhotoMessage] = useState(""), [productUrl, setProductUrl] = useState("");
+  const photoController = useRef<AbortController | undefined>(undefined);
   const [rendering, setRendering] = useState(false);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [progress, setProgress] = useState(0), [previewing, setPreviewing] = useState(false);
   const [rendered, setRendered] = useState<Blob>(), [downloadUrl, setDownloadUrl] = useState(""), [savedAsset, setSavedAsset] = useState("");
@@ -38,15 +42,17 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not load campaigns. Try again."); }
     finally { setLoadingCampaigns(false); }
   }
-  useEffect(() => { if (initialCampaigns === undefined) void refreshCampaigns(); return () => { controller.current?.abort(); if (playTimer.current) clearInterval(playTimer.current); localUrls.current.forEach(URL.revokeObjectURL); }; }, []);
+  useEffect(() => { if (initialCampaigns === undefined) void refreshCampaigns(); return () => { controller.current?.abort(); photoController.current?.abort(); if (playTimer.current) clearInterval(playTimer.current); localUrls.current.forEach(URL.revokeObjectURL); }; }, []);
   useEffect(()=>{setCampaignId(initialCampaignId);setRequestedPostId(initialContentItemId);},[initialCampaignId,initialContentItemId]);
   useEffect(() => {
+    photoController.current?.abort(); photoController.current = undefined; setLoadingPhotos(false); setPhotoMessage(""); setProductUrl("");
     if (!campaignId) { setOrganizationId(""); setLoadingProject(false); return; }
     let disposed = false; setLoadingProject(true); finishPreview(); setMessage(""); setProject(empty); setSources([]); setPosts([]); setOrganizationId(""); setContentItemId(""); setRendered(undefined); setSavedAsset(""); request.current=undefined;
     fetch(`/api/reels/project?campaignId=${encodeURIComponent(campaignId)}${requestedPostId?`&contentItemId=${encodeURIComponent(requestedPostId)}`:""}`, { cache: "no-store", signal: AbortSignal.timeout(15000) }).then(async response => {
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not load campaign."); if (disposed) return;
       const context=selectedPostProject(data,requestedPostId);
       let next=context.project;
+      let library: Source[] = data.sources.filter((source: Source) => source.contentItemId === context.post.id);
       const stored = await loadDraft(reelDraftKey(data.organizationId,campaignId,context.post.id)).catch(() => undefined);
       if(disposed)return;
       const draft=matchingDraft(stored,context.post.id);
@@ -55,11 +61,12 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         const restored = new Map<string, string>();
         draft.files.forEach(([old, file]) => { const url = ownUrl(file); restored.set(old, url); localFiles.current.set(url, file); });
         next = { ...draft.project, scenes: draft.project.scenes.map(scene => ({ ...scene, src: restored.get(scene.src) || scene.src })), logo: restored.get(draft.project.logo || "") || draft.project.logo };
+        library = mergeSources(library, restoreLibrary(draft, restored, context.post.id));
         setMusic(draft.music); setOriginalAudio(draft.originalAudio); setMusicFile(draft.musicFile); setVoiceFile(draft.voiceFile);
 
         setMessage("Your saved draft was restored.");
       }
-      setSources(data.sources);setPosts(data.posts);setContentItemId(context.post.id);setProject(next);setOrganizationId(data.organizationId);setLoadingProject(false);
+      setSources(library);setPosts(data.posts);setContentItemId(context.post.id);setProject(next);setOrganizationId(data.organizationId);setLoadingProject(false);
       if(!next.scenes.length)setMessage("This post has no ready matching photo or clip. Finish its photo in the campaign or upload media for this post.");
     }).catch(error => { if (!disposed) { setMessage(error.message || "Could not open campaign. Try again."); setLoadingProject(false); } });
     return () => { disposed = true; };
@@ -77,13 +84,46 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   }, [project, music, originalAudio, musicFile, voiceFile]);
   useEffect(() => { if (!rendered) { setDownloadUrl(""); return; } const url = URL.createObjectURL(rendered); setDownloadUrl(url); return () => URL.revokeObjectURL(url); }, [rendered]);
   const changeScene = (index: number, patch: Partial<ReelScene>) => setProject(old => ({ ...old, scenes: old.scenes.map((scene, i) => i === index ? { ...scene, ...patch } : scene) }));
-  function addSource(source: Source) { if (project.scenes.length >= 6) return; setProject(old => ({ ...old, scenes: [...old.scenes, { id: crypto.randomUUID(), src: source.src, kind: source.kind, headline: "", detail: "", seconds: source.seconds || 4 }] })); }
-  function importFile(file?: File) {
-    if (!file) return;
-    if (file.size > 100_000_000 || !["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"].includes(file.type)) { setMessage("Choose a JPEG, PNG, WebP, MP4 or WebM file up to 100 MB."); return; }
-    const src = ownUrl(file); localFiles.current.set(src, file); const source: Source = { id: crypto.randomUUID(), src, kind: file.type.startsWith("video/") ? "video" : "image" }; setSources(old => [source, ...old]); addSource(source);
+  function addSource(source: Source) {
+    setProject(old => appendScenes(old, [source], () => crypto.randomUUID()));
   }
-  async function persist() { try { await saveDraft(draftKey, { project, files: [...localFiles.current.entries()].filter(([src]) => project.scenes.some(scene => scene.src === src) || project.logo === src), music, originalAudio, musicFile, voiceFile, contentItemId }); setMessage("Draft saved in this browser, including your uploaded files."); } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save draft."); } }
+  function importFiles(files: FileList | null) {
+    if (!files?.length) return;
+    const { selected, invalid, overflow } = uploadSelection([...files], sources.length);
+    const added: Source[] = selected.map(file => {
+      const src = ownUrl(file); localFiles.current.set(src, file);
+      return { id: crypto.randomUUID(), src, kind: file.type.startsWith("video/") ? "video" : "image", contentItemId, label: file.name };
+    });
+    setSources(old => mergeSources(old, added));
+    setProject(old => appendScenes(old, added, () => crypto.randomUUID()));
+    setPhotoMessage(`${added.length} file${added.length === 1 ? "" : "s"} added. Up to 6 scenes can be used in one reel.${invalid > 0 ? " Some files were skipped: choose JPEG, PNG, WebP, MP4 or WebM up to 100 MB each." : ""}${overflow > 0 ? " The photo library holds up to 30 items." : ""}`);
+  }
+  async function loadProductPhotos() {
+    photoController.current?.abort();
+    const active = new AbortController(); photoController.current = active;
+    const deadline = setTimeout(() => active.abort(), 45000);
+    setLoadingPhotos(true); setPhotoMessage("Finding photos for this product…");
+    try {
+      const response = await fetch("/api/reels/photos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ campaignId, contentItemId, ...(productUrl.trim() ? { url: productUrl.trim() } : {}) }), signal: active.signal });
+      const data = await response.json();
+      if (active.signal.aborted || photoController.current !== active) return;
+      if (!response.ok) throw new Error(data.error || "Could not load product photos.");
+      const photos = (data.sources as Source[]).filter(source => source.contentItemId === contentItemId);
+      setSources(old => mergeSources(old, photos)); setProductUrl(data.sourceUrl);
+      setPhotoMessage(`${photos.length} product photo${photos.length === 1 ? "" : "s"} available. Choose Add to reel, or replace a scene’s photo below.`);
+    } catch (error) {
+      if (photoController.current === active) setPhotoMessage(active.signal.aborted ? "Loading took too long. Try again or upload the photos." : error instanceof Error ? error.message : "Could not load product photos.");
+    } finally {
+      clearTimeout(deadline);
+      if (photoController.current === active) { photoController.current = undefined; setLoadingPhotos(false); }
+    }
+  }
+  async function persist() {
+    try {
+      await saveDraft(draftKey, { project, sources, files: [...localFiles.current.entries()].filter(([src]) => sources.some(source => source.src === src) || project.scenes.some(scene => scene.src === src) || project.logo === src), music, originalAudio, musicFile, voiceFile, contentItemId });
+      setMessage("Draft saved in this browser, including your photo library and uploaded files.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save draft."); }
+  }
   function preview() {
     if (previewing) { finishPreview(); return; }
     if (!canvas.current || media.current.length !== project.scenes.length) { setMessage("The scene media is still loading."); return; }
@@ -123,23 +163,35 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save reel. Download your copy."); }
     finally { setBusy(false); }
   }
-  return <><div className="eyebrow">REEL EDITOR</div><h1>Make a finished reel.</h1><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p>
-    <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingCampaigns} onChange={event => {setRequestedPostId("");setCampaignId(event.target.value);}}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>
+  return <div className={styles.editor}><div className="eyebrow">REEL EDITOR</div><h1>Make a finished reel.</h1><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p>
+    <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingPhotos || loadingCampaigns} onChange={event => {setRequestedPostId("");setCampaignId(event.target.value);}}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>
     {!organizationId && <p role="status">{loadingCampaigns ? "Loading your campaigns…" : loadingProject ? "Opening campaign…" : message}</p>}
     {!loadingCampaigns && !campaigns.length && <section className="card"><h2>No campaigns available in this workspace</h2><p>Open an existing campaign from the Campaigns page, or create a campaign first to use its photos and save your reel.</p><a href="/campaigns">Open Campaigns</a> · <a href="/create">Create a campaign</a></section>}
     {!organizationId && <button type="button" disabled={loadingCampaigns || loadingProject} onClick={refreshCampaigns}>Refresh campaigns</button>}
-    {campaignId && organizationId && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 24, marginTop: 24 }}>
-      <section className="card"><h2>Your scenes</h2><fieldset disabled={busy || previewing} style={{ border: 0, padding: 0 }}>
-        <label>Visual style<select value={project.style} onChange={event => setProject({ ...project, style: event.target.value as ReelStyle })}><option value="editorial">Animated photo collage</option><option value="cinematic">Cinematic close-ups / presenter</option><option value="gallery">Framed photo gallery</option></select></label>
+    {campaignId && organizationId && <div className={styles.layout}>
+      <section className="card"><h2>Your scenes</h2><fieldset disabled={busy || previewing || loadingPhotos} style={{ border: 0, padding: 0 }}>
+        <label>Visual style<select value={project.style} onChange={event => setProject({ ...project, style: event.target.value as ReelStyle })}>{REEL_STYLES.map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</select></label>
+        <p className={styles.hint}>{REEL_STYLES.find(style => style.value === project.style)?.description}</p>
+        <h3>Photos and clips for this post</h3>
+        <p className={styles.hint}>Load this product’s gallery or upload your own photos. Add different photos to separate scenes; collages use those photos together.</p>
+        <button type="button" disabled={loadingPhotos} onClick={loadProductPhotos}>{loadingPhotos ? "Loading photos…" : "Load product photos"}</button>
+        <details><summary>Choose a product page</summary><label>Product page address<input type="url" placeholder="https://your-website.com/product/…" value={productUrl} onChange={event => setProductUrl(event.target.value)} /></label><p className={styles.hint}>Use this brand’s website. Leave blank to find the product link in the selected post.</p></details>
+        <label>Upload photos or presenter clips<input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={event => { importFiles(event.target.files); event.target.value = ""; }} /></label>
+        <p role="status" className={styles.hint}>{photoMessage}</p>
+        <div className={styles.library}>{sources.map((source, index) => <div key={source.id} className={styles.photo}>
+          {source.kind === "image" ? <img src={source.src} alt={source.label || `Photo ${index + 1}`} loading="lazy" /> : <video src={source.src} muted playsInline preload="metadata" aria-label={source.label || `Clip ${index + 1}`} />}
+          <p>{source.label || `${source.kind === "image" ? "Photo" : "Clip"} ${index + 1}`}</p>
+          <button type="button" disabled={project.scenes.length >= 6} onClick={() => addSource(source)} aria-label={`Add ${source.label || `item ${index + 1}`} to reel`}>{project.scenes.some(scene => scene.src === source.src) ? "Add again" : "Add to reel"}</button>
+        </div>)}</div>
+        {project.scenes.length === 1 && <p className={styles.hint}>One photo selected. It appears once in the collage. Add another photo for a multi-photo layout.</p>}
         {project.scenes.map((scene, index) => <div key={scene.id} style={{ borderTop: "1px solid #7775", marginTop: 20, paddingTop: 14 }}><h3>Scene {index + 1}</h3>
-          <label>Photo or clip<select value={scene.src} onChange={event => { const source = sources.find(source => source.src === event.target.value); if (source) changeScene(index, { src: source.src, kind: source.kind, seconds: source.seconds || 4 }); }}><option value={scene.src}>Current {scene.kind}</option>{sources.map((source, i) => <option key={source.id} value={source.src}>{source.kind === "video" ? "Video clip" : "Photo"} {i + 1}</option>)}</select></label>
+          <label>Photo or clip<select value={scene.src} onChange={event => { const source = sources.find(source => source.src === event.target.value); if (source) changeScene(index, { src: source.src, kind: source.kind, seconds: source.seconds || 4 }); }}>{!sources.some(source => source.src === scene.src) && <option value={scene.src}>Current {scene.kind}</option>}{sources.map((source, i) => <option key={source.id} value={source.src}>{source.label || `${source.kind === "video" ? "Video clip" : "Photo"} ${i + 1}`}</option>)}</select></label>
           <label>Headline<input value={scene.headline} maxLength={120} onChange={event => changeScene(index, { headline: event.target.value })} /></label>
           <label>Supporting caption<textarea value={scene.detail} maxLength={160} onChange={event => changeScene(index, { detail: event.target.value })} /></label>
           <label>Scene length<select value={scene.seconds} onChange={event => changeScene(index, { seconds: Number(event.target.value) })}>{[3,4,5,6,8,10,15].map(seconds => <option key={seconds} value={seconds}>{seconds} seconds</option>)}</select></label>
           <button type="button" disabled={index === 0} onClick={() => { const scenes = [...project.scenes]; [scenes[index - 1], scenes[index]] = [scenes[index], scenes[index - 1]]; setProject({ ...project, scenes }); }}>Move earlier</button> <button type="button" onClick={() => setProject({ ...project, scenes: project.scenes.filter((_, i) => i !== index) })}>Remove scene</button>
         </div>)}
-        <p>Up to 6 scenes. Short clips loop to fill their scene.</p><button type="button" disabled={project.scenes.length >= 6 || !sources.length} onClick={() => addSource(sources[0])}>Add scene</button>
-        <label>Upload a photo or real / AI presenter clip<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={event => importFile(event.target.files?.[0])} /></label>
+        <p>Up to 6 scenes. Short clips loop to fill their scene.</p><button type="button" disabled={project.scenes.length >= 6 || !sources.length} onClick={() => addSource(sources.find(source => !project.scenes.some(scene => scene.src === source.src)) || sources[0])}>Add scene</button>
         <h2>Closing screen</h2><label>Brand name<input value={project.brand} maxLength={80} onChange={event => setProject({ ...project, brand: event.target.value })} /></label><label>Call to action<input value={project.cta} maxLength={70} onChange={event => setProject({ ...project, cta: event.target.value })} /></label><label>Website<input value={project.website} maxLength={140} onChange={event => setProject({ ...project, website: event.target.value })} /></label>
         <label>Brand color<input type="color" value={/^#[a-f0-9]{6}$/i.test(project.color) ? project.color : "#132342"} onChange={event => setProject({ ...project, color: event.target.value })} /></label><label>Accent color<input type="color" value={/^#[a-f0-9]{6}$/i.test(project.accent) ? project.accent : "#dec184"} onChange={event => setProject({ ...project, accent: event.target.value })} /></label>
         <label>Upload brand logo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => { const file = event.target.files?.[0]; if (!file || file.size > 5_000_000 || !["image/png","image/jpeg","image/webp"].includes(file.type)) { setMessage("Choose a PNG, JPEG or WebP logo under 5 MB."); return; } const src = ownUrl(file); localFiles.current.set(src, file); setProject({ ...project, logo: src }); }} /></label>{project.logo && <button type="button" onClick={() => setProject({ ...project, logo: undefined })}>Remove logo</button>}
@@ -149,15 +201,15 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <p>Music is a background soundtrack, not a recording of the instrument. Presenter clips keep their audio when “Keep audio” is selected. Create a new presenter in the AI presenter studio.</p>
         <button type="button" onClick={persist}>Save draft in this browser</button>
       </fieldset></section>
-      <section className="card" style={{ alignSelf: "start", position: "sticky", top: 20 }}><h2>Preview · {reelDuration(project)} seconds</h2><canvas ref={canvas} width={1080} height={1920} style={{ width: "100%", maxWidth: 350, background: project.color, borderRadius: 12 }} /><p>1080 × 1920 · vertical reel</p>
-        <button type="button" disabled={busy || !project.scenes.length} onClick={preview}>{previewing ? "Stop preview" : "Preview visuals"}</button> <button type="button" disabled={busy || !project.scenes.length || !project.brand.trim()} onClick={render}>Export finished reel</button>
+      <section className={`card ${styles.preview}`}><h2>Preview · {reelDuration(project)} seconds</h2><canvas ref={canvas} width={1080} height={1920} style={{ width: "100%", maxWidth: 350, background: project.color, borderRadius: 12 }} /><p>1080 × 1920 · vertical reel</p>
+        <button type="button" disabled={busy || loadingPhotos || !project.scenes.length} onClick={preview}>{previewing ? "Stop preview" : "Preview visuals"}</button> <button type="button" disabled={busy || loadingPhotos || !project.scenes.length || !project.brand.trim()} onClick={render}>Export finished reel</button>
         {rendering && <><progress max={100} value={progress} aria-label="Reel export progress" /><button type="button" onClick={() => controller.current?.abort()}>Cancel export</button></>}
         {downloadUrl && <div style={{ marginTop: 20 }}><video controls playsInline src={downloadUrl} style={{ width: "100%", maxWidth: 350 }} /><p><a href={downloadUrl} download={`finished-reel.${rendered?.type === "video/mp4" ? "mp4" : "webm"}`}>Download finished reel</a></p>
-          <label>Save to campaign post<select value={contentItemId} disabled={busy} onChange={event => { setRequestedPostId(event.target.value); request.current = undefined; setSavedAsset(""); }}>{posts.map(post => <option key={post.id} value={post.id}>{post.headline || "Untitled post"}</option>)}</select></label><button type="button" disabled={busy || !contentItemId || !!savedAsset} onClick={save}>{savedAsset ? "Saved to campaign" : "Save finished reel to campaign"}</button>
+          <label>Save to campaign post<select value={contentItemId} disabled={busy || loadingPhotos} onChange={event => { setRequestedPostId(event.target.value); request.current = undefined; setSavedAsset(""); }}>{posts.map(post => <option key={post.id} value={post.id}>{post.headline || "Untitled post"}</option>)}</select></label><button type="button" disabled={busy || !contentItemId || !!savedAsset} onClick={save}>{savedAsset ? "Saved to campaign" : "Save finished reel to campaign"}</button>
         </div>}
         <p role="status">{message}</p><a href={`/campaigns/${campaignId}`}>Return to campaign</a>
       </section>
     </div>}
     {campaignId && organizationId && <><a href={`/studio/presenters?campaignId=${encodeURIComponent(campaignId)}`}>Create an AI presenter with a real product photo</a><WeeklyReels key={campaignId} project={project} campaignId={campaignId} organizationId={organizationId} music={music} originalAudio={originalAudio} musicFile={musicFile} voiceFile={voiceFile}/></>}
-  </>;
+  </div>;
 }

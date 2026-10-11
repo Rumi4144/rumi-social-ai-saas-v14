@@ -1,5 +1,5 @@
 import type {ReelProject} from './timeline';
-export type ReelSource={id:string;src:string;kind:'image'|'video';contentItemId?:string;seconds?:number};
+export type ReelSource={id:string;src:string;kind:'image'|'video';contentItemId?:string;seconds?:number;label?:string};
 export type ReelPost={id:string;headline:string|null;caption:string|null};
 export function reelDraftKey(organizationId:string,campaignId:string,postId:string){return `${organizationId}:${campaignId}:${postId}`;}
 export function selectedPostProject(data:{posts:ReelPost[];sources:ReelSource[];brand:{name:string;color:string;accent:string;website:string;logo?:string}},requestedPostId:string):{post:ReelPost;project:ReelProject}{

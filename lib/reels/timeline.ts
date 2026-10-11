@@ -1,7 +1,23 @@
-export type ReelStyle = "editorial" | "cinematic" | "gallery";
+export const REEL_STYLES = [
+  { value: "cinematic", label: "Cinematic close-ups / presenter", description: "A full-screen photo or clip with gentle movement and captions." },
+  { value: "editorial", label: "Animated photo collage", description: "Distinct scene photos together. With one photo, a single large panel is used." },
+  { value: "gallery", label: "Framed photo gallery", description: "Keep the whole photo visible in a frame with your brand colors." },
+  { value: "spotlight", label: "Product spotlight", description: "A centered, uncropped product photo with a soft glow and a clear headline." },
+  { value: "minimal", label: "Clean slideshow", description: "One photo per scene with a light background and simple captions." },
+  { value: "split", label: "Split-screen details", description: "Two different scene photos side by side, or one large photo when only one is available." },
+] as const;
+export type ReelStyle = typeof REEL_STYLES[number]["value"];
 export type ReelScene = { id: string; src: string; kind: "image" | "video"; headline: string; detail: string; seconds: number };
 export type ReelProject = { brand: string; website: string; cta: string; color: string; accent: string; style: ReelStyle; logo?: string; scenes: ReelScene[]; closingSeconds: number };
 export const REEL_WIDTH = 1080, REEL_HEIGHT = 1920;
+export function distinctSceneIndexes(scenes: ReelScene[], current: number, limit = 3) {
+  const seen = new Set<string>(), indexes: number[] = [];
+  for (let offset = 0; offset < scenes.length && indexes.length < limit; offset++) {
+    const index = (current + offset) % scenes.length, scene = scenes[index];
+    if (!seen.has(scene.src)) { seen.add(scene.src); indexes.push(index); }
+  }
+  return indexes;
+}
 export function reelDuration(project: ReelProject) { return project.scenes.reduce((sum, scene) => sum + scene.seconds, 0) + project.closingSeconds; }
 export function frameAt(project: ReelProject, time: number) {
   let start = 0;

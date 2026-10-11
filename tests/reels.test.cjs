@@ -18,7 +18,7 @@ function load(file, mocks = {}, cache = new Map()) {
     return require(name);
   };
   const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
-  vm.runInNewContext(js, { module, exports: module.exports, require: requireFile, process, Buffer, URL, console, fetch: mocks.__fetch || fetch, AbortSignal, FormData, Blob, Response, Uint8Array, Headers, ReadableStream }, { filename: file });
+  vm.runInNewContext(js, { module, exports: module.exports, require: requireFile, process, Buffer, URL, console, fetch: mocks.__fetch || fetch, AbortSignal, FormData, Blob, Response, Uint8Array, Headers, ReadableStream, setTimeout, clearTimeout }, { filename: file });
   return module.exports;
 }
 const timeline = load('lib/reels/timeline.ts');
@@ -84,7 +84,7 @@ test('editor cannot load another workspace campaign or its images', async () => 
 test('weekly plan stays on seven calendar dates across daylight savings and rotates real sources',()=>{
  const week=load('lib/reels/week.ts');
  const project={brand:'Rumi',website:'https://example.test',style:'gallery',closingSeconds:3,scenes:[{id:'a',src:'/real-a',kind:'image',seconds:4,headline:'Actual A',detail:''},{id:'b',src:'/real-b',kind:'video',seconds:5,headline:'Actual B',detail:''}]};
- const days=week.makeWeek(project,'2026-10-31');assert.equal(days.length,7);assert.equal(days[6].date,'2026-11-06');assert.equal(new Set(days.map(d=>d.headline)).size,7);assert.equal(new Set(days.map(d=>d.project.style)).size,3);assert.equal(days[1].project.scenes[0].src,'/real-b');assert.ok(days.every(d=>d.project.scenes.every(s=>['/real-a','/real-b'].includes(s.src))));assert.throws(()=>week.weekDates('2026-02-30'));assert.throws(()=>week.makeWeek({...project,scenes:[]},'2026-10-04'));
+ const days=week.makeWeek(project,'2026-10-31');assert.equal(days.length,7);assert.equal(days[6].date,'2026-11-06');assert.equal(new Set(days.map(d=>d.headline)).size,7);assert.equal(new Set(days.map(d=>d.project.style)).size,6);assert.equal(days[1].project.scenes[0].src,'/real-b');assert.ok(days.every(d=>d.project.scenes.every(s=>['/real-a','/real-b'].includes(s.src))));assert.throws(()=>week.weekDates('2026-02-30'));assert.throws(()=>week.makeWeek({...project,scenes:[]},'2026-10-04'));
 });
 test('weekly creation claims once, makes seven draft posts, and refuses foreign campaigns',async()=>{
  let claimed,created=0,scheduled=0;
@@ -92,4 +92,88 @@ test('weekly creation claims once, makes seven draft posts, and refuses foreign 
  const api=load('app/api/reels/week/route.ts',{'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'org',role:'owner'})},'@/lib/prisma':{prisma:{campaign:{findFirst:async q=>q.where.id==='own'&&q.where.brand.organizationId==='org'?{id:'own'}:null},$transaction:async fn=>fn(tx)}},'@/lib/http/errors':{apiError:e=>{throw e;}}});
  const p={requestId:'12345678-1234-4234-8234-123456789abc',campaignId:'own',startDate:'2026-10-04',days:Array.from({length:7},(_,i)=>({headline:`Day ${i}`,caption:'Grounded'}))};
  const first=await api.POST({json:async()=>p});assert.equal(first.body.days.length,7);await api.POST({json:async()=>p});assert.equal(created,7);assert.equal(scheduled,0);const foreign=await api.POST({json:async()=>({...p,campaignId:'foreign'})});assert.equal(foreign.status,404);
+});
+
+test('collage and split layouts never repeat a source to fill panels', () => {
+ const scenes=[{src:'/one'},{src:'/one'},{src:'/two'},{src:'/three'}];
+ assert.deepEqual([...timeline.distinctSceneIndexes([{src:'/one'}],0)],[0]);
+ assert.deepEqual([...timeline.distinctSceneIndexes(scenes,0)],[0,2,3]);
+ assert.deepEqual([...timeline.distinctSceneIndexes(scenes,2,2)],[2,3]);
+ assert.equal(timeline.REEL_STYLES.length,6);
+});
+test('gallery extraction ignores related products and deduplicates resized photos', () => {
+ const photos=load('lib/reels/product-photos.ts');
+ const html=`<div class="woocommerce-product-gallery gallery"><div><a href="/uploads/front.jpg"><img src="/uploads/front-300x300.jpg"></a></div><div><img data-large_image="/uploads/back.jpg" src="/uploads/back-100x100.jpg"></div></div><div class="related"><img src="/uploads/unrelated.jpg"></div>`;
+ assert.deepEqual([...photos.extractProductPhotos(html,'https://shop.test/product/a')],['https://shop.test/uploads/front.jpg','https://shop.test/uploads/back.jpg']);
+ assert.notEqual(photos.photoKey('https://cdn.test/image?id=front'),photos.photoKey('https://cdn.test/image?id=back'));
+ assert.equal(photos.photoKey('https://cdn.test/front.jpg?w=300'),photos.photoKey('https://cdn.test/front.jpg?w=800'));
+ assert.equal(photos.cleanPhotoUrl('http://localhost/file','https://shop.test'),null);
+ assert.equal(photos.cleanPhotoUrl('https://user:pass@shop.test/file','https://shop.test'),null);
+});
+test('structured gallery selects the matching product and avoids unrelated images', () => {
+ const photos=load('lib/reels/product-photos.ts');
+ const data={'@graph':[{'@type':'Product',url:'https://shop.test/product/a',image:['/a.jpg',{'@type':'ImageObject',url:'/b.jpg'}]},{'@type':'Product',url:'https://shop.test/product/other',image:'/other.jpg'}]};
+ assert.deepEqual([...photos.extractProductPhotos(`<script type="application/ld+json">${JSON.stringify(data)}</script>`,'https://shop.test/product/a')],['https://shop.test/a.jpg','https://shop.test/b.jpg']);
+ assert.deepEqual([...photos.extractProductPhotos('<img src="/unrelated.jpg">','https://shop.test/product/a')],[]);
+});
+test('product inference uses selected post and brand, and asks when ambiguous', () => {
+ const photos=load('lib/reels/product-photos.ts');
+ const products=[{name:'Actual product',sourceUrl:'https://shop.test/product/a',imageUrl:null}];
+ assert.equal(photos.productPageForPost({headline:'Actual product | Brand',caption:''},'https://shop.test',products),'https://shop.test/product/a');
+ assert.equal(photos.productPageForPost({headline:'Campaign',caption:'https://another-business.test/product/a'},'https://shop.test',products),null);
+ assert.equal(photos.productPageForPost({headline:'Campaign',caption:'https://shop.test/product/a https://shop.test/product/b'},'https://shop.test',products),null);
+ assert.equal(photos.pageBelongsToBrand('https://shop.test.evil.test/product/a','https://shop.test',products),false);
+});
+test('photo library restoration keeps unused uploads and excludes another post', () => {
+ const library=load('lib/reels/source-library.ts');
+ const draft={sources:[{id:'a',src:'blob:old',kind:'image',contentItemId:'post-a'},{id:'b',src:'/foreign',kind:'image',contentItemId:'post-b'},{id:'c',src:'blob:missing',kind:'image',contentItemId:'post-a'}],project:{scenes:[]}};
+ const result=library.restoreLibrary(draft,new Map([['blob:old','blob:new']]),'post-a');
+ assert.equal(result.length,1);assert.equal(result[0].src,'blob:new');
+ assert.equal(library.mergeSources(result,result).length,1);
+});
+test('product photos require post ownership, stay scoped, and import idempotently', async () => {
+ let role='owner',found=true,fetches=0; const writes=[];
+ const api=load('app/api/reels/photos/route.ts',{
+  'next/server':{NextResponse:{json:(body,options={})=>({body,status:options.status||200})}},
+  '@/lib/auth/context':{tenantContext:async()=>({organizationId:'org-a',role})},
+  '@/lib/http/errors':{apiError:e=>({status:e.message==='FORBIDDEN'?403:500})},
+  '@/lib/reels/public-fetch':{fetchPublicBytes:async()=>{fetches++;return{contentType:'text/html',bytes:Buffer.from('<div class="woocommerce-product-gallery"><img src="/a.jpg"><img src="/b.jpg"></div>')};}},
+  '@/lib/prisma':{prisma:{contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'org-a');assert.equal(q.where.campaignId,'campaign-a');return found?{id:'post-a',headline:'A',caption:'https://shop.test/product/a',campaign:{brand:{websiteUrl:'https://shop.test',products:[]}}}:null;}},mediaAsset:{upsert:async q=>writes.push(q)}}}
+ });
+ const req=url=>({json:async()=>({campaignId:'campaign-a',contentItemId:'post-a',...(url?{url}:{})})});
+ found=false;assert.equal((await api.POST(req())).status,404);assert.equal(fetches,0);
+ found=true;role='viewer';assert.equal((await api.POST(req())).status,403);assert.equal(fetches,0);
+ role='owner';assert.equal((await api.POST(req('https://other-business.test/product/a'))).status,400);assert.equal(fetches,0);
+ const first=await api.POST(req());const again=await api.POST(req());
+ assert.equal(first.body.sources.length,2);assert.equal(first.body.sources[0].id,again.body.sources[0].id);
+ assert.ok(writes.every(q=>q.create.organizationId==='org-a'&&q.create.contentItemId==='post-a'&&q.create.campaignId==='campaign-a'&&q.create.kind==='product_photo'));
+});
+test('public photo fetch rejects private hosts before making a request', async () => {
+ let requested=0;
+ const api=load('lib/reels/public-fetch.ts',{'node:dns/promises':{lookup:async()=>[{address:'127.0.0.1',family:4}]},'node:https':{request:()=>{requested++;}}});
+ await assert.rejects(api.fetchPublicBytes('https://private.test/product/a',1000));assert.equal(requested,0);
+ for(const address of ['127.0.0.1','10.1.2.3','192.168.1.1','169.254.169.254','100.64.0.1','::1','::ffff:127.0.0.1','2001:db8::1']) assert.equal(api.publicAddress(address),false,address);
+ assert.equal(api.publicAddress('8.8.8.8'),true);
+});
+test('product photo proxy enforces organization ownership', async () => {
+ let where,downloads=0;
+ class ResponseMock { constructor(body,options={}) { this.body=body;this.status=options.status||200; } }
+ const api=load('app/api/reels/media/route.ts',{
+  'next/server':{NextResponse:ResponseMock},
+  '@/lib/auth/context':{tenantContext:async()=>({organizationId:'org-a'})},
+  '@/lib/prisma':{prisma:{mediaAsset:{findFirst:async q=>{where=q.where;return null;}}}},
+  '@/lib/reels/public-fetch':{fetchPublicBytes:async()=>{downloads++;}},
+  '@/lib/http/errors':{apiError:e=>{throw e;}}
+ });
+ assert.equal((await api.GET(new Request('https://app.test/api/reels/media?assetId=foreign'))).status,404);
+ assert.equal(where.organizationId,'org-a');assert.ok(where.kind.in.includes('product_photo'));assert.equal(downloads,0);
+});
+test('multiple uploads validate every file, preserve order and respect library and scene limits', () => {
+ const library=load('lib/reels/source-library.ts');
+ const files=[{name:'a.png',type:'image/png',size:50},{name:'bad',type:'text/html',size:10},{name:'b.jpg',type:'image/jpeg',size:50},{name:'too-big',type:'video/mp4',size:100000001},{name:'c.webp',type:'image/webp',size:80}];
+ const selection=library.uploadSelection(files,28);
+ assert.deepEqual([...selection.selected].map(f=>f.name),['a.png','b.jpg']);assert.equal(selection.invalid,2);assert.equal(selection.overflow,1);
+ const project={scenes:Array.from({length:5},(_,i)=>({id:`existing-${i}`,src:`existing-${i}`}))};
+ const result=library.appendScenes(project,[{id:'a',src:'new-a',kind:'image'},{id:'b',src:'new-b',kind:'image'}],()=> 'new-id');
+ assert.equal(result.scenes.length,6);assert.equal(result.scenes[5].src,'new-a');assert.equal(project.scenes.length,5);
 });
