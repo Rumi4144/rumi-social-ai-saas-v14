@@ -14,6 +14,7 @@ const protectedRoutes = [
   "/billing",
   "/usage",
   "/agency",
+  "/settings",
 ];
 
 export default auth((req) => {
@@ -45,5 +46,6 @@ export const config = {
     "/billing/:path*",
     "/usage/:path*",
     "/agency/:path*",
+    "/settings/:path*",
   ],
 };
