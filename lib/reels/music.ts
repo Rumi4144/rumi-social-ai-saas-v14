@@ -4,6 +4,11 @@ export const MUSIC_STYLES = [
   { value: "classical", label: "Classical", description: "Gentle fingerpicked arpeggios with a flowing melody." },
   { value: "jazz", label: "Jazz", description: "Relaxed swing with mellow keys, walking bass and soft brushes." },
   { value: "country", label: "Country", description: "Bright picking, alternating bass and a steady country rhythm." },
+  { value: "blues", label: "Blues", description: "A laid-back guitar shuffle with warm bass and bluesy fills." },
+  { value: "bossa", label: "Bossa nova", description: "Gentle syncopated guitar, rounded bass and light percussion." },
+  { value: "folk", label: "Acoustic folk", description: "Warm fingerpicking in a lilting three-beat rhythm." },
+  { value: "piano", label: "Soft piano", description: "Delicate piano chords and a slow, spacious melody." },
+  { value: "pop", label: "Upbeat pop", description: "Bright keys, a pulsing bass and a cheerful drum beat." },
 ] as const;
 export type MusicStyle = typeof MUSIC_STYLES[number]["value"];
 export type MusicChoice = MusicStyle | "custom";
@@ -22,14 +27,14 @@ export function musicSettings(input: MusicSettings) {
   };
 }
 
-type Instrument = "guitar" | "bright" | "keys" | "bass" | "pad" | "tap" | "brush";
+type Instrument = "guitar" | "bright" | "keys" | "piano" | "bass" | "pad" | "kick" | "tap" | "brush";
 type Note = { at: number; length: number; midi: number; instrument: Instrument; level: number };
 
 // Short original arrangements, synthesized locally without songs, samples or external services.
 export function musicScore(style: MusicStyle, duration: number): Note[] {
   const notes: Note[] = [];
-  const bpm = { ambient: 72, flamenco: 112, classical: 84, jazz: 94, country: 108 }[style];
-  const beat = 60 / bpm, beatsPerBar = style === "flamenco" ? 6 : 4, barLength = beat * beatsPerBar;
+  const bpm = { ambient: 72, flamenco: 112, classical: 84, jazz: 94, country: 108, blues: 88, bossa: 116, folk: 96, piano: 66, pop: 120 }[style];
+  const beat = 60 / bpm, beatsPerBar = style === "flamenco" ? 6 : style === "folk" ? 3 : 4, barLength = beat * beatsPerBar;
   const add = (at: number, midi: number, length: number, instrument: Instrument, level = 1) => {
     if (at < duration) notes.push({ at, midi, length: Math.min(length, duration - at), instrument, level });
   };
@@ -39,9 +44,19 @@ export function musicScore(style: MusicStyle, duration: number): Note[] {
     classical: [[40, 52, 55, 59, 64], [36, 48, 55, 60, 64], [43, 50, 55, 59, 62], [38, 50, 54, 57, 62]],
     jazz: [[36, 55, 58, 62, 65], [41, 57, 63, 67, 72], [34, 53, 57, 60, 62], [39, 55, 58, 62, 65]],
     country: [[43, 55, 59, 62, 67], [36, 55, 60, 64, 67], [38, 54, 57, 62, 66], [43, 55, 59, 62, 67]],
+    blues: [
+      [40, 52, 56, 59, 62], [40, 52, 56, 59, 62], [40, 52, 56, 59, 62], [40, 52, 56, 59, 62],
+      [45, 52, 57, 61, 67], [45, 52, 57, 61, 67], [40, 52, 56, 59, 62], [40, 52, 56, 59, 62],
+      [47, 54, 57, 63, 66], [45, 52, 57, 61, 67], [40, 52, 56, 59, 62], [47, 54, 57, 63, 66],
+    ],
+    bossa: [[38, 53, 57, 60, 64], [43, 53, 59, 62, 69], [36, 52, 55, 59, 62], [45, 55, 61, 64, 67]],
+    folk: [[48, 55, 60, 64, 67], [45, 52, 57, 60, 64], [41, 53, 57, 60, 65], [43, 55, 59, 62, 67]],
+    piano: [[48, 55, 60, 64, 67], [45, 52, 57, 60, 64], [41, 48, 53, 57, 60], [43, 50, 55, 59, 62]],
+    pop: [[48, 60, 64, 67, 72], [43, 59, 62, 67, 71], [45, 57, 60, 64, 69], [41, 57, 60, 65, 69]],
   };
   for (let bar = 0; bar * barLength < duration; bar++) {
-    const start = bar * barLength, chord = progressions[style][bar % 4];
+    const progression = progressions[style];
+    const start = bar * barLength, chord = progression[bar % progression.length];
     if (style === "ambient") {
       chord.forEach(midi => add(start, midi, barLength + .4, "pad", .4));
       add(start + beat * 2, chord[2] + 12, beat * 1.8, "keys", .28);
@@ -61,11 +76,41 @@ export function musicScore(style: MusicStyle, duration: number): Note[] {
       [0, .66, 1, 1.66, 2, 2.66, 3, 3.66].forEach(pulse => add(start + pulse * beat, 0, .12, "brush", Number.isInteger(pulse) ? .13 : .07));
       add(start + beat, chord[3] + 12, beat * .6, "keys", .42);
       add(start + beat * 2.66, chord[2] + 12, beat, "keys", .4);
-    } else {
+    } else if (style === "country") {
       [0, 2].forEach((pulse, index) => add(start + pulse * beat, chord[0] + index * 7, beat * .9, "bass", .8));
       [1, 3].forEach(pulse => chord.slice(1).forEach((midi, string) => add(start + pulse * beat + string * .015, midi, beat * .5, "bright", .3)));
       [2, 4, 3, 2, 1, 3, 4, 3].forEach((string, pulse) => add(start + pulse * beat / 2, chord[string] + (bar % 2 ? 0 : 12), beat * .7, "bright", .5));
       [0, .5, 1, 1.5, 2, 2.5, 3, 3.5].forEach(pulse => add(start + pulse * beat, 0, .075, "brush", Number.isInteger(pulse) ? .08 : .04));
+    } else if (style === "blues") {
+      [0, 7, 9, 7].forEach((interval, pulse) => {
+        add(start + pulse * beat, chord[0] + interval, beat * .85, "bass", .85);
+        add(start + (pulse + 2 / 3) * beat, chord[0] + interval + 12, beat * .3, "guitar", .5);
+      });
+      [1, 3].forEach(pulse => chord.slice(1).forEach((midi, string) => add(start + pulse * beat + string * .015, midi, beat * .6, "guitar", .3)));
+      [0, 1, 2, 3].forEach(pulse => add(start + pulse * beat, 0, .13, "brush", .13));
+      [0, 3, 5, 6, 7, 3].forEach((interval, index) => add(start + [0, 2 / 3, 1, 5 / 3, 2.5, 3 + 2 / 3][index] * beat, chord[0] + 24 + interval, beat * .55, "bright", .45));
+    } else if (style === "bossa") {
+      [0, 1.5, 2, 3.5].forEach((pulse, index) => add(start + pulse * beat, chord[0] + (index % 2 ? 7 : 0), beat * .65, "bass", .7));
+      [0, .75, 1.5, 2.5, 3.25].forEach(pulse => chord.slice(1).forEach((midi, string) => add(start + pulse * beat + string * .01, midi, beat * .75, "guitar", .5)));
+      [1, 2.5, 3].forEach(pulse => add(start + pulse * beat, 0, .07, "tap", .1));
+      [0, .5, 1, 1.5, 2, 2.5, 3, 3.5].forEach(pulse => add(start + pulse * beat, 0, .09, "brush", .07));
+    } else if (style === "folk") {
+      [0, 2, 3, 1, 4, 2].forEach((string, pulse) => add(start + pulse * beat / 2, chord[string], beat * 1.7, "guitar", string === 0 ? 1.1 : .75));
+      [1, 2].forEach(pulse => chord.slice(1, 4).forEach((midi, string) => add(start + pulse * beat + string * .025, midi, beat * .9, "guitar", .24)));
+      add(start + beat * 2.5, chord[4], beat * 1.1, "bright", .35);
+    } else if (style === "piano") {
+      add(start, chord[0] - 12, beat * 3.5, "piano", .65);
+      [0, 2].forEach(pulse => chord.slice(1, 4).forEach((midi, key) => add(start + pulse * beat + key * .035, midi, beat * 2.5, "piano", .38)));
+      [4, 3, 2, 4].forEach((key, index) => add(start + [0, 1.5, 2.5, 3.5][index] * beat, chord[key] + 12, beat * 1.4, "piano", .65));
+    } else if (style === "pop") {
+      [0, 1, 2, 3].forEach(pulse => {
+        add(start + pulse * beat, 0, .22, "kick", .7);
+        add(start + pulse * beat, chord[0] - 12, beat * .75, "bass", .75);
+        chord.slice(1, 4).forEach(midi => add(start + (pulse + .5) * beat, midi, beat * .45, "keys", .4));
+      });
+      [1, 3].forEach(pulse => add(start + pulse * beat, 0, .12, "tap", .6));
+      [0, .5, 1, 1.5, 2, 2.5, 3, 3.5].forEach(pulse => add(start + pulse * beat, 0, .07, "brush", .13));
+      [4, 3, 4, 2, 3, 4].forEach((key, index) => add(start + [0, .5, 1.5, 2, 2.5, 3.5][index] * beat, chord[key], beat * .6, "bright", .55));
     }
   }
   return notes;
@@ -99,10 +144,14 @@ export function musicSamples(style: MusicStyle, duration: number, sampleRate = 2
         value *= 1.6 * Math.min(1, t / .003);
       } else if (note.instrument === "keys") {
         value = (Math.sin(phase) + .3 * Math.sin(phase * 2) * Math.exp(-t * 4) + .14 * Math.sin(phase * 3) * Math.exp(-t * 7)) * Math.exp(-t * 2) * Math.min(1, t / .008) * .28;
+      } else if (note.instrument === "piano") {
+        value = (Math.sin(phase) * Math.exp(-t * 1.3) + .45 * Math.sin(phase * 2.001) * Math.exp(-t * 2.2) + .2 * Math.sin(phase * 3.004) * Math.exp(-t * 3.5) + .08 * Math.sin(phase * 4.008) * Math.exp(-t * 5)) * Math.min(1, t / .004) * .3;
       } else if (note.instrument === "bass") {
         value = (Math.sin(phase) + .18 * Math.sin(phase * 2)) * Math.exp(-t * 3) * Math.min(1, t / .012) * .32;
       } else if (note.instrument === "pad") {
         value = (Math.sin(phase) + .12 * Math.sin(phase * 2.003)) * Math.sin(Math.PI * i / length) * .2;
+      } else if (note.instrument === "kick") {
+        value = Math.sin(2 * Math.PI * (48 * t + 4 * (1 - Math.exp(-t * 25)))) * Math.exp(-t * 20) * Math.min(1, t / .002) * .5;
       } else if (note.instrument === "tap") {
         value = (noise() * .45 + Math.sin(2 * Math.PI * 180 * t) * .55) * Math.exp(-t * 55) * .3;
       } else {
