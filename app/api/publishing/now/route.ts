@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (item.mediaUrl?.includes("/api/video/media/") && connection.provider.toLowerCase() !== "facebook") return NextResponse.json({ error: "Choose Facebook for automatic video publishing. Download the clip for other platforms." }, { status: 400 });
+    if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube"].includes(connection.provider.toLowerCase())) return NextResponse.json({ error: "Choose Facebook, Instagram or YouTube for automatic video publishing. Download the clip for other platforms." }, { status: 400 });
 
     if (connection.provider === "youtube" && (!parsed.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
     const publishTime = new Date();

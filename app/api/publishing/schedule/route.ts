@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
       if (!connection) continue;
       if (!["facebook", "instagram", "youtube"].includes(connection.provider.toLowerCase())) continue;
-      if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "youtube"].includes(connection.provider.toLowerCase())) continue;
+      if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube"].includes(connection.provider.toLowerCase())) continue;
 
       const key = publishKey(item.id, connection.id, p.data.scheduledFor);
 

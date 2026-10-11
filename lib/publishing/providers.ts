@@ -1,6 +1,7 @@
 import { publishYouTubeCampaign } from "./youtube-campaign";
 import { decryptSecret } from "@/lib/security/crypto";
 import { campaignVideoId, publishFacebookVideo } from "./facebook-video";
+import {publishInstagramVideo} from "./instagram-video";
 import { publishInstagram } from "./instagram";
 
 export type PublishResult = {
@@ -40,7 +41,7 @@ export async function publishToProvider(input: {
   catch { return { ok: false, error: "TOKEN_DECRYPT_FAILED" }; }
 
   if (input.platform.toLowerCase() === "instagram") {
-    if (campaignVideoId(input.mediaUrl)) return { ok: false, retryable: false, error: "Download this clip to post on Instagram. Automatic Instagram video publishing is not available yet." };
+    const assetId=campaignVideoId(input.mediaUrl);if(assetId)return publishInstagramVideo({...input,accessToken:decrypted,accountId:input.externalAccountId,assetId});
     return publishInstagram({ accessToken: decrypted, accountId: input.externalAccountId, caption: input.caption, mediaUrl: input.mediaUrl });
   }
 

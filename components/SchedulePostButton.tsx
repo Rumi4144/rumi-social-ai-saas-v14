@@ -106,7 +106,7 @@ export default function SchedulePostButton({
           );
         }
 
-        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "youtube"] : ["facebook", "instagram"]).includes(connection.provider.toLowerCase()));
+        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "instagram", "youtube"] : ["facebook", "instagram"]).includes(connection.provider.toLowerCase()));
 
         setConnections(list);
 
