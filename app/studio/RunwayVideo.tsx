@@ -8,7 +8,7 @@ export default function RunwayVideo() {
   const [images, setImages] = useState<Image[]>([]), [jobs, setJobs] = useState<Video[]>([]);
   const [assetId, setAssetId] = useState(""), [imageUrl, setImageUrl] = useState("");
   const [source, setSource] = useState("url"), [duration, setDuration] = useState(5), [ratio, setRatio] = useState("720:1280");
-  const [prompt, setPrompt] = useState("Slow cinematic camera movement, premium studio lighting, subtle parallax, preserve the product accurately.");
+  const [prompt, setPrompt] = useState("Slow cinematic camera movement, soft lighting, subtle parallax, preserve the original subject accurately.");
   const [consent, setConsent] = useState(false), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
   const requestId = useRef<string | null>(null);
   const cost = duration === 10 ? 80 : 40;
@@ -52,7 +52,7 @@ export default function RunwayVideo() {
   };
   const uncertain = jobs.some(job => job.status === "uncertain" || job.status === "starting");
   return <section className="card" style={{ marginTop: 28 }}>
-    <div className="eyebrow">AI VIDEO</div><h2>Bring your product image to life.</h2>
+    <div className="eyebrow">AI VIDEO</div><h2>Bring your image to life.</h2>
     <p><a href="https://runwayml.com" target="_blank" rel="noreferrer">Powered by Runway</a> · Choose an opening image and describe the motion.</p>
     {!configured && <p role="status">Runway setup is pending. An administrator needs to connect the Runway developer account and private video storage.</p>}
     <div style={{ display: "grid", gap: 14, maxWidth: 680 }}>
