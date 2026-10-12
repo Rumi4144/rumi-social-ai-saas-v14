@@ -2,7 +2,7 @@ export const MUSIC_STYLES = [
   { value: "ambient", label: "Soft ambient", description: "Warm, slow chords for a calm background." },
   { value: "soft-acoustic", label: "Soft acoustic guitar", description: "Slow, mellow guitar-style picking with space between notes for a peaceful background." },
   { value: "flamenco", label: "Flamenco", description: "Spanish-style guitar plucks, rhythmic strums and light hand percussion." },
-  { value: "classical", label: "Classical", description: "Gentle fingerpicked arpeggios with a flowing melody." },
+  { value: "classical", label: "Classical guitar · Spanish Romance", description: "Spanish Romance, performed on classical guitar by Alisa Gladyseva. A real instrumental recording." },
   { value: "fingerpicking", label: "Fingerpicking guitar", description: "Gentle acoustic-style picking with alternating bass notes and a flowing melody." },
   { value: "jazz", label: "Jazz", description: "Relaxed swing with mellow keys, walking bass and soft brushes." },
   { value: "country", label: "Country", description: "Bright picking, alternating bass and a steady country rhythm." },
@@ -193,6 +193,10 @@ export async function prepareMusic(context: AudioContext, destination: AudioNode
   if (selected.musicStyle === "custom") {
     if (!settings.musicFile) throw new Error("Choose your music file, or select a built-in music style.");
     buffer = await context.decodeAudioData(await settings.musicFile.arrayBuffer());
+  } else if (selected.musicStyle === "classical") {
+    const response = await fetch("/music/spanish-romance.mp3", { signal });
+    if (!response.ok) throw new Error("Could not load Spanish Romance. Please try again.");
+    buffer = await context.decodeAudioData(await response.arrayBuffer());
   } else {
     const samples = musicSamples(selected.musicStyle, duration);
     buffer = context.createBuffer(1, samples.length, 22050); buffer.getChannelData(0).set(samples);
@@ -200,7 +204,7 @@ export async function prepareMusic(context: AudioContext, destination: AudioNode
   return () => {
   if (signal?.aborted || context.state === "closed") return () => {};
   const source = context.createBufferSource(), volume = context.createGain(), start = context.currentTime;
-  source.buffer = buffer; source.loop = selected.musicStyle === "custom";
+  source.buffer = buffer; source.loop = selected.musicStyle === "custom" || selected.musicStyle === "classical";
   source.connect(volume).connect(destination);
   const level = selected.musicVolume / 100;
   volume.gain.setValueAtTime(0, start); volume.gain.linearRampToValueAtTime(level, start + .03);

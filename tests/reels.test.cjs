@@ -205,6 +205,22 @@ function musicContext() {
  const context={currentTime:10,state:'running',decoded:0,createBuffer:(_,length)=>({getChannelData:()=>new Float32Array(length)}),decodeAudioData:async()=>{context.decoded++;return{duration:1};},createBufferSource:()=>{const node={started:[],stops:[],disconnected:false,connect:other=>other,disconnect(){this.disconnected=true;},start(at){this.started.push(at);},stop(at){this.stops.push(at);}};nodes.push(node);return node;},createGain:()=>({connect:other=>other,disconnect(){},gain:{setValueAtTime(value,at){levels.push([value,at]);},linearRampToValueAtTime(value,at){levels.push([value,at]);}}})};
  return {context,nodes,levels};
 }
+test('Spanish Romance loads the bundled recording before playback and loops for long reels', async () => {
+ const requests=[], controller=new AbortController();
+ const music=load('lib/reels/music.ts',{__fetch:async (url,options)=>{requests.push([url,options.signal]);return new Response(new Uint8Array([1,2,3]));}});
+ const {context,nodes}=musicContext();
+ const begin=await music.prepareMusic(context,{}, {music:true,musicStyle:'classical'},180,controller.signal);
+ assert.equal(requests[0][0],'/music/spanish-romance.mp3');assert.equal(requests[0][1],controller.signal);
+ assert.equal(context.decoded,1);assert.equal(nodes.length,0);
+ const stop=begin();assert.equal(nodes[0].loop,true);assert.equal(nodes[0].stops[0],190);stop();
+ assert.ok(fs.statSync(path.join(root,'public/music/spanish-romance.mp3')).size>1000000);
+});
+test('missing Spanish Romance recording fails clearly instead of exporting silent music', async () => {
+ const music=load('lib/reels/music.ts',{__fetch:async()=>new Response(null,{status:404})});
+ const {context,nodes}=musicContext();
+ await assert.rejects(music.prepareMusic(context,{}, {music:true,musicStyle:'classical'},7),/Could not load Spanish Romance/);
+ assert.equal(context.decoded,0);assert.equal(nodes.length,0);
+});
 test('music prepares before recording, then starts at the selected volume and stops on cancellation', async () => {
  const music=load('lib/reels/music.ts'), {context,nodes,levels}=musicContext(), controller=new AbortController();
  const begin=await music.prepareMusic(context,{}, {music:true,musicStyle:'flamenco',musicVolume:55},3,controller.signal);

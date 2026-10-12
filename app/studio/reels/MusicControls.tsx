@@ -51,7 +51,8 @@ export default function MusicControls({ music, musicStyle, musicVolume, musicFil
       </>}
       <label>Music volume: {musicVolume}%<input type="range" min="0" max="100" step="5" value={musicVolume} onChange={event => onVolume(Number(event.target.value))} /></label>
       <button type="button" disabled={disabled || musicVolume === 0 || (musicStyle === "custom" && !musicFile)} onClick={listen}>{listening ? "Stop music preview" : "Listen to music"}</button>
-      <p className={styles.hint}>Listen to a 12-second sample. Built-in styles are original instrumental backgrounds. Your selected music is included when you export.</p>
+      <p className={styles.hint}>Listen to a 12-second sample. Your selected music is included when you export.</p>
+      {musicStyle === "classical" && <p className={styles.hint}>Spanish Romance · Alisa Gladyseva. <a href="https://commons.wikimedia.org/wiki/File:Romanza_espa%C3%B1ola.ogg" target="_blank" rel="noopener noreferrer">Recording and source</a> · CC0 public domain; attribution is optional.</p>}
     </>}
     {message && <p role="status">{message}</p>}
   </div>;
