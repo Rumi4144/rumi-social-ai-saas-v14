@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { publishToProvider } from "@/lib/publishing/providers";
+import { requiresVideo } from "@/lib/campaign/content-plan";
 
 export async function processDuePublishJob() {
   const job = await prisma.publishJob.findFirst({
@@ -50,6 +51,12 @@ export async function processDuePublishJob() {
   }
 
   const attempt = job.attempts + 1;
+
+  if (requiresVideo(item.type) && !/^\/api\/video\/media\/[^/?#]+(?:\?.*)?$/.test(item.mediaUrl || "")) {
+    const error = "Finish and select the planned video before publishing.";
+    await prisma.publishJob.update({where:{id:job.id},data:{status:"failed",lastError:error}});
+    return {status:"failed" as const,jobId:job.id,error};
+  }
 
   let publishMediaUrl = item.mediaUrl;
 

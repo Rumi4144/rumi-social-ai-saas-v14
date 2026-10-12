@@ -1,3 +1,4 @@
+import { contentTypeLabel, requiresVideo } from "@/lib/campaign/content-plan";
 import RestoreCalendarButton from "@/components/RestoreCalendarButton";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
@@ -30,7 +31,7 @@ export default async function Campaign({
   console.log("[CAMPAIGN PERF] tenantContext:", Date.now() - tenantStarted, "ms");
 
   const dataStarted = Date.now();
-  const [campaign, assets, videoJobs] = await Promise.all([
+  const [campaign, assets, videoJobs, planningJob] = await Promise.all([
     prisma.campaign.findFirst({
       where: {
         id,
@@ -55,6 +56,7 @@ export default async function Campaign({
       },
     }),
     prisma.job.findMany({ where: { organizationId, type: "RUNWAY_VIDEO", status: { in: ["starting", "running", "saving", "uncertain"] }, payload: { path: ["campaignId"], equals: id } }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, payload: true } }),
+    prisma.job.findFirst({where:{organizationId,type:"CREATE_EVERYTHING",status:"succeeded",payload:{path:["campaignId"],equals:id}},orderBy:{createdAt:"desc"},select:{payload:true,result:true}}),
   ]);
 
   console.log(
@@ -74,7 +76,10 @@ export default async function Campaign({
 
   const dailyItems = campaign.items.filter(
     (item: any) => item.type !== "story" && item.type !== "reel"
-  );
+  ).sort((a,b)=>(a.scheduledFor?.getTime()||0)-(b.scheduledFor?.getTime()||0) || Number(a.type === "holiday_post")-Number(b.type === "holiday_post") || a.createdAt.getTime()-b.createdAt.getTime());
+  const plannedPosts = (planningJob?.result as {posts?:Array<{headline:string;caption:string;type:string;day:number;planKey?:string;visualDirection?:string}>})?.posts || [];
+  const contentSlots = (planningJob?.payload as {contentPlan?:Array<{planKey:string;occasion?:string}>})?.contentPlan || [];
+  const calendarDates = [...new Set(dailyItems.filter(item=>item.type!=="holiday_post").map(item=>item.scheduledFor?.toISOString().slice(0,10)).filter(Boolean))];
 
   console.log(
     "[CAMPAIGN PERF] before JSX return:",
@@ -171,6 +176,10 @@ export default async function Campaign({
               ? "AI Image"
               : "No Image";
 
+          const plannedPost = plannedPosts.find(post=>post.headline===item.headline && post.caption===item.caption && post.type===item.type);
+          const occasion = contentSlots.find(slot=>slot.planKey===plannedPost?.planKey)?.occasion;
+          const calendarDay = plannedPost?.day || (item.scheduledFor ? calendarDates.indexOf(item.scheduledFor.toISOString().slice(0,10))+1 : (page-1)*pageSize+index+1);
+          const needsVideo = requiresVideo(item.type) && !item.mediaUrl?.startsWith("/api/video/media/");
           return (
             <article className="card" key={item.id}>
               {videoAsset && <div style={{ marginBottom: 20 }}>
@@ -207,7 +216,7 @@ export default async function Campaign({
               )}
 
               <span className="eyebrow">
-                DAY {(page - 1) * pageSize + index + 1} ·{" "}
+                {item.type === "holiday_post" ? "EXTRA SPECIAL DAY" : `DAY ${calendarDay}`} · {contentTypeLabel(item.type)} ·{" "}
               {item.platform
                 .split(",")
                 .map((platform: string) =>
@@ -229,10 +238,13 @@ export default async function Campaign({
             </div>
           ) : null}
 
+          {occasion && <p><strong>{occasion}</strong> · extra draft alongside regular content</p>}
           <h3>{item.headline || "Creative"}</h3>
           {item.scheduledFor && <p>Planned date: {item.scheduledFor.toISOString().slice(0, 10)}</p>}
 
               <p>{item.caption}</p>
+              {requiresVideo(item.type) && plannedPost?.visualDirection && <details><summary>Video draft plan</summary><p style={{whiteSpace:"pre-wrap"}}>{plannedPost.visualDirection}</p></details>}
+              {needsVideo && <p>Finish and select this video before scheduling it.</p>}
               <p><a href={`/studio/presenters?campaignId=${campaign.id}&contentItemId=${item.id}`}>Make a presenter video for this post</a></p>
               <p><a href={`/studio/reels?campaignId=${campaign.id}&contentItemId=${item.id}`}>Make a finished reel for this post</a></p>
               <CampaignVideoTools campaignId={campaign.id} contentItemId={item.id} sourceAssetId={originalImage?.id} pendingJobId={pendingVideo?.id} />
@@ -244,12 +256,12 @@ export default async function Campaign({
                   caption={item.caption}
                   initialStatus={item.status}
                 />
-                <SchedulePostButton
+                {!needsVideo && <SchedulePostButton
                   isVideo={Boolean(item.mediaUrl?.includes("/api/video/media/"))}
                   contentItemId={item.id}
                   initialStatus={item.status}
                   initialScheduledFor={item.scheduledFor?.toISOString() || null}
-                />
+                />}
                 <EditContentButton
                   contentItemId={item.id}
                   campaignId={campaign.id}

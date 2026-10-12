@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { buildVisualConcept, type RecentVisualConcept } from "./visual-plan";
+import type { ContentSlot } from "@/lib/campaign/content-plan";
 export type CampaignPackage = {
   title: string;
   strategy: string;
@@ -9,6 +10,7 @@ export type CampaignPackage = {
   cta: string;
   hashtags: string[];
   posts: {
+    planKey?: string | null;
     day: number;
     type: string;
     platforms: string[];
@@ -55,6 +57,7 @@ const schema = {
         type: "object",
         additionalProperties: false,
         required: [
+          "planKey",
           "day",
           "type",
           "platforms",
@@ -63,6 +66,7 @@ const schema = {
           "visualDirection",
         ],
         properties: {
+          planKey: { type: ["string", "null"] },
           day: { type: "integer" },
           type: { type: "string" },
           platforms: {
@@ -90,7 +94,7 @@ const schema = {
     },
     stories: {
       type: "array",
-      minItems: 5,
+      minItems: 0,
       maxItems: 5,
       items: {
         type: "object",
@@ -132,6 +136,7 @@ export async function generateCampaign(input: {
   brief: string;
   goal: string;
   days: number;
+  contentPlan?: ContentSlot[];
   recentConcepts?: RecentVisualConcept[];
   dailyPlan?: Array<{
     day: number;
@@ -185,17 +190,27 @@ Goal: ${input.goal}
 DAILY PUBLISHING PLAN:
 ${scheduleContext}
 
+${input.contentPlan?.length ? `REQUESTED CONTENT SLOTS (authoritative):
+${JSON.stringify(input.contentPlan)}
+Return exactly ${input.contentPlan.length} objects in posts, one for every planKey above, preserving its day.
+There are ${input.days} regular daily slots, plus ${input.contentPlan.filter(slot=>slot.extra).length} EXTRA holiday/special-day slots.
+Extra slots are additional drafts on the same calendar date, never replacements for the regular daily slot.
+Set type to the slot's requested type. For post: write a static text/photo post. For reel_post: write a concise reel hook and caption, and a practical scene-by-scene plan in visualDirection. For presenter_post: write a concise presenter hook and caption, and a spoken-script outline in visualDirection. These are video plans; never claim a video has been generated.
+For holiday_post, acknowledge the supplied occasion respectfully and connect it naturally to this workspace's actual business. Do not invent discounts, partnerships, medical outcomes, or event details. If no natural promotional connection exists, use a simple, respectful observance message. Keep its creative distinct from the regular post on the same date.
+Use ONLY this brand's context. Do not mix products or messages from another business.` : "Set planKey to null for each primary post."}
+
 Treat the DAILY PUBLISHING PLAN as authoritative scheduling context.
 For each numbered campaign day, create EXACTLY ONE primary social post.
 That single daily post must be suitable for distribution to ALL platforms selected for that day.
-When google_business is selected, create a text/photo Business Profile update and keep the complete caption, including links, under 1,500 characters. Do not promise video distribution to Google Business Profile.
+When google_business is selected for a static or holiday post, keep the complete caption, including links, under 1,500 characters. Preserve the requested video type for reel and presenter slots; do not promise video distribution to Google Business Profile.
 Do NOT create duplicate Facebook, Instagram, LinkedIn, or other platform-specific versions of the same day's post.
 The selected platforms are publishing destinations for the daily post, not instructions to create additional posts.
-For a 7-day campaign, return EXACTLY 7 primary posts: one post for each campaign day.
+Return EXACTLY one primary post for each campaign day; the only additional posts are the explicitly requested extra slots above.
 Each day's post must have its own distinct creative angle, headline, caption, call-to-action, and visual concept while maintaining one coherent campaign strategy.
 Use the supplied calendar date as context for that day's creative.
 
-When a Special day is supplied, consider it an optional creative opportunity, not a mandatory promotion.
+For an explicit mixed content plan, only the selected extra slots should use special-day themes. Regular slots keep the campaign's everyday content even when the calendar mentions an occasion.
+For a legacy campaign without requested content slots, when a Special day is supplied, consider it an optional creative opportunity, not a mandatory promotion.
 Use the occasion only when it is relevant and appropriate to the brand, campaign objective, audience and brief.
 Do not force holiday language, discounts, sales, religious messaging or promotional claims merely because a special day appears on the calendar.
 If the special day is relevant, make that day's concept meaningfully specific to the occasion rather than adding the holiday name superficially.

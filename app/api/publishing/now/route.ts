@@ -3,6 +3,7 @@ import { campaignVideoId } from "@/lib/publishing/facebook-video";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
+import { requiresVideo } from "@/lib/campaign/content-plan";
 import { publishKey } from "@/lib/publishing/idempotency";
 import { publishToProvider } from "@/lib/publishing/providers";
 import { z } from "zod";
@@ -51,6 +52,8 @@ export async function POST(req: Request) {
         { status: 409 }
       );
     }
+
+    if (requiresVideo(item.type) && !campaignVideoId(item.mediaUrl)) return NextResponse.json({error:"Finish and select the planned video before publishing."},{status:400});
 
     const connection =
       await prisma.socialConnection.findFirst({

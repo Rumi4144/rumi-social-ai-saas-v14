@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { publishKey } from "@/lib/publishing/idempotency";
 import { z } from "zod";
 import { tenantContext } from "@/lib/auth/context";
+import { requiresVideo } from "@/lib/campaign/content-plan";
 
 const S = z.object({
   organizationId: z.string().optional(),
@@ -45,6 +46,8 @@ export async function POST(req: Request) {
         { status: 409 },
       );
     }
+
+    if (requiresVideo(item.type) && !campaignVideoId(item.mediaUrl)) return NextResponse.json({error:"Finish and select the planned video before scheduling."},{status:400});
 
     const scheduledFor = new Date(p.data.scheduledFor);
 

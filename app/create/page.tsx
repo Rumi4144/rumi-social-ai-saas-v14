@@ -1,11 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { CONTENT_TYPES, campaignDate, newYorkToday, contentTypeForDay, contentTypeLabel, specialDayForDate, type ContentType, type SpecialDay } from "@/lib/campaign/content-plan";
 
 export default function Create() {
   const [brief, setBrief] = useState("");
   const [goal, setGoal] = useState("launch");
-  const [days, setDays] = useState(14);
+  const [days, setDays] = useState(15);
+  const [contentMix, setContentMix] = useState<ContentType[]>(["post", "reel_post", "presenter_post"]);
+  const [dayTypes, setDayTypes] = useState<Record<number, ContentType>>({});
+  const [includeSpecialDays, setIncludeSpecialDays] = useState(false);
+  const [excludedSpecialDays, setExcludedSpecialDays] = useState<string[]>([]);
+  const [customSpecialDays, setCustomSpecialDays] = useState<SpecialDay[]>([]);
+  const [specialDate, setSpecialDate] = useState("");
+  const [specialLabel, setSpecialLabel] = useState("");
 
   const platforms = [
     "facebook",
@@ -22,15 +30,13 @@ export default function Create() {
   >({});
 
   const [campaignStartDate, setCampaignStartDate] = useState(
-    () => new Date().toISOString().slice(0, 10)
+    () => newYorkToday()
   );
 
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
 
   function dateForDay(day: number) {
-    const date = new Date(`${campaignStartDate}T12:00:00`);
-    date.setDate(date.getDate() + day - 1);
-    return date;
+    return campaignDate(campaignStartDate || newYorkToday(), day);
   }
 
   function formatCampaignDate(day: number) {
@@ -39,102 +45,33 @@ export default function Create() {
       month: "short",
       day: "numeric",
       year: "numeric",
+      timeZone: "UTC",
     });
   }
 
-  function specialDayForDate(date: Date) {
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const year = date.getFullYear();
 
-    const fixed: Record<string, string> = {
-      "1-1": "New Year's Day",
-      "2-14": "Valentine's Day",
-      "7-4": "Independence Day",
-      "10-31": "Halloween",
-      "11-11": "Veterans Day",
-      "12-24": "Christmas Eve",
-      "12-25": "Christmas Day",
-      "12-31": "New Year's Eve",
-    };
-
-    const fixedName = fixed[`${month}-${day}`];
-    if (fixedName) return fixedName;
-
-    function nthWeekday(
-      targetMonth: number,
-      weekday: number,
-      occurrence: number
-    ) {
-      const first = new Date(year, targetMonth - 1, 1);
-      const offset = (7 + weekday - first.getDay()) % 7;
-
-      return new Date(
-        year,
-        targetMonth - 1,
-        1 + offset + (occurrence - 1) * 7
-      );
-    }
-
-    function lastWeekday(targetMonth: number, weekday: number) {
-      const last = new Date(year, targetMonth, 0);
-      const offset = (7 + last.getDay() - weekday) % 7;
-
-      return new Date(
-        year,
-        targetMonth - 1,
-        last.getDate() - offset
-      );
-    }
-
-    const sameDay = (a: Date, b: Date) =>
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
-
-    if (sameDay(date, nthWeekday(1, 1, 3)))
-      return "Martin Luther King Jr. Day";
-
-    if (sameDay(date, nthWeekday(2, 1, 3)))
-      return "Presidents Day";
-
-    if (sameDay(date, nthWeekday(5, 0, 2)))
-      return "Mother's Day";
-
-    if (sameDay(date, lastWeekday(5, 1)))
-      return "Memorial Day";
-
-    if (sameDay(date, nthWeekday(6, 0, 3)))
-      return "Father's Day";
-
-    if (sameDay(date, nthWeekday(9, 1, 1)))
-      return "Labor Day";
-
-    if (sameDay(date, nthWeekday(11, 4, 4)))
-      return "Thanksgiving";
-
-    const thanksgiving = nthWeekday(11, 4, 4);
-    const blackFriday = new Date(thanksgiving);
-    blackFriday.setDate(blackFriday.getDate() + 1);
-
-    if (sameDay(date, blackFriday))
-      return "Black Friday";
-
-    const smallBusinessSaturday = new Date(thanksgiving);
-    smallBusinessSaturday.setDate(
-      smallBusinessSaturday.getDate() + 2
-    );
-
-    if (sameDay(date, smallBusinessSaturday))
-      return "Small Business Saturday";
-
-    const cyberMonday = new Date(thanksgiving);
-    cyberMonday.setDate(cyberMonday.getDate() + 4);
-
-    if (sameDay(date, cyberMonday))
-      return "Cyber Monday";
-
-    return null;
+  function plannedType(day: number): ContentType {
+    return dayTypes[day] || contentTypeForDay(day, contentMix.length ? contentMix : ["post"]);
+  }
+  const suggestedDays = campaignStartDate ? Array.from({length: days}, (_, index) => {
+    const date = dateForDay(index + 1), label = specialDayForDate(date);
+    return label ? {date: date.toISOString().slice(0,10), label} : null;
+  }).filter((day): day is SpecialDay => Boolean(day)) : [];
+  const endDate = campaignStartDate ? dateForDay(days).toISOString().slice(0,10) : "";
+  const specialKey = (day: SpecialDay) => `${day.date}:${day.label.toLowerCase()}`;
+  const availableSpecialDays = [...suggestedDays, ...customSpecialDays.filter(day => day.date >= campaignStartDate && day.date <= endDate)].filter((day,index,all) => all.findIndex(other => specialKey(other) === specialKey(day)) === index);
+  const selectedSpecialDays = includeSpecialDays ? availableSpecialDays.filter(day => !excludedSpecialDays.includes(specialKey(day))) : [];
+  function toggleContent(type: ContentType) {
+    setContentMix(current => current.includes(type) ? current.filter(value => value !== type) : [...current, type]);
+    setDayTypes({});
+  }
+  function addSpecialDay() {
+    const label = specialLabel.trim();
+    if (!specialDate || !label || specialDate < campaignStartDate || specialDate > endDate) { setStatus("Choose a named special day inside the campaign dates."); return; }
+    const day = {date: specialDate, label};
+    if (availableSpecialDays.some(other => specialKey(other) === specialKey(day))) {setStatus("That special day is already listed."); return;}
+    if (customSpecialDays.length >= 20) {setStatus("You can add up to 20 custom special days."); return;}
+    setCustomSpecialDays(current => [...current, day]); setSpecialLabel(""); setStatus("");
   }
 
   function platformsForDay(day: number) {
@@ -183,7 +120,7 @@ export default function Create() {
   const [busy, setBusy] = useState(false);
 
   const [photoSource, setPhotoSource] =
-    useState<"website" | "ai">("website");
+    useState<"website" | "ai" | "none">("none");
   const [productUrl, setProductUrl] = useState("");
   const [productTitle, setProductTitle] = useState("");
   const [websiteImages, setWebsiteImages] = useState<string[]>([]);
@@ -238,7 +175,7 @@ export default function Create() {
   }
 
   async function go() {
-    if (brief.trim().length < 10 || busy) return;
+    if (brief.trim().length < 10 || busy || !contentMix.length || !campaignStartDate) return;
 
     setBusy(true);
     setStatus("Preparing campaign...");
@@ -257,8 +194,10 @@ export default function Create() {
             day: index + 1,
             date: dateForDay(index + 1).toISOString().slice(0, 10),
             specialDay: specialDayForDate(dateForDay(index + 1)),
+            contentType: plannedType(index + 1),
             platforms: platformsForDay(index + 1),
           })),
+          extraSpecialDays: selectedSpecialDays,
           photoSource,
           imageUrl:
             photoSource === "website"
@@ -378,8 +317,8 @@ export default function Create() {
         }
 
         if (
-          primaryImageJobs.length >= days &&
-          completedPrimaryImages >= days
+          photoSource === "none" || (primaryImageJobs.length >= days + selectedSpecialDays.length &&
+          completedPrimaryImages >= days + selectedSpecialDays.length)
         ) {
           setStatus("Campaign ready — opening...");
 
@@ -392,7 +331,7 @@ export default function Create() {
         }
 
         setStatus(
-          `Creating campaign images... ${completedPrimaryImages}/${days}`
+          `Creating campaign images... ${completedPrimaryImages}/${days + selectedSpecialDays.length}`
         );
       }
 
@@ -427,11 +366,11 @@ export default function Create() {
           rows={6}
           value={brief}
           onChange={(e) => setBrief(e.target.value)}
-          placeholder="Launch our new product over the next 14 days..."
+          placeholder="Describe the product, service, or topic you want this campaign to promote…"
         />
 
         <div style={{ marginTop: 24, marginBottom: 24 }}>
-          <label>Product imagery</label>
+          <label>Campaign images</label>
 
           <div
             style={{
@@ -441,6 +380,7 @@ export default function Create() {
               marginBottom: 14,
             }}
           >
+            <button type="button" disabled={busy} onClick={() => setPhotoSource("none")}>{photoSource === "none" ? "✓ " : ""}Drafts only · no images</button>
             <button
               type="button"
               onClick={() => setPhotoSource("website")}
@@ -475,7 +415,7 @@ export default function Create() {
                   type="url"
                   value={productUrl}
                   onChange={(e) => setProductUrl(e.target.value)}
-                  placeholder="https://rumiguitars.com/product/..."
+                  placeholder="https://your-website.com/product-or-service/"
                   disabled={busy || importing}
                   style={{ flex: 1 }}
                 />
@@ -593,6 +533,7 @@ export default function Create() {
             </>
           )}
 
+          {photoSource === "none" && <p>Prepare copy and video plans first. Creating the campaign uses 1 Rumi credit. Images and finished videos are created separately when you choose.</p>}
           {photoSource === "ai" && (
             <p className="status">
               Rumi Social AI will generate clean campaign photography
@@ -604,7 +545,7 @@ export default function Create() {
         <label>Campaign goal</label>
 
         <select value={goal} onChange={(e) => setGoal(e.target.value)}>
-          <option value="launch">Product launch</option>
+          <option value="launch">Product or service launch</option>
           <option value="sales">Sales</option>
           <option value="awareness">Awareness</option>
           <option value="education">Education</option>
@@ -622,7 +563,7 @@ export default function Create() {
               alignItems: "center",
             }}
           >
-            {[7, 14, 30].map((option) => (
+            {[7, 15, 30].map((option) => (
               <button
                 key={option}
                 type="button"
@@ -647,13 +588,13 @@ export default function Create() {
               <input
                 type="number"
                 min={1}
-                max={90}
+                max={30}
                 value={days}
                 disabled={busy}
                 onChange={(e) => {
                   const value = Number(e.target.value);
                   if (Number.isFinite(value)) {
-                    setDays(Math.min(90, Math.max(1, value)));
+                    setDays(Math.min(30, Math.max(1, Math.floor(value))));
                   }
                 }}
                 style={{
@@ -672,6 +613,27 @@ export default function Create() {
           </p>
         </div>
 
+        <section style={{marginTop:24}} aria-label="Content mix">
+          <h3>Content mix</h3>
+          <p>Rotate your selected formats across the campaign. You can change any day below.</p>
+          <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>{CONTENT_TYPES.map(type => <label key={type.value} style={{display:"inline-flex",alignItems:"center",gap:8}}><input type="checkbox" style={{width:18,height:18,margin:0}} checked={contentMix.includes(type.value)} disabled={busy} onChange={() => toggleContent(type.value)}/> {type.label}s</label>)}</div>
+          {!contentMix.length && <p role="status">Choose at least one content type.</p>}
+          <p>{CONTENT_TYPES.map(type => `${Array.from({length:days},(_,index)=>plannedType(index+1)).filter(value=>value===type.value).length} ${type.label.toLowerCase()}s`).join(" · ")}</p>
+          <p>Reels and presenter videos start as drafts. Review them, then use the reel editor or presenter studio to create the finished video before scheduling.</p>
+        </section>
+        <section style={{marginTop:24}} aria-label="Extra holiday and special-day posts">
+          <h3>Extra holiday and special-day posts</h3>
+          <label style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" style={{width:18,height:18,margin:0}} checked={includeSpecialDays} disabled={busy} onChange={e=>setIncludeSpecialDays(e.target.checked)}/> Add extra posts for selected occasions</label>
+          <p>U.S. holidays and wellness observances are suggestions. Choose only those relevant to this workspace. Extra posts are added alongside your regular daily content.</p>
+          {includeSpecialDays && <>
+            {!availableSpecialDays.length && <p>No suggested dates in this period. You can add your own below.</p>}
+            {availableSpecialDays.map(day => <div key={specialKey(day)}><label style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><input type="checkbox" style={{width:18,height:18,margin:0}} disabled={busy} checked={!excludedSpecialDays.includes(specialKey(day))} onChange={()=>setExcludedSpecialDays(current=>current.includes(specialKey(day))?current.filter(key=>key!==specialKey(day)):[...current,specialKey(day)])}/> {day.date} · {day.label}</label></div>)}
+            <label>Your special date<input type="date" value={specialDate} min={campaignStartDate} max={endDate} disabled={busy} onInput={e=>setSpecialDate(e.currentTarget.value)} onChange={e=>setSpecialDate(e.target.value)}/></label>
+            <label>Occasion name<input value={specialLabel} maxLength={100} placeholder="Wellness event, anniversary, open day…" disabled={busy} onChange={e=>setSpecialLabel(e.target.value)}/></label>
+            <button type="button" disabled={busy || !specialDate || !specialLabel.trim()} onClick={addSpecialDay}>Add special day</button>
+          </>}
+          <p><strong>{days} regular drafts + {selectedSpecialDays.length} extra special-day drafts = {days+selectedSpecialDays.length} planned posts.</strong></p>
+        </section>
         <div style={{ marginTop: 28, marginBottom: 28 }}>
           <h3 style={{ marginBottom: 6 }}>Campaign Schedule</h3>
 
@@ -686,6 +648,7 @@ export default function Create() {
                 type="date"
                 value={campaignStartDate}
                 disabled={busy}
+                onInput={(e) => setCampaignStartDate(e.currentTarget.value)}
                 onChange={(e) => setCampaignStartDate(e.target.value)}
                 style={{
                   marginLeft: 12,
@@ -744,6 +707,7 @@ export default function Create() {
                   >
                     <div>
                       <strong>{formatCampaignDate(day)}</strong>
+                      <div>{contentTypeLabel(plannedType(day))}</div>
 
                       {specialDay && (
                         <div
@@ -788,6 +752,7 @@ export default function Create() {
                         padding: "16px 18px 18px",
                       }}
                     >
+                      <label>Content for day {day}<select value={plannedType(day)} disabled={busy} onChange={e => setDayTypes(current => ({...current, [day]: e.target.value as ContentType}))}>{CONTENT_TYPES.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
                       <strong>Publish this day to</strong>
 
                       <div
@@ -883,13 +848,13 @@ export default function Create() {
         <div className="deliverables">
           <b>Campaign Director will prepare</b>
           <span>Strategy</span>
-          <span>Static posts</span>
+          <span>Selected content mix</span>
           <span>Carousel</span>
           <span>Stories</span>
-          <span>Reel plan</span>
+          <span>Reel and presenter drafts</span>
           <span>Voiceover</span>
           <span>Calendar</span>
-          <span>Publishing queue</span>
+          <span>Extra special-day drafts</span>
         </div>
 
         <button
@@ -897,14 +862,14 @@ export default function Create() {
           onClick={go}
           disabled={
             brief.trim().length < 10 ||
-            busy ||
+            busy || !contentMix.length || !campaignStartDate ||
             (photoSource === "website" &&
               selectedImages.length === 0)
           }
         >
           {busy
   ? `✦ ${status || "Creating campaign..."}`
-  : "✦ Create Everything"}
+  : "✦ Create campaign drafts"}
         </button>
 
         <span

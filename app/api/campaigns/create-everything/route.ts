@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { spendCredits } from "@/lib/services/credits";
 import { tenantContext } from "@/lib/auth/context";
 import { z } from "zod";
+import { buildContentPlan } from "@/lib/campaign/content-plan";
 
 const S = z.object({
   organizationId: z.string().optional(),
@@ -10,7 +11,8 @@ const S = z.object({
   brief: z.string().min(10),
   goal: z.string().default("launch"),
   days: z.number().int().min(1).max(30).default(14),
-  photoSource: z.enum(["website", "ai"]).default("ai"),
+  photoSource: z.enum(["website", "ai", "none"]).default("ai"),
+  extraSpecialDays: z.array(z.object({date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),label:z.string().trim().min(1).max(100)})).max(30).default([]),
   imageUrl: z.string().url().optional(),
   imageUrls: z.array(z.string().url()).max(20).optional(),
   dailyPlan: z.array(
@@ -18,6 +20,7 @@ const S = z.object({
       day: z.number().int().min(1).max(30),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       specialDay: z.string().max(100).nullable().optional(),
+      contentType: z.enum(["post", "reel_post", "presenter_post"]).default("post"),
       platforms: z.array(
         z.enum([
           "facebook",
@@ -41,6 +44,11 @@ export async function POST(req: Request) {
   }
 
   try {
+    let contentPlan;
+    try {
+      if (p.data.dailyPlan?.length) contentPlan = buildContentPlan(p.data.dailyPlan, p.data.days, p.data.extraSpecialDays);
+      else if (p.data.extraSpecialDays.length) throw new Error("Supply a complete campaign calendar for special-day posts.");
+    } catch (error) { return NextResponse.json({error:error instanceof Error?error.message:"Invalid campaign plan."},{status:400}); }
     const ctx = await tenantContext();
 
     let brand;
@@ -92,7 +100,7 @@ export async function POST(req: Request) {
 
     await spendCredits(
       ctx.organizationId,
-      p.data.photoSource === "website" ? 1 : 3,
+      p.data.photoSource === "ai" ? 3 : 1,
       p.data.photoSource === "website"
         ? "campaign_generation_website_photo"
         : "campaign_generation",
@@ -109,6 +117,7 @@ export async function POST(req: Request) {
           goal: p.data.goal,
           days: p.data.days,
           dailyPlan: p.data.dailyPlan ?? [],
+          contentPlan,
           photoSource: p.data.photoSource,
           imageUrl: p.data.imageUrl,
           imageUrls: p.data.imageUrls,

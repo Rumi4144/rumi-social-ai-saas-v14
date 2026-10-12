@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { recentBrandConcepts } from "@/lib/ai/visual-history";
 import { generateCampaign } from "@/lib/ai/campaign";
+import { applyContentPlan, type ContentSlot } from "@/lib/campaign/content-plan";
 import { renderSocialSvg } from "@/lib/render/svg";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
 import { buildVisualConcept, isSubjectCategory, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "@/lib/ai/visual-plan";
@@ -399,13 +400,14 @@ export async function POST(req: Request) {
       brief: string;
       goal: string;
       days: number;
+      contentPlan?: ContentSlot[];
     dailyPlan?: Array<{
       day: number;
       date: string;
       specialDay?: string | null;
       platforms: string[];
     }>;
-      photoSource?: "website" | "ai";
+      photoSource?: "website" | "ai" | "none";
       imageUrl?: string;
       imageUrls?: string[];
       brandContext?: {
@@ -447,6 +449,7 @@ export async function POST(req: Request) {
       brief: p.brief,
       goal: p.goal,
       days: p.days,
+      contentPlan: p.contentPlan,
       recentConcepts,
     dailyPlan: p.dailyPlan ?? [],
       brand: campaign.brand,
@@ -465,6 +468,7 @@ export async function POST(req: Request) {
         : businessContext,
     });
 
+    pack.posts = applyContentPlan(pack.posts, p.contentPlan);
     if(plannedDates.size&&pack.posts.some(post=>!plannedDates.has(post.day)))throw new Error("A campaign post does not match its planned calendar day.");
     await prisma.$transaction(async (tx: any) => {
       await tx.contentItem.deleteMany({
@@ -498,7 +502,7 @@ export async function POST(req: Request) {
       );
 
       const publishingPlatforms =
-        scheduledDay?.platforms?.length
+        scheduledDay
           ? scheduledDay.platforms
           : Array.isArray(x.platforms)
             ? x.platforms
@@ -517,7 +521,7 @@ export async function POST(req: Request) {
         });
 
         if (
-          (
+          p.photoSource !== "none" && (
         x.visualDirection?.trim() ||
         x.headline?.trim() ||
         x.caption?.trim() ||
@@ -620,7 +624,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
         },
       });
 
-      await tx.job.create({
+      if (p.photoSource !== "none") await tx.job.create({
         data: {
           organizationId: job.organizationId,
           type: "GENERATE_IMAGE",
@@ -678,7 +682,7 @@ Leave intentional negative space for Rumi Social AI typography.`,
       creativeLayoutIndex++;
     }
 
-      await tx.contentItem.create({
+      if (!p.contentPlan?.length) await tx.contentItem.create({
         data: {
           campaignId: campaign.id,
           type: "reel",
