@@ -610,7 +610,9 @@ export default function Create() {
 
         <section style={{marginTop:24}} aria-label="Content mix">
           <h3>Content mix</h3>
-          <p>Enter how many of each format you want. Use 0 to skip a format. Drafts are spread across the campaign dates; a day can contain more than one item.</p>
+          <p>Enter how many of each format you want.</p>
+          <p>Entering 0 will skip a format, and the planner will spread your choices across the campaign dates.</p>
+          <p>A day can contain more than one item.</p>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:16}}>{CONTENT_TYPES.map(type => <label key={type.value}>{type.value === "presenter_post" ? "Presenter drafts" : type.value === "story_post" ? "Stories" : type.label + "s"}<input type="number" min={0} max={30} step={1} value={quantities[type.value]} disabled={busy} onChange={e=>setQuantities(current=>({...current,[type.value]:Math.max(0,Math.min(30,Math.floor(Number(e.target.value)||0)))}))}/></label>)}</div>
           <p>{totalQuantity} regular drafts across {days} days. Maximum 30 of each format, 60 regular drafts per campaign.</p>
           {!validQuantities && <p role="status">Choose between 1 and 60 regular drafts in total.</p>}
