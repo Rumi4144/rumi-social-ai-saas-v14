@@ -9,6 +9,22 @@ function load(file,deps={}) {
 const plan=load('lib/campaign/content-plan.ts');
 const mix=['post','reel_post','presenter_post'];
 const calendar=(days,start='2026-11-01')=>Array.from({length:days},(_,i)=>({day:i+1,date:plan.campaignDate(start,i+1).toISOString().slice(0,10),platforms:['facebook'],contentType:plan.contentTypeForDay(i+1,mix)}));
+test('AI instructions preserve exact requested slots without extra platform entries or bonus Stories',async()=>{
+ let request;
+ const ai=load('lib/ai/campaign.ts',{
+  openai:{default:class {responses={create:async value=>{request=value;return {output_text:'{"posts":[]}'}}}}},
+  './visual-plan':{buildVisualConcept:()=>({subjectCategory:'human',direction:'Relevant workspace scene'})},
+ });
+ const rows=calendar(7),slots=plan.buildQuantityContentPlan(rows,7,{post:0,reel_post:7,story_post:7,presenter_post:0});
+ const previous=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='mock-only';
+ try {await ai.generateCampaign({brief:'A week of mindful change',goal:'education',days:7,brand:{name:'Master Mind Advanced Hypnosis'},dailyPlan:rows,contentPlan:slots});}
+ finally {if(previous===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=previous;}
+ assert.match(request.input,/Return exactly 14 objects in posts/);
+ assert.match(request.input,/return an empty auxiliary stories array/);
+ assert.match(request.input,/Do not create extra platform-specific entries or change the requested quantities/);
+ assert.doesNotMatch(request.input,/Write each platform post natively/);
+ assert.doesNotMatch(request.input,/Rumi Guitars/);
+});
 test('typed quantities preserve exact counts, zero exclusions, same-day drafts, and holiday extras',()=>{
  const quantities={post:2,reel_post:4,story_post:7,presenter_post:1};
  const slots=plan.buildQuantityContentPlan(calendar(7),7,quantities,[{date:'2026-11-04',label:'Custom event'}]);

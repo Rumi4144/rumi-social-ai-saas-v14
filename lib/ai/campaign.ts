@@ -246,7 +246,7 @@ ${Array.from({ length: input.days }, (_, index) => {
 Business context and recent concepts for this brand only: ${JSON.stringify({ business: input.businessContext || {}, recentConcepts: (input.recentConcepts || []).slice(-6) })}
 The subject plan is adapted to this business. For real-photo campaigns, describe the supplied photographs honestly; do not imply a new generated scene or product.
 The current brief and campaign goal determine this campaign's specific objective.
-Write each platform post natively for that platform rather than repeating one caption.
+Write one clear caption per requested content slot, suitable for that slot's selected destinations. Do not create extra platform-specific entries or change the requested quantities.
 Vary hooks, creative angles, captions, calls-to-action, and visual concepts while maintaining one coherent campaign strategy.
 Follow the brand voice, positioning, preferred words, banned words/claims, and visual rules.
 Use the website only as business context. Never invent facts, product details, prices, reviews, guarantees, or claims that were not supplied.
