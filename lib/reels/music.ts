@@ -18,12 +18,22 @@ export const RECORDED_MUSIC = {
   "guitar-andante": { file: "/music/guitar-andante.mp3", title: "Andante", artist: "Composition by Matteo Carcassi; recording uploaded by Matteo Carcassi on Wikimedia Commons", source: "https://commons.wikimedia.org/wiki/File:Matteo_Carcassi_Andante.ogg" },
   "bach-aria": { file: "/music/bach-aria.mp3", title: "Goldberg Variations · Aria", artist: "Kimiko Ishizaka", source: "https://commons.wikimedia.org/wiki/File:Goldberg_Variations_01_Aria.ogg" },
   "bach-variation-13": { file: "/music/bach-variation-13.mp3", title: "Goldberg Variations · Variation 13", artist: "Kimiko Ishizaka", source: "https://commons.wikimedia.org/wiki/File:Goldberg_Variations_14_Variatio_13_a_2_Clav.ogg" },
+  "ocean-waves": { file: "/music/ocean-waves.wav", title: "Ocean waves", artist: "jasinski; wave excerpts by qubodup", source: "https://opengameart.org/content/beach-ocean-waves" },
+  rain: { file: "/music/rain.wav", title: "Steady rainfall", artist: "ezwa", source: "https://commons.wikimedia.org/wiki/File:Rain_(1).ogg" },
+  fireplace: { file: "/music/fireplace.wav", title: "Fireplace crackle", artist: "ezwa", source: "https://commons.wikimedia.org/wiki/File:Dry_grass_burning_in_open_fireplace.ogg" },
 } as const;
+export const NATURE_SOUND_CHOICES = ["ocean-waves", "rain", "fireplace"] as const;
+export function isNatureSound(style: string) {
+  return NATURE_SOUND_CHOICES.some(choice => choice === style);
+}
 export const MUSIC_STYLES = [
   ...SYNTH_MUSIC_STYLES,
   { value: "guitar-andante", label: "Classical guitar · Andante", description: "A recorded steel-string guitar performance of Carcassi’s Andante." },
   { value: "bach-aria", label: "Gentle piano · Bach Aria", description: "Kimiko Ishizaka plays Bach’s flowing, unhurried Aria on piano." },
   { value: "bach-variation-13", label: "Reflective piano · Bach Variation 13", description: "A graceful, expressive piano recording performed by Kimiko Ishizaka." },
+  { value: "ocean-waves", label: "Ocean waves", description: "Recorded beach waves, blended into a continuous background." },
+  { value: "rain", label: "Steady rainfall", description: "Recorded rain with a smooth repeat for a steady background." },
+  { value: "fireplace", label: "Fireplace crackle", description: "Recorded fireplace sounds with a smooth repeat." },
 ] as const;
 export type MusicStyle = typeof MUSIC_STYLES[number]["value"];
 export function recordedMusic(style: MusicChoice) {

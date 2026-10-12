@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { MUSIC_STYLES, recordedMusic, startMusic, type MusicChoice } from "@/lib/reels/music";
+import { MUSIC_STYLES, recordedMusic, isNatureSound, startMusic, type MusicChoice } from "@/lib/reels/music";
 import styles from "./ReelEditor.module.css";
 
 export default function MusicControls({ music, musicStyle, musicVolume, musicFile, disabled, onMusic, onStyle, onVolume, onFile }: {
@@ -34,14 +34,16 @@ export default function MusicControls({ music, musicStyle, musicVolume, musicFil
     } catch (error) { stop(); setMessage(error instanceof Error ? error.message : "Could not play this music. Choose another style or file."); }
   }
   return <div>
-    <label><input type="checkbox" checked={music} onChange={event => onMusic(event.target.checked)} /> Add background music</label>
+    <label><input type="checkbox" checked={music} onChange={event => onMusic(event.target.checked)} /> Add background music or nature sounds</label>
     {music && <>
       <label>Music style<select value={musicStyle} onChange={event => onStyle(event.target.value as MusicChoice)}>
-        <optgroup label="Recorded music">{MUSIC_STYLES.filter(style => recordedMusic(style.value)).map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</optgroup>
+        <optgroup label="Nature sounds for hypnosis">{MUSIC_STYLES.filter(style => isNatureSound(style.value)).map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</optgroup>
+        <optgroup label="Recorded music">{MUSIC_STYLES.filter(style => recordedMusic(style.value) && !isNatureSound(style.value)).map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</optgroup>
         <optgroup label="Generated instrumental styles">{MUSIC_STYLES.filter(style => !recordedMusic(style.value)).map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</optgroup>
         <option value="custom">Upload my music</option>
       </select></label>
       <p className={styles.hint}>{MUSIC_STYLES.find(style => style.value === musicStyle)?.description || "Use your own music file as the soundtrack."}</p>
+      {isNatureSound(musicStyle) && <p className={styles.hint}>For spoken hypnosis, start around 10–20% volume and preview it beneath your narration.</p>}
       {musicStyle === "custom" && <>
         <label>Your music<input type="file" accept="audio/*" onChange={event => {
           const file = event.target.files?.[0]; event.target.value = "";

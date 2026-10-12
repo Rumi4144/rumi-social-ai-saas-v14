@@ -225,7 +225,7 @@ test('every recorded choice uses its own bundled file and survives draft restora
  const requests=[];
  const music=load('lib/reels/music.ts',{__fetch:async url=>{requests.push(url);return new Response(new Uint8Array([1,2,3]));}});
  const styles=Object.keys(music.RECORDED_MUSIC);
- assert.equal(styles.length,4);assert.equal(new Set(styles.map(style=>music.recordedMusic(style).file)).size,4);
+ assert.equal(styles.length,7);assert.equal(new Set(styles.map(style=>music.recordedMusic(style).file)).size,7);
  for (const style of styles) {
   const track=music.recordedMusic(style), {context,nodes}=musicContext();
   assert.equal(music.musicSettings({music:true,musicStyle:style}).musicStyle,style);

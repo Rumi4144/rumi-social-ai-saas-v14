@@ -25,3 +25,20 @@ Downloaded 2026-10-11. MP3 transcodes supplied by Wikimedia Commons, unchanged.
 
 The UI identifies each recording and links to its source. It does not promise
 that social platforms will never issue an automated copyright claim.
+
+## Nature sounds for hypnosis
+
+Downloaded and prepared 2026-10-11. These are field recordings, not generated sound.
+
+| File | Recordist and source | License |
+| --- | --- | --- |
+| ocean-waves.wav | jasinski, Alki beach, Seattle; four wave excerpts by qubodup from https://opengameart.org/content/beach-ocean-waves ; original https://freesound.org/people/jasinski/sounds/18363/ | CC0 1.0 |
+| rain.wav | ezwa, https://commons.wikimedia.org/wiki/File:Rain_(1).ogg | Worldwide public-domain release by author |
+| fireplace.wav | ezwa, https://commons.wikimedia.org/wiki/File:Dry_grass_burning_in_open_fireplace.ogg | Worldwide public-domain release by author |
+
+Preparation: decoded to 16-bit PCM WAV; ocean excerpts joined with 0.35-second
+linear crossfades. Each nature sound has a 0.5-second overlap at its loop seam
+and gain adjusted to an RMS target of 0.12 with a peak cap of 0.75. Natural
+variation remains. Preview and export use the same prepared loop. Narration
+and sound volume are controlled separately by the existing reel audio mix.
+No medical or therapeutic effectiveness is claimed.
