@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { spendCredits } from "@/lib/services/credits";
 import { tenantContext } from "@/lib/auth/context";
 import { z } from "zod";
-import { buildContentPlan } from "@/lib/campaign/content-plan";
+import { buildContentPlan, buildQuantityContentPlan } from "@/lib/campaign/content-plan";
 
 const S = z.object({
   organizationId: z.string().optional(),
@@ -12,6 +12,7 @@ const S = z.object({
   goal: z.string().default("launch"),
   days: z.number().int().min(1).max(30).default(14),
   photoSource: z.enum(["website", "ai", "none"]).default("ai"),
+  contentQuantities: z.object({post:z.number().int().min(0).max(30),reel_post:z.number().int().min(0).max(30),story_post:z.number().int().min(0).max(30),presenter_post:z.number().int().min(0).max(30)}).optional(),
   extraSpecialDays: z.array(z.object({date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),label:z.string().trim().min(1).max(100)})).max(30).default([]),
   imageUrl: z.string().url().optional(),
   imageUrls: z.array(z.string().url()).max(20).optional(),
@@ -20,7 +21,7 @@ const S = z.object({
       day: z.number().int().min(1).max(30),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       specialDay: z.string().max(100).nullable().optional(),
-      contentType: z.enum(["post", "reel_post", "presenter_post"]).default("post"),
+      contentType: z.enum(["post", "reel_post", "presenter_post", "story_post"]).default("post"),
       platforms: z.array(
         z.enum([
           "facebook",
@@ -46,8 +47,8 @@ export async function POST(req: Request) {
   try {
     let contentPlan;
     try {
-      if (p.data.dailyPlan?.length) contentPlan = buildContentPlan(p.data.dailyPlan, p.data.days, p.data.extraSpecialDays);
-      else if (p.data.extraSpecialDays.length) throw new Error("Supply a complete campaign calendar for special-day posts.");
+      if (p.data.dailyPlan?.length) contentPlan = p.data.contentQuantities ? buildQuantityContentPlan(p.data.dailyPlan, p.data.days, p.data.contentQuantities, p.data.extraSpecialDays) : buildContentPlan(p.data.dailyPlan, p.data.days, p.data.extraSpecialDays);
+      else if (p.data.contentQuantities || p.data.extraSpecialDays.length) throw new Error("Supply a complete campaign calendar for special-day posts.");
     } catch (error) { return NextResponse.json({error:error instanceof Error?error.message:"Invalid campaign plan."},{status:400}); }
     const ctx = await tenantContext();
 

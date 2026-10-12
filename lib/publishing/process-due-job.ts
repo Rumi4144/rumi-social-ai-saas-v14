@@ -52,8 +52,8 @@ export async function processDuePublishJob() {
 
   const attempt = job.attempts + 1;
 
-  if (requiresVideo(item.type) && !/^\/api\/video\/media\/[^/?#]+(?:\?.*)?$/.test(item.mediaUrl || "")) {
-    const error = "Finish and select the planned video before publishing.";
+  if (item.type === "story_post" || requiresVideo(item.type) && !/^\/api\/video\/media\/[^/?#]+(?:\?.*)?$/.test(item.mediaUrl || "")) {
+    const error = item.type === "story_post" ? "Story drafts require manual Story publishing." : "Finish and select the planned video before publishing.";
     await prisma.publishJob.update({where:{id:job.id},data:{status:"failed",lastError:error}});
     return {status:"failed" as const,jobId:job.id,error};
   }

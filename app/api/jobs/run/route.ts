@@ -594,7 +594,7 @@ later. Do not place important product details in the left typography zone.
 Maintain a balanced premium advertising composition and natural perspective.
 
 IMPORTANT: Generate ONLY the underlying photography/artwork. The final image must contain absolutely NO typography, words, letters, numbers, dates, captions, headlines, labels, logos, brand marks, signatures, watermarks, signs, posters, packaging text, or UI elements. Leave clean negative space where appropriate for Rumi Social AI to add professional typography later. Do not render the campaign title or content headline inside the image. Use people when the planned subject requires a human or lifestyle experience; do not imply a real customer endorsement.`,
-                format: "portrait",
+                format: x.type === "story_post" ? "story" : "portrait",
               },
             },
           });
@@ -608,7 +608,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
         }
       }
 
-    for (const x of pack.stories) {
+    for (const x of (p.contentPlan?.length ? [] : pack.stories)) {
       const concept = buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });
       const priorConcepts = plannedConcepts.slice(-6);
       plannedConcepts.push({ subjectCategory: concept.subjectCategory, direction: `${concept.direction} Campaign direction: ${x.visualDirection}` });

@@ -53,6 +53,8 @@ export async function POST(req: Request) {
       );
     }
 
+    if (item.type === "story_post") return NextResponse.json({error:"Download this Story draft and publish it manually. Automatic Story publishing is not available yet."},{status:400});
+
     if (requiresVideo(item.type) && !campaignVideoId(item.mediaUrl)) return NextResponse.json({error:"Finish and select the planned video before publishing."},{status:400});
 
     const connection =

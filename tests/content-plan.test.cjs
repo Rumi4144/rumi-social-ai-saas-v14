@@ -9,6 +9,20 @@ function load(file,deps={}) {
 const plan=load('lib/campaign/content-plan.ts');
 const mix=['post','reel_post','presenter_post'];
 const calendar=(days,start='2026-11-01')=>Array.from({length:days},(_,i)=>({day:i+1,date:plan.campaignDate(start,i+1).toISOString().slice(0,10),platforms:['facebook'],contentType:plan.contentTypeForDay(i+1,mix)}));
+test('typed quantities preserve exact counts, zero exclusions, same-day drafts, and holiday extras',()=>{
+ const quantities={post:2,reel_post:4,story_post:7,presenter_post:1};
+ const slots=plan.buildQuantityContentPlan(calendar(7),7,quantities,[{date:'2026-11-04',label:'Custom event'}]);
+ assert.equal(slots.length,15);
+ for(const [type,count] of Object.entries(quantities)) assert.equal(slots.filter(s=>s.type===type).length,count);
+ assert.equal(new Set(slots.filter(s=>s.type==='story_post').map(s=>s.day)).size,7);
+ assert.equal(new Set(slots.map(s=>s.planKey)).size,15);
+ const reels=plan.buildQuantityContentPlan(calendar(7),7,{post:0,reel_post:7,story_post:0,presenter_post:0});
+ assert.equal(reels.length,7);assert.ok(reels.every(s=>s.type==='reel_post'));
+ assert.equal(new Set(reels.map(s=>s.day)).size,7);
+ assert.throws(()=>plan.buildQuantityContentPlan(calendar(7),7,{post:0,reel_post:0,story_post:0,presenter_post:0}));
+ assert.throws(()=>plan.buildQuantityContentPlan(calendar(7),7,{post:30,reel_post:30,story_post:1,presenter_post:0}));
+ assert.throws(()=>plan.buildQuantityContentPlan(calendar(7),7,{post:1.5,reel_post:0,story_post:0,presenter_post:0}));
+});
 for(const days of [7,15,30]) test(`${days} days preserves mixed daily slots and adds occasions separately`,()=>{
  const rows=calendar(days),extras=[{date:rows[3].date,label:'My special day'}];
  const slots=plan.buildContentPlan(rows,days,extras);
@@ -20,8 +34,9 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
  try {
   const rows=calendar(7);rows[1].platforms=[];
   const slots=plan.buildContentPlan(rows,7,[{date:rows[3].date,label:'Kindness event'}]);
+  slots.push({...slots[1],planKey:'story-1',type:'story_post'});
   let invalid=false,transactions=0,result;const items=[],media=[];
-  const pack=()=>({title:'Master Mind campaign',posts:slots.map(s=>({planKey:s.planKey,day:s.day,type:'post',platforms:['youtube'],headline:s.planKey,caption:'Workspace content',visualDirection:'Scene and spoken plan'})),stories:[],carousels:[],reel:{hook:'Hook',voiceover:'Outline'}});
+  const pack=()=>({title:'Master Mind campaign',posts:slots.map(s=>({planKey:s.planKey,day:s.day,type:'post',platforms:['youtube'],headline:s.planKey,caption:'Workspace content',visualDirection:'Scene and spoken plan'})),stories:[{frame:1,text:'Unrequested bonus',visualDirection:'Bonus'}],carousels:[],reel:{hook:'Hook',voiceover:'Outline'}});
   const job={id:'job',organizationId:'master-mind',type:'CREATE_EVERYTHING',status:'queued',payload:{campaignId:'campaign',brief:'Mindful change',goal:'education',days:7,dailyPlan:rows,contentPlan:slots,photoSource:'none'}};
   const tx={contentItem:{deleteMany:async()=>{},create:async q=>{items.push(q.data);return {id:'item-'+items.length};}},job:{create:async q=>media.push(q),update:async q=>{result=q.data;}},campaign:{update:async()=>{}}};
   const api=load('app/api/jobs/run/route.ts',{
@@ -33,8 +48,9 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
    '@/lib/ai/visual-plan':{buildVisualConcept:()=>({subjectCategory:'human',direction:'Service scene'})},
   });
   const req={headers:{get:()=> 'planner-test'},json:async()=>({organizationId:'master-mind'})};
-  assert.equal((await api.POST(req)).status,200);assert.equal(items.length,8);assert.equal(media.length,0);assert.equal(items[1].type,'reel_post');assert.equal(items[1].platform,'');assert.equal(items[2].type,'presenter_post');assert.equal(items[7].type,'holiday_post');assert.equal(items[3].scheduledFor.getTime(),items[7].scheduledFor.getTime());assert.ok(items.every(i=>i.status==='draft'));assert.equal(result.result.posts[2].visualDirection,'Scene and spoken plan');
+  assert.equal((await api.POST(req)).status,200);assert.equal(items.length,9);assert.equal(items[8].type,"story_post");assert.equal(media.length,0);assert.equal(items[1].type,'reel_post');assert.equal(items[1].platform,'');assert.equal(items[2].type,'presenter_post');assert.equal(items[7].type,'holiday_post');assert.equal(items[3].scheduledFor.getTime(),items[7].scheduledFor.getTime());assert.ok(items.every(i=>i.status==='draft'));assert.equal(result.result.posts[2].visualDirection,'Scene and spoken plan');
   invalid=true;assert.equal((await api.POST(req)).status,500);assert.equal(transactions,1);
+  invalid=false;job.payload.photoSource="ai";assert.equal((await api.POST(req)).status,200);assert.equal(media.length,9);assert.equal(media.filter(j=>j.data.payload.format==="story").length,1);
  } finally {if(previous===undefined)delete process.env.WORKER_SECRET;else process.env.WORKER_SECRET=previous;}
 });
 for(const route of ['schedule','now']) test(`${route} refuses unfinished reel and presenter drafts before accessing publishing accounts`,async()=>{
@@ -47,7 +63,7 @@ for(const route of ['schedule','now']) test(`${route} refuses unfinished reel an
   '@/lib/publishing/facebook-video':{campaignVideoId:()=>null},
  });
  const req={json:async()=>({contentItemId:'draft',socialConnectionId:'account',socialConnectionIds:['account'],scheduledFor:'2027-01-01T12:00:00Z'})};
- for(type of ['reel_post','presenter_post']) {const result=await api.POST(req);assert.equal(result.status,400);assert.match(result.body.error,/Finish and select/);}
+ for(type of ['reel_post','presenter_post','story_post']) {const result=await api.POST(req);assert.equal(result.status,400);assert.match(result.body.error,type === "story_post" ? /publish it manually/ : /Finish and select/);}
 });
 test('calendar dates survive daylight saving and year boundaries',()=>{
  assert.equal(plan.campaignDate('2026-10-31',3).toISOString().slice(0,10),'2026-11-02');
@@ -89,4 +105,8 @@ test('creation derives the plan in the current workspace without generating paid
  const before=writes.length;
  const invalid=await api.POST({json:async()=>({brief:'Mindful change for our audience',days:15,photoSource:'none',dailyPlan:rows.slice(1)})});
  assert.equal(invalid.status,400);assert.equal(writes.length,before);assert.equal(credits.length,1);
+ const quantities={post:0,reel_post:7,story_post:7,presenter_post:0};
+ const typed=await api.POST({json:async()=>({brief:'Mindful change for our audience',days:7,photoSource:'none',dailyPlan:calendar(7),contentQuantities:quantities})});
+ assert.equal(typed.status,202);const typedSlots=writes.at(-1).data.payload.contentPlan;
+ assert.equal(typedSlots.filter(s=>s.type==='reel_post').length,7);assert.equal(typedSlots.filter(s=>s.type==='story_post').length,7);
 });

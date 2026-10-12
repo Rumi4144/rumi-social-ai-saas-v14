@@ -1,8 +1,8 @@
 # Mixed campaign calendar
 
-The planner rotates the selected daily formats across 7, 15, or 30 calendar days. Optional observances add separate static drafts on their actual dates; they never replace a daily entry. Users can deselect suggestions and add custom occasions. This is a suggestions catalog, not an exhaustive list of holidays or observed office closures.
+The planner accepts exact quantities of static posts, reels, Stories, and presenter drafts across 7, 15, or 30 calendar days. Enter 0–30 of each format, up to 60 regular drafts total. Each format is spread evenly across the dates, so multiple drafts can share a day. Legacy plans still support one rotating format per day. Optional observances add separate static drafts on their actual dates; they never replace a daily entry. Users can deselect suggestions and add custom occasions. This is a suggestions catalog, not an exhaustive list of holidays or observed office closures.
 
-Draft-only mode charges the existing campaign-writing credit and creates no image jobs or finished videos. Reel and presenter drafts require a selected finished campaign video before publishing or scheduling. All content and planning-job reads use the active organization.
+Draft-only mode charges the existing campaign-writing credit and creates no image jobs or finished videos. Reel and presenter drafts require a selected finished campaign video before publishing or scheduling. Stories are distinct vertical 1080 × 1920 drafts; automated Story publishing is deliberately blocked until a dedicated integration exists. All content and planning-job reads use the active organization.
 
 Observance references:
 

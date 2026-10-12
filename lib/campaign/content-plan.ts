@@ -2,8 +2,10 @@ export const CONTENT_TYPES = [
   { value: "post", label: "Static post" },
   { value: "reel_post", label: "Reel" },
   { value: "presenter_post", label: "Presenter video" },
+  { value: "story_post", label: "Story" },
 ] as const;
 export type ContentType = typeof CONTENT_TYPES[number]["value"];
+export type ContentQuantities = Record<ContentType, number>;
 export type DailyPlan = { day: number; date: string; platforms: string[]; specialDay?: string | null; contentType?: ContentType };
 export type SpecialDay = { date: string; label: string };
 export type ContentSlot = { planKey: string; day: number; date: string; type: ContentType | "holiday_post"; platforms: string[]; occasion: string | null; extra: boolean };
@@ -66,6 +68,21 @@ export function applyContentPlan<T extends { planKey?: string | null; day: numbe
     remaining.delete(slot.planKey);
     return { ...post, type: slot.type };
   });
+}
+export function buildQuantityContentPlan(plan: DailyPlan[], days: number, quantities: ContentQuantities, extras: SpecialDay[] = []): ContentSlot[] {
+  const calendar = buildContentPlan(plan, days, extras);
+  const total = CONTENT_TYPES.reduce((sum, type) => sum + quantities[type.value], 0);
+  if (CONTENT_TYPES.some(type => !Number.isInteger(quantities[type.value]) || quantities[type.value] < 0 || quantities[type.value] > 30) || total < 1 || total > 60) throw new Error("Enter 0–30 for each format and choose 1–60 regular drafts in total.");
+  const slots: ContentSlot[] = [];
+  for (const type of CONTENT_TYPES) {
+    const count = quantities[type.value];
+    for (let index = 0; index < count; index++) {
+      const day = Math.floor(index * days / count) + 1;
+      const row = calendar[day - 1];
+      slots.push({...row, planKey:`${type.value}-${index + 1}`, type:type.value});
+    }
+  }
+  return [...slots.sort((a,b) => a.day - b.day), ...calendar.filter(slot => slot.extra)];
 }
 export function specialDayForDate(date: Date) {
     const month = date.getUTCMonth() + 1;

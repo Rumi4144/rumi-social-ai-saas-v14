@@ -193,19 +193,20 @@ ${scheduleContext}
 ${input.contentPlan?.length ? `REQUESTED CONTENT SLOTS (authoritative):
 ${JSON.stringify(input.contentPlan)}
 Return exactly ${input.contentPlan.length} objects in posts, one for every planKey above, preserving its day.
-There are ${input.days} regular daily slots, plus ${input.contentPlan.filter(slot=>slot.extra).length} EXTRA holiday/special-day slots.
+There are ${input.contentPlan.filter(slot=>!slot.extra).length} regular content slots distributed across ${input.days} days, plus ${input.contentPlan.filter(slot=>slot.extra).length} EXTRA holiday/special-day slots.
 Extra slots are additional drafts on the same calendar date, never replacements for the regular daily slot.
 Set type to the slot's requested type. For post: write a static text/photo post. For reel_post: write a concise reel hook and caption, and a practical scene-by-scene plan in visualDirection. For presenter_post: write a concise presenter hook and caption, and a spoken-script outline in visualDirection. These are video plans; never claim a video has been generated.
+For story_post: write a concise vertical Story headline and supporting text, and its visual plan in visualDirection. Keep it short enough to read on a phone. All requested Stories belong in posts with their supplied planKey, not the auxiliary stories array.
 For holiday_post, acknowledge the supplied occasion respectfully and connect it naturally to this workspace's actual business. Do not invent discounts, partnerships, medical outcomes, or event details. If no natural promotional connection exists, use a simple, respectful observance message. Keep its creative distinct from the regular post on the same date.
 Use ONLY this brand's context. Do not mix products or messages from another business.` : "Set planKey to null for each primary post."}
 
 Treat the DAILY PUBLISHING PLAN as authoritative scheduling context.
-For each numbered campaign day, create EXACTLY ONE primary social post.
+For a requested content plan, use exactly the supplied slots; multiple slots may share a day and some days may have none. Without a requested content plan, create EXACTLY ONE primary social post per day.
 That single daily post must be suitable for distribution to ALL platforms selected for that day.
 When google_business is selected for a static or holiday post, keep the complete caption, including links, under 1,500 characters. Preserve the requested video type for reel and presenter slots; do not promise video distribution to Google Business Profile.
 Do NOT create duplicate Facebook, Instagram, LinkedIn, or other platform-specific versions of the same day's post.
 The selected platforms are publishing destinations for the daily post, not instructions to create additional posts.
-Return EXACTLY one primary post for each campaign day; the only additional posts are the explicitly requested extra slots above.
+Preserve every requested slot and quantity. For a legacy campaign without requested slots, return exactly one primary post per day.
 Each day's post must have its own distinct creative angle, headline, caption, call-to-action, and visual concept while maintaining one coherent campaign strategy.
 Use the supplied calendar date as context for that day's creative.
 
@@ -253,7 +254,7 @@ Make calls-to-action appropriate to the campaign objective and business type.
 
 
 STORY SEQUENCE RULES:
-If Instagram is selected on at least one day in the DAILY PUBLISHING PLAN, create EXACTLY 5 Instagram Story slides.
+If REQUESTED CONTENT SLOTS are supplied, return an empty auxiliary stories array: all selected Stories are already included in posts. Otherwise, if Instagram is selected on at least one day in the DAILY PUBLISHING PLAN, create EXACTLY 5 Instagram Story slides.
 If Instagram is not selected anywhere in the DAILY PUBLISHING PLAN, return an empty stories array.
 The Story sequence is a campaign-level creative asset and does not override the per-day platform selections above.
 

@@ -10,6 +10,7 @@ export default function RenderCreativeButton({
   imageUrl,
   textPosition = "left",
   existingCreative = false,
+  format = "portrait",
 }: {
   campaignId: string;
   contentItemId: string;
@@ -18,6 +19,7 @@ export default function RenderCreativeButton({
   imageUrl: string;
   textPosition?: "left" | "right" | "top";
   existingCreative?: boolean;
+  format?: "portrait" | "story";
 }) {
   const [status, setStatus] = useState("");
 
@@ -33,7 +35,7 @@ export default function RenderCreativeButton({
         cta: "Discover More",
         imageUrl,
         textPosition,
-        format: "portrait" as const,
+        format,
       };
 
       // Ask the server only to prepare the complete SVG. The browser then
@@ -55,7 +57,7 @@ export default function RenderCreativeButton({
 
       const canvas = document.createElement("canvas");
       canvas.width = 1080;
-      canvas.height = 1350;
+      canvas.height = format === "story" ? 1920 : 1350;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas unavailable");
       ctx.fillStyle = "#ffffff";

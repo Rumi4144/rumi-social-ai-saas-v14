@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { CONTENT_TYPES, campaignDate, newYorkToday, contentTypeForDay, contentTypeLabel, specialDayForDate, type ContentType, type SpecialDay } from "@/lib/campaign/content-plan";
+import { CONTENT_TYPES, campaignDate, newYorkToday, buildQuantityContentPlan, contentTypeLabel, specialDayForDate, type ContentQuantities, type SpecialDay } from "@/lib/campaign/content-plan";
 
 export default function Create() {
   const [brief, setBrief] = useState("");
   const [goal, setGoal] = useState("launch");
-  const [days, setDays] = useState(15);
-  const [contentMix, setContentMix] = useState<ContentType[]>(["post", "reel_post", "presenter_post"]);
-  const [dayTypes, setDayTypes] = useState<Record<number, ContentType>>({});
+  const [days, setDays] = useState(7);
+  const [quantities, setQuantities] = useState<ContentQuantities>({post:2,reel_post:4,story_post:7,presenter_post:1});
   const [includeSpecialDays, setIncludeSpecialDays] = useState(false);
   const [excludedSpecialDays, setExcludedSpecialDays] = useState<string[]>([]);
   const [customSpecialDays, setCustomSpecialDays] = useState<SpecialDay[]>([]);
@@ -50,9 +49,11 @@ export default function Create() {
   }
 
 
-  function plannedType(day: number): ContentType {
-    return dayTypes[day] || contentTypeForDay(day, contentMix.length ? contentMix : ["post"]);
-  }
+  const totalQuantity = CONTENT_TYPES.reduce((sum, type) => sum + quantities[type.value], 0);
+  const validQuantities = totalQuantity > 0 && totalQuantity <= 60;
+  const quantityCalendar = Array.from({length:days}, (_,index)=>({day:index+1,date:dateForDay(index+1).toISOString().slice(0,10),platforms:platformsForDay(index+1)}));
+  const quantitySlots = validQuantities ? buildQuantityContentPlan(quantityCalendar, days, quantities) : [];
+  const contentForDay = (day:number) => quantitySlots.filter(slot=>slot.day===day).map(slot=>contentTypeLabel(slot.type)).join(" · ") || "No regular drafts planned";
   const suggestedDays = campaignStartDate ? Array.from({length: days}, (_, index) => {
     const date = dateForDay(index + 1), label = specialDayForDate(date);
     return label ? {date: date.toISOString().slice(0,10), label} : null;
@@ -61,10 +62,6 @@ export default function Create() {
   const specialKey = (day: SpecialDay) => `${day.date}:${day.label.toLowerCase()}`;
   const availableSpecialDays = [...suggestedDays, ...customSpecialDays.filter(day => day.date >= campaignStartDate && day.date <= endDate)].filter((day,index,all) => all.findIndex(other => specialKey(other) === specialKey(day)) === index);
   const selectedSpecialDays = includeSpecialDays ? availableSpecialDays.filter(day => !excludedSpecialDays.includes(specialKey(day))) : [];
-  function toggleContent(type: ContentType) {
-    setContentMix(current => current.includes(type) ? current.filter(value => value !== type) : [...current, type]);
-    setDayTypes({});
-  }
   function addSpecialDay() {
     const label = specialLabel.trim();
     if (!specialDate || !label || specialDate < campaignStartDate || specialDate > endDate) { setStatus("Choose a named special day inside the campaign dates."); return; }
@@ -175,7 +172,7 @@ export default function Create() {
   }
 
   async function go() {
-    if (brief.trim().length < 10 || busy || !contentMix.length || !campaignStartDate) return;
+    if (brief.trim().length < 10 || busy || !validQuantities || !campaignStartDate) return;
 
     setBusy(true);
     setStatus("Preparing campaign...");
@@ -194,9 +191,9 @@ export default function Create() {
             day: index + 1,
             date: dateForDay(index + 1).toISOString().slice(0, 10),
             specialDay: specialDayForDate(dateForDay(index + 1)),
-            contentType: plannedType(index + 1),
             platforms: platformsForDay(index + 1),
           })),
+          contentQuantities: quantities,
           extraSpecialDays: selectedSpecialDays,
           photoSource,
           imageUrl:
@@ -298,9 +295,7 @@ export default function Create() {
       if (!mainJob || mainJob.status !== "succeeded") {
         setStatus("Writing campaign...");
       } else {
-        const primaryImageJobs = imageJobs.filter(
-          (job: any) => job.payload?.format !== "story"
-        );
+        const primaryImageJobs = imageJobs;
 
         const completedPrimaryImages = primaryImageJobs.filter(
           (job: any) => job.status === "succeeded"
@@ -317,8 +312,8 @@ export default function Create() {
         }
 
         if (
-          photoSource === "none" || (primaryImageJobs.length >= days + selectedSpecialDays.length &&
-          completedPrimaryImages >= days + selectedSpecialDays.length)
+          photoSource === "none" || (primaryImageJobs.length >= totalQuantity + selectedSpecialDays.length &&
+          completedPrimaryImages >= totalQuantity + selectedSpecialDays.length)
         ) {
           setStatus("Campaign ready — opening...");
 
@@ -331,7 +326,7 @@ export default function Create() {
         }
 
         setStatus(
-          `Creating campaign images... ${completedPrimaryImages}/${days + selectedSpecialDays.length}`
+          `Creating campaign images... ${completedPrimaryImages}/${totalQuantity + selectedSpecialDays.length}`
         );
       }
 
@@ -615,10 +610,11 @@ export default function Create() {
 
         <section style={{marginTop:24}} aria-label="Content mix">
           <h3>Content mix</h3>
-          <p>Rotate your selected formats across the campaign. You can change any day below.</p>
-          <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>{CONTENT_TYPES.map(type => <label key={type.value} style={{display:"inline-flex",alignItems:"center",gap:8}}><input type="checkbox" style={{width:18,height:18,margin:0}} checked={contentMix.includes(type.value)} disabled={busy} onChange={() => toggleContent(type.value)}/> {type.label}s</label>)}</div>
-          {!contentMix.length && <p role="status">Choose at least one content type.</p>}
-          <p>{CONTENT_TYPES.map(type => `${Array.from({length:days},(_,index)=>plannedType(index+1)).filter(value=>value===type.value).length} ${type.label.toLowerCase()}s`).join(" · ")}</p>
+          <p>Enter how many of each format you want. Use 0 to skip a format. Drafts are spread across the campaign dates; a day can contain more than one item.</p>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:16}}>{CONTENT_TYPES.map(type => <label key={type.value}>{type.value === "presenter_post" ? "Presenter drafts" : type.value === "story_post" ? "Stories" : type.label + "s"}<input type="number" min={0} max={30} step={1} value={quantities[type.value]} disabled={busy} onChange={e=>setQuantities(current=>({...current,[type.value]:Math.max(0,Math.min(30,Math.floor(Number(e.target.value)||0)))}))}/></label>)}</div>
+          <p>{totalQuantity} regular drafts across {days} days. Maximum 30 of each format, 60 regular drafts per campaign.</p>
+          {!validQuantities && <p role="status">Choose between 1 and 60 regular drafts in total.</p>}
+          <p>Stories are vertical drafts for you to review and download. Automatic Story publishing is not available yet.</p>
           <p>Reels and presenter videos start as drafts. Review them, then use the reel editor or presenter studio to create the finished video before scheduling.</p>
         </section>
         <section style={{marginTop:24}} aria-label="Extra holiday and special-day posts">
@@ -632,7 +628,7 @@ export default function Create() {
             <label>Occasion name<input value={specialLabel} maxLength={100} placeholder="Wellness event, anniversary, open day…" disabled={busy} onChange={e=>setSpecialLabel(e.target.value)}/></label>
             <button type="button" disabled={busy || !specialDate || !specialLabel.trim()} onClick={addSpecialDay}>Add special day</button>
           </>}
-          <p><strong>{days} regular drafts + {selectedSpecialDays.length} extra special-day drafts = {days+selectedSpecialDays.length} planned posts.</strong></p>
+          <p><strong>{totalQuantity} regular drafts + {selectedSpecialDays.length} extra special-day drafts = {totalQuantity+selectedSpecialDays.length} planned posts.</strong></p>
         </section>
         <div style={{ marginTop: 28, marginBottom: 28 }}>
           <h3 style={{ marginBottom: 6 }}>Campaign Schedule</h3>
@@ -707,7 +703,7 @@ export default function Create() {
                   >
                     <div>
                       <strong>{formatCampaignDate(day)}</strong>
-                      <div>{contentTypeLabel(plannedType(day))}</div>
+                      <div>{contentForDay(day)}</div>
 
                       {specialDay && (
                         <div
@@ -752,7 +748,7 @@ export default function Create() {
                         padding: "16px 18px 18px",
                       }}
                     >
-                      <label>Content for day {day}<select value={plannedType(day)} disabled={busy} onChange={e => setDayTypes(current => ({...current, [day]: e.target.value as ContentType}))}>{CONTENT_TYPES.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
+                      <p>{contentForDay(day)}</p>
                       <strong>Publish this day to</strong>
 
                       <div
@@ -862,7 +858,7 @@ export default function Create() {
           onClick={go}
           disabled={
             brief.trim().length < 10 ||
-            busy || !contentMix.length || !campaignStartDate ||
+            busy || !validQuantities || !campaignStartDate ||
             (photoSource === "website" &&
               selectedImages.length === 0)
           }

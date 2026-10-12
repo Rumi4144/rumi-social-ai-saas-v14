@@ -211,6 +211,7 @@ export default async function Campaign({
                   caption={item.caption}
                   imageUrl={originalImage.url}
                   textPosition={textPosition}
+                  format={item.type === "story_post" ? "story" : "portrait"}
                   existingCreative={!!brandedCreative}
                 />
               )}
@@ -244,6 +245,7 @@ export default async function Campaign({
 
               <p>{item.caption}</p>
               {requiresVideo(item.type) && plannedPost?.visualDirection && <details><summary>Video draft plan</summary><p style={{whiteSpace:"pre-wrap"}}>{plannedPost.visualDirection}</p></details>}
+              {item.type === "story_post" && <p>Vertical Story draft · review and download for manual Story publishing. {displayAsset?.url && <a href={displayAsset.url} download>Download Story creative</a>}</p>}
               {needsVideo && <p>Finish and select this video before scheduling it.</p>}
               <p><a href={`/studio/presenters?campaignId=${campaign.id}&contentItemId=${item.id}`}>Make a presenter video for this post</a></p>
               <p><a href={`/studio/reels?campaignId=${campaign.id}&contentItemId=${item.id}`}>Make a finished reel for this post</a></p>
@@ -256,7 +258,7 @@ export default async function Campaign({
                   caption={item.caption}
                   initialStatus={item.status}
                 />
-                {!needsVideo && <SchedulePostButton
+                {!needsVideo && item.type !== "story_post" && <SchedulePostButton
                   isVideo={Boolean(item.mediaUrl?.includes("/api/video/media/"))}
                   contentItemId={item.id}
                   initialStatus={item.status}
@@ -293,6 +295,7 @@ export default async function Campaign({
                   campaignId={campaign.id}
                   contentItemId={item.id}
                   headline={item.headline || "Campaign Creative"}
+                  format={item.type === "story_post" ? "story" : "portrait"}
                 />
               </div>
             </article>

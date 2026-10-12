@@ -6,10 +6,12 @@ export default function RegenerateImageButton({
   campaignId,
   contentItemId,
   headline,
+  format = "portrait",
 }: {
   campaignId: string;
   contentItemId: string;
   headline: string;
+  format?: "portrait" | "story";
 }) {
   const [status, setStatus] = useState("");
 
@@ -30,7 +32,7 @@ Generate underlying photography or artwork only, with no text or branding; leave
           campaignId,
           contentItemId,
           prompt,
-          format: "portrait",
+          format,
         }),
       });
 
@@ -57,7 +59,7 @@ Generate underlying photography or artwork only, with no text or branding; leave
         headline,
         cta: "Discover More",
         imageUrl: result.url,
-        format: "portrait",
+        format,
       }),
     });
 
