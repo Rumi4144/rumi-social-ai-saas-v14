@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { MUSIC_STYLES, startMusic, type MusicChoice } from "@/lib/reels/music";
+import { MUSIC_STYLES, recordedMusic, startMusic, type MusicChoice } from "@/lib/reels/music";
 import styles from "./ReelEditor.module.css";
 
 export default function MusicControls({ music, musicStyle, musicVolume, musicFile, disabled, onMusic, onStyle, onVolume, onFile }: {
@@ -8,6 +8,7 @@ export default function MusicControls({ music, musicStyle, musicVolume, musicFil
   onMusic: (value: boolean) => void; onStyle: (value: MusicChoice) => void; onVolume: (value: number) => void; onFile: (value?: File) => void;
 }) {
   const [listening, setListening] = useState(false), [message, setMessage] = useState("");
+  const recording = recordedMusic(musicStyle);
   const playback = useRef<{ controller: AbortController; context: AudioContext; timer?: ReturnType<typeof setTimeout> } | undefined>(undefined);
   function stop() {
     const active = playback.current; playback.current = undefined;
@@ -36,7 +37,8 @@ export default function MusicControls({ music, musicStyle, musicVolume, musicFil
     <label><input type="checkbox" checked={music} onChange={event => onMusic(event.target.checked)} /> Add background music</label>
     {music && <>
       <label>Music style<select value={musicStyle} onChange={event => onStyle(event.target.value as MusicChoice)}>
-        {MUSIC_STYLES.map(style => <option key={style.value} value={style.value}>{style.label}</option>)}
+        <optgroup label="Recorded music">{MUSIC_STYLES.filter(style => recordedMusic(style.value)).map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</optgroup>
+        <optgroup label="Generated instrumental styles">{MUSIC_STYLES.filter(style => !recordedMusic(style.value)).map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</optgroup>
         <option value="custom">Upload my music</option>
       </select></label>
       <p className={styles.hint}>{MUSIC_STYLES.find(style => style.value === musicStyle)?.description || "Use your own music file as the soundtrack."}</p>
@@ -52,7 +54,7 @@ export default function MusicControls({ music, musicStyle, musicVolume, musicFil
       <label>Music volume: {musicVolume}%<input type="range" min="0" max="100" step="5" value={musicVolume} onChange={event => onVolume(Number(event.target.value))} /></label>
       <button type="button" disabled={disabled || musicVolume === 0 || (musicStyle === "custom" && !musicFile)} onClick={listen}>{listening ? "Stop music preview" : "Listen to music"}</button>
       <p className={styles.hint}>Listen to a 12-second sample. Your selected music is included when you export.</p>
-      {musicStyle === "classical" && <p className={styles.hint}>Spanish Romance · Alisa Gladyseva. <a href="https://commons.wikimedia.org/wiki/File:Romanza_espa%C3%B1ola.ogg" target="_blank" rel="noopener noreferrer">Recording and source</a> · CC0 public domain; attribution is optional.</p>}
+      {recording && <p className={styles.hint}>{recording.title} · {recording.artist}. <a href={recording.source} target="_blank" rel="noopener noreferrer">Recording and source</a> · Public domain; attribution is optional.</p>}
     </>}
     {message && <p role="status">{message}</p>}
   </div>;

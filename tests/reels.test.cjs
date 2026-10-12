@@ -180,7 +180,7 @@ test('multiple uploads validate every file, preserve order and respect library a
 
 test('every music style produces distinct, finite audio with safe peaks and faded edges', () => {
  const music=load('lib/reels/music.ts'), fingerprints=new Set();
- for (const style of music.MUSIC_STYLES) {
+ for (const style of music.SYNTH_MUSIC_STYLES) {
   const samples=music.musicSamples(style.value,7,8000);
   assert.equal(samples.length,56000);assert.equal(Math.abs(samples[0]),0);assert.equal(Math.abs(samples.at(-1)),0);
   let peak=0,energy=0;
@@ -220,6 +220,29 @@ test('missing Spanish Romance recording fails clearly instead of exporting silen
  const {context,nodes}=musicContext();
  await assert.rejects(music.prepareMusic(context,{}, {music:true,musicStyle:'classical'},7),/Could not load Spanish Romance/);
  assert.equal(context.decoded,0);assert.equal(nodes.length,0);
+});
+test('every recorded choice uses its own bundled file and survives draft restoration', async () => {
+ const requests=[];
+ const music=load('lib/reels/music.ts',{__fetch:async url=>{requests.push(url);return new Response(new Uint8Array([1,2,3]));}});
+ const styles=Object.keys(music.RECORDED_MUSIC);
+ assert.equal(styles.length,4);assert.equal(new Set(styles.map(style=>music.recordedMusic(style).file)).size,4);
+ for (const style of styles) {
+  const track=music.recordedMusic(style), {context,nodes}=musicContext();
+  assert.equal(music.musicSettings({music:true,musicStyle:style}).musicStyle,style);
+  const stop=await music.startMusic(context,{}, {music:true,musicStyle:style},12);
+  assert.equal(requests.at(-1),track.file);assert.equal(context.decoded,1);assert.equal(nodes[0].loop,true);stop();
+  assert.ok(fs.statSync(path.join(root,'public',track.file)).size>100000);
+ }
+ assert.equal(music.recordedMusic('jazz'),undefined);assert.equal(music.recordedMusic('custom'),undefined);
+ assert.equal(music.recordedMusic('toString'),undefined);
+});
+test('cancelled recorded music decoding does not start playback', async () => {
+ const controller=new AbortController();
+ const music=load('lib/reels/music.ts',{__fetch:async()=>new Response(new Uint8Array([1,2,3]))});
+ const {context,nodes}=musicContext();
+ context.decodeAudioData=async()=>{controller.abort();return{};};
+ await music.startMusic(context,{}, {music:true,musicStyle:'bach-aria'},12,controller.signal);
+ assert.equal(nodes.length,0);
 });
 test('music prepares before recording, then starts at the selected volume and stops on cancellation', async () => {
  const music=load('lib/reels/music.ts'), {context,nodes,levels}=musicContext(), controller=new AbortController();

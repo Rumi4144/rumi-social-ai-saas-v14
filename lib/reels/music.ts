@@ -1,4 +1,4 @@
-export const MUSIC_STYLES = [
+export const SYNTH_MUSIC_STYLES = [
   { value: "ambient", label: "Soft ambient", description: "Warm, slow chords for a calm background." },
   { value: "soft-acoustic", label: "Soft acoustic guitar", description: "Slow, mellow guitar-style picking with space between notes for a peaceful background." },
   { value: "flamenco", label: "Flamenco", description: "Spanish-style guitar plucks, rhythmic strums and light hand percussion." },
@@ -12,7 +12,23 @@ export const MUSIC_STYLES = [
   { value: "piano", label: "Soft piano", description: "Delicate piano chords and a slow, spacious melody." },
   { value: "pop", label: "Upbeat pop", description: "Bright keys, a pulsing bass and a cheerful drum beat." },
 ] as const;
+type SynthMusicStyle = typeof SYNTH_MUSIC_STYLES[number]["value"];
+export const RECORDED_MUSIC = {
+  classical: { file: "/music/spanish-romance.mp3", title: "Spanish Romance", artist: "Alisa Gladyseva", source: "https://commons.wikimedia.org/wiki/File:Romanza_espa%C3%B1ola.ogg" },
+  "guitar-andante": { file: "/music/guitar-andante.mp3", title: "Andante", artist: "Composition by Matteo Carcassi; recording uploaded by Matteo Carcassi on Wikimedia Commons", source: "https://commons.wikimedia.org/wiki/File:Matteo_Carcassi_Andante.ogg" },
+  "bach-aria": { file: "/music/bach-aria.mp3", title: "Goldberg Variations · Aria", artist: "Kimiko Ishizaka", source: "https://commons.wikimedia.org/wiki/File:Goldberg_Variations_01_Aria.ogg" },
+  "bach-variation-13": { file: "/music/bach-variation-13.mp3", title: "Goldberg Variations · Variation 13", artist: "Kimiko Ishizaka", source: "https://commons.wikimedia.org/wiki/File:Goldberg_Variations_14_Variatio_13_a_2_Clav.ogg" },
+} as const;
+export const MUSIC_STYLES = [
+  ...SYNTH_MUSIC_STYLES,
+  { value: "guitar-andante", label: "Classical guitar · Andante", description: "A recorded steel-string guitar performance of Carcassi’s Andante." },
+  { value: "bach-aria", label: "Gentle piano · Bach Aria", description: "Kimiko Ishizaka plays Bach’s flowing, unhurried Aria on piano." },
+  { value: "bach-variation-13", label: "Reflective piano · Bach Variation 13", description: "A graceful, expressive piano recording performed by Kimiko Ishizaka." },
+] as const;
 export type MusicStyle = typeof MUSIC_STYLES[number]["value"];
+export function recordedMusic(style: MusicChoice) {
+  return Object.prototype.hasOwnProperty.call(RECORDED_MUSIC, style) ? RECORDED_MUSIC[style as keyof typeof RECORDED_MUSIC] : undefined;
+}
 export type MusicChoice = MusicStyle | "custom";
 export type MusicSettings = { music: boolean; musicStyle?: MusicChoice; musicVolume?: number; musicFile?: File };
 export const DEFAULT_MUSIC_VOLUME = 35;
@@ -33,14 +49,14 @@ type Instrument = "guitar" | "soft-guitar" | "bright" | "keys" | "piano" | "bass
 type Note = { at: number; length: number; midi: number; instrument: Instrument; level: number };
 
 // Short original arrangements, synthesized locally without songs, samples or external services.
-export function musicScore(style: MusicStyle, duration: number): Note[] {
+export function musicScore(style: SynthMusicStyle, duration: number): Note[] {
   const notes: Note[] = [];
   const bpm = { ambient: 72, "soft-acoustic": 64, flamenco: 112, classical: 84, fingerpicking: 78, jazz: 94, country: 108, blues: 88, bossa: 116, folk: 96, piano: 66, pop: 120 }[style];
   const beat = 60 / bpm, beatsPerBar = style === "flamenco" ? 6 : style === "folk" ? 3 : 4, barLength = beat * beatsPerBar;
   const add = (at: number, midi: number, length: number, instrument: Instrument, level = 1) => {
     if (at < duration) notes.push({ at, midi, length: Math.min(length, duration - at), instrument, level });
   };
-  const progressions: Record<MusicStyle, number[][]> = {
+  const progressions: Record<SynthMusicStyle, number[][]> = {
     ambient: [[48, 55, 64], [45, 52, 60], [41, 48, 57], [43, 50, 59]],
     "soft-acoustic": [[43, 50, 55, 59, 62], [40, 47, 52, 55, 59], [48, 55, 60, 64, 67], [38, 45, 50, 54, 57]],
     flamenco: [[45, 52, 57, 60, 64], [43, 50, 55, 59, 62], [41, 48, 53, 57, 60], [40, 47, 52, 56, 59]],
@@ -131,7 +147,7 @@ export function musicScore(style: MusicStyle, duration: number): Note[] {
   return notes;
 }
 
-export function musicSamples(style: MusicStyle, duration: number, sampleRate = 22050): Float32Array {
+export function musicSamples(style: SynthMusicStyle, duration: number, sampleRate = 22050): Float32Array {
   if (!Number.isFinite(duration) || duration <= 0 || duration > 180) throw new Error("Choose a reel length between 1 and 180 seconds.");
   if (!Number.isFinite(sampleRate) || sampleRate < 8000 || sampleRate > 96000) throw new Error("Unsupported audio sample rate.");
   const samples = new Float32Array(Math.ceil(duration * sampleRate));
@@ -190,21 +206,22 @@ export async function prepareMusic(context: AudioContext, destination: AudioNode
   const selected = musicSettings(settings);
   if (!selected.music || selected.musicVolume === 0 || signal?.aborted) return () => () => {};
   let buffer: AudioBuffer;
+  const recording = recordedMusic(selected.musicStyle);
   if (selected.musicStyle === "custom") {
     if (!settings.musicFile) throw new Error("Choose your music file, or select a built-in music style.");
     buffer = await context.decodeAudioData(await settings.musicFile.arrayBuffer());
-  } else if (selected.musicStyle === "classical") {
-    const response = await fetch("/music/spanish-romance.mp3", { signal });
-    if (!response.ok) throw new Error("Could not load Spanish Romance. Please try again.");
+  } else if (recording) {
+    const response = await fetch(recording.file, { signal });
+    if (!response.ok) throw new Error(`Could not load ${recording.title}. Please try again.`);
     buffer = await context.decodeAudioData(await response.arrayBuffer());
   } else {
-    const samples = musicSamples(selected.musicStyle, duration);
+    const samples = musicSamples(selected.musicStyle as SynthMusicStyle, duration);
     buffer = context.createBuffer(1, samples.length, 22050); buffer.getChannelData(0).set(samples);
   }
   return () => {
   if (signal?.aborted || context.state === "closed") return () => {};
   const source = context.createBufferSource(), volume = context.createGain(), start = context.currentTime;
-  source.buffer = buffer; source.loop = selected.musicStyle === "custom" || selected.musicStyle === "classical";
+  source.buffer = buffer; source.loop = selected.musicStyle === "custom" || Boolean(recording);
   source.connect(volume).connect(destination);
   const level = selected.musicVolume / 100;
   volume.gain.setValueAtTime(0, start); volume.gain.linearRampToValueAtTime(level, start + .03);
