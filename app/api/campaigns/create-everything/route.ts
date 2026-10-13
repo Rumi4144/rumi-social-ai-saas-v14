@@ -51,6 +51,7 @@ export async function POST(req: Request) {
       else if (p.data.contentQuantities || p.data.extraSpecialDays.length) throw new Error("Supply a complete campaign calendar for special-day posts.");
     } catch (error) { return NextResponse.json({error:error instanceof Error?error.message:"Invalid campaign plan."},{status:400}); }
     const ctx = await tenantContext();
+    if (p.data.organizationId && p.data.organizationId !== ctx.organizationId) return NextResponse.json({error:"Your selected workspace changed. Refresh this page before creating the campaign."},{status:409});
 
     let brand;
 

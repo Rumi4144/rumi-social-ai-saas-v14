@@ -1,10 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { briefSuggestions, type BriefSuggestion } from "@/lib/campaign/brief-suggestions";
 import { CONTENT_TYPES, campaignDate, newYorkToday, buildQuantityContentPlan, contentTypeLabel, specialDayForDate, type ContentQuantities, type SpecialDay } from "@/lib/campaign/content-plan";
 
 export default function Create() {
   const [brief, setBrief] = useState("");
+  const [suggestionContext, setSuggestionContext] = useState<{organizationId:string;brandName:string;suggestions:BriefSuggestion[]}|null>(null);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(true);
+  useEffect(()=>{
+    let active = true;
+    fetch("/api/campaigns/brief-suggestions",{cache:"no-store"}).then(async response=>{
+      if (!response.ok) return;
+      const data = await response.json();
+      if(active && typeof data.organizationId === "string" && typeof data.brandName === "string" && Array.isArray(data.suggestions)) setSuggestionContext(data);
+    }).catch(()=>{}).finally(()=>{if(active)setSuggestionsLoading(false);});
+    return ()=>{active=false;};
+  },[]);
   const [goal, setGoal] = useState("launch");
   const [days, setDays] = useState(7);
   const [quantities, setQuantities] = useState<ContentQuantities>({post:2,reel_post:4,story_post:7,presenter_post:1});
@@ -140,6 +152,7 @@ export default function Create() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          organizationId: suggestionContext?.organizationId,
           url: productUrl.trim(),
         }),
       });
@@ -355,9 +368,15 @@ export default function Create() {
       <h1>One brief. A complete campaign.</h1>
 
       <div className="form">
-        <label>What do you want to promote?</label>
+        <section aria-label="Campaign ideas" style={{marginBottom:20}}>
+          <h3>Need an idea? Choose a starting point.</h3>
+          <p>{suggestionContext ? `Suggestions for ${suggestionContext.brandName}.` : suggestionsLoading ? "Loading ideas for your workspace…" : "Choose a general idea, then add your business details."} Click an idea to fill the box below. You can edit it before creating your drafts.</p>
+          {!suggestionsLoading && <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>{(suggestionContext?.suggestions || briefSuggestions({name:"your business"})).map(suggestion=><button type="button" key={suggestion.label} disabled={busy} onClick={()=>{setBrief(suggestion.brief);setGoal(suggestion.goal);}}>{suggestion.label}</button>)}</div>}
+        </section>
+        <label htmlFor="campaign-brief">What do you want to promote?</label>
 
         <textarea
+          id="campaign-brief"
           rows={6}
           value={brief}
           onChange={(e) => setBrief(e.target.value)}

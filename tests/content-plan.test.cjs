@@ -116,9 +116,11 @@ test('creation derives the plan in the current workspace without generating paid
   '@/lib/prisma':{prisma:{brand:{findFirst:async q=>{assert.equal(q.where.organizationId,'master-mind');return {id:'master-brand',name:'Master Mind'};}},onboardingState:{findUnique:async()=>null},campaign:{create:async q=>{writes.push(q);return {id:'campaign'};}},job:{create:async q=>{writes.push(q);return {id:'job'};}}}},
  });
  const rows=calendar(15);
- const result=await api.POST({json:async()=>({brief:'Mindful change for our audience',organizationId:'guitars',days:15,photoSource:'none',dailyPlan:rows,extraSpecialDays:[{date:'2026-11-13',label:'World Kindness Day'}]})});
+ const result=await api.POST({json:async()=>({brief:'Mindful change for our audience',organizationId:'master-mind',days:15,photoSource:'none',dailyPlan:rows,extraSpecialDays:[{date:'2026-11-13',label:'World Kindness Day'}]})});
  assert.equal(result.status,202);assert.equal(writes[1].data.organizationId,'master-mind');assert.equal(writes[1].data.payload.contentPlan.length,16);assert.equal(writes[1].data.payload.photoSource,'none');assert.equal(credits[0][1],1);
  const before=writes.length;
+ const stale=await api.POST({json:async()=>({brief:'Mindful change for our audience',organizationId:'guitars',days:15,photoSource:'none',dailyPlan:rows})});
+ assert.equal(stale.status,409);assert.equal(writes.length,before);assert.equal(credits.length,1);
  const invalid=await api.POST({json:async()=>({brief:'Mindful change for our audience',days:15,photoSource:'none',dailyPlan:rows.slice(1)})});
  assert.equal(invalid.status,400);assert.equal(writes.length,before);assert.equal(credits.length,1);
  const quantities={post:0,reel_post:7,story_post:7,presenter_post:0};
