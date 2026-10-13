@@ -78,7 +78,7 @@ export default async function Campaign({
     (item: any) => item.type !== "story" && item.type !== "reel"
   ).sort((a,b)=>(a.scheduledFor?.getTime()||0)-(b.scheduledFor?.getTime()||0) || Number(a.type === "holiday_post")-Number(b.type === "holiday_post") || a.createdAt.getTime()-b.createdAt.getTime());
   const plannedPosts = (planningJob?.result as {posts?:Array<{headline:string;caption:string;type:string;day:number;planKey?:string;visualDirection?:string}>})?.posts || [];
-  const contentSlots = (planningJob?.payload as {contentPlan?:Array<{planKey:string;occasion?:string}>})?.contentPlan || [];
+  const contentSlots = (planningJob?.payload as {contentPlan?:Array<{planKey:string;occasion?:string;topics?:string[]}>})?.contentPlan || [];
   const calendarDates = [...new Set(dailyItems.filter(item=>item.type!=="holiday_post").map(item=>item.scheduledFor?.toISOString().slice(0,10)).filter(Boolean))];
 
   console.log(
@@ -177,7 +177,8 @@ export default async function Campaign({
               : "No Image";
 
           const plannedPost = plannedPosts.find(post=>post.headline===item.headline && post.caption===item.caption && post.type===item.type);
-          const occasion = contentSlots.find(slot=>slot.planKey===plannedPost?.planKey)?.occasion;
+          const plannedSlot = contentSlots.find(slot=>slot.planKey===plannedPost?.planKey);
+          const occasion = plannedSlot?.occasion;
           const calendarDay = plannedPost?.day || (item.scheduledFor ? calendarDates.indexOf(item.scheduledFor.toISOString().slice(0,10))+1 : (page-1)*pageSize+index+1);
           const needsVideo = requiresVideo(item.type) && !item.mediaUrl?.startsWith("/api/video/media/");
           return (
@@ -239,6 +240,7 @@ export default async function Campaign({
             </div>
           ) : null}
 
+          {plannedSlot?.topics?.length ? <p><strong>Topics:</strong> {plannedSlot.topics.join(" · ")}</p> : null}
           {occasion && <p><strong>{occasion}</strong> · extra draft alongside regular content</p>}
           <h3>{item.headline || "Creative"}</h3>
           {item.scheduledFor && <p>Planned date: {item.scheduledFor.toISOString().slice(0, 10)}</p>}

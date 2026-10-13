@@ -8,7 +8,17 @@ export type ContentType = typeof CONTENT_TYPES[number]["value"];
 export type ContentQuantities = Record<ContentType, number>;
 export type DailyPlan = { day: number; date: string; platforms: string[]; specialDay?: string | null; contentType?: ContentType };
 export type SpecialDay = { date: string; label: string };
-export type ContentSlot = { planKey: string; day: number; date: string; type: ContentType | "holiday_post"; platforms: string[]; occasion: string | null; extra: boolean };
+export type ContentSlot = { planKey: string; day: number; date: string; type: ContentType | "holiday_post"; platforms: string[]; occasion: string | null; extra: boolean; topics?: string[] };
+export function applyCampaignTopics(slots: ContentSlot[], topics: string[]): ContentSlot[] {
+  if (!topics.length) return slots;
+  const regular=slots.filter(slot=>!slot.extra);
+  if(!regular.length || topics.length>12 || topics.some(topic=>!topic.trim() || topic.length>100) || new Set(topics.map(topic=>topic.trim().toLowerCase())).size!==topics.length) throw new Error("Choose up to 12 distinct campaign topics.");
+  const assigned=regular.map(()=>[] as string[]);
+  topics.forEach((topic,index)=>assigned[index%regular.length].push(topic.trim()));
+  assigned.forEach((bucket,index)=>{if(!bucket.length)bucket.push(topics[index%topics.length].trim());});
+  let index=0;
+  return slots.map(slot=>slot.extra ? slot : {...slot,topics:assigned[index++]});
+}
 
 export function campaignDate(start: string, day: number) {
   const date = new Date(`${start}T12:00:00Z`);

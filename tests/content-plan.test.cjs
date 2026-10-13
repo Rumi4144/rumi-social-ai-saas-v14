@@ -9,6 +9,13 @@ function load(file,deps={}) {
 const plan=load('lib/campaign/content-plan.ts');
 const mix=['post','reel_post','presenter_post'];
 const calendar=(days,start='2026-11-01')=>Array.from({length:days},(_,i)=>({day:i+1,date:plan.campaignDate(start,i+1).toISOString().slice(0,10),platforms:['facebook'],contentType:plan.contentTypeForDay(i+1,mix)}));
+test('topics rotate through regular drafts and never replace special occasions',()=>{
+ const slots=plan.buildContentPlan(calendar(7),7,[{date:'2026-11-04',label:'Kindness event'}]);
+ const result=plan.applyCampaignTopics(slots,['Relaxation','Confidence','Habits']);
+ assert.equal(result[0].topics[0],'Relaxation');assert.equal(result[1].topics[0],'Confidence');assert.equal(result[3].topics[0],'Relaxation');assert.equal(result.at(-1).topics,undefined);
+ const one=plan.applyCampaignTopics(slots.slice(0,1),['Relaxation','Confidence']);assert.equal(one[0].topics.length,2);
+ assert.throws(()=>plan.applyCampaignTopics(slots,['Confidence','confidence']));
+});
 test('AI instructions preserve exact requested slots without extra platform entries or bonus Stories',async()=>{
  let request;
  const ai=load('lib/ai/campaign.ts',{

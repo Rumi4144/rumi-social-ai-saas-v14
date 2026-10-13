@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { briefSuggestions, type BriefSuggestion } from "@/lib/campaign/brief-suggestions";
-import { CONTENT_TYPES, campaignDate, newYorkToday, buildQuantityContentPlan, contentTypeLabel, specialDayForDate, type ContentQuantities, type SpecialDay } from "@/lib/campaign/content-plan";
+import { briefSuggestions, mixedTopicBrief, type BriefSuggestion } from "@/lib/campaign/brief-suggestions";
+import { CONTENT_TYPES, campaignDate, newYorkToday, buildQuantityContentPlan, applyCampaignTopics, contentTypeLabel, specialDayForDate, type ContentQuantities, type SpecialDay } from "@/lib/campaign/content-plan";
 
 export default function Create() {
   const [brief, setBrief] = useState("");
-  const [suggestionContext, setSuggestionContext] = useState<{organizationId:string;brandName:string;suggestions:BriefSuggestion[]}|null>(null);
+  const [suggestionContext, setSuggestionContext] = useState<{organizationId:string;brandName:string;website?:string|null;source?:string;suggestions:BriefSuggestion[]}|null>(null);
+  const [appliedTopics, setAppliedTopics] = useState<string[]>([]);
+  const [mixTopics, setMixTopics] = useState(true);
+  const [selectedTopics, setSelectedTopics] = useState<string[]|null>(null);
+  const [readingWebsite, setReadingWebsite] = useState(false);
+  const [topicStatus, setTopicStatus] = useState("");
   const [suggestionsLoading, setSuggestionsLoading] = useState(true);
   useEffect(()=>{
     let active = true;
@@ -64,8 +69,8 @@ export default function Create() {
   const totalQuantity = CONTENT_TYPES.reduce((sum, type) => sum + quantities[type.value], 0);
   const validQuantities = totalQuantity > 0 && totalQuantity <= 60;
   const quantityCalendar = Array.from({length:days}, (_,index)=>({day:index+1,date:dateForDay(index+1).toISOString().slice(0,10),platforms:platformsForDay(index+1)}));
-  const quantitySlots = validQuantities ? buildQuantityContentPlan(quantityCalendar, days, quantities) : [];
-  const contentForDay = (day:number) => quantitySlots.filter(slot=>slot.day===day).map(slot=>contentTypeLabel(slot.type)).join(" · ") || "No regular drafts planned";
+  const quantitySlots = validQuantities ? applyCampaignTopics(buildQuantityContentPlan(quantityCalendar, days, quantities), appliedTopics) : [];
+  const contentForDay = (day:number) => quantitySlots.filter(slot=>slot.day===day).map(slot=>contentTypeLabel(slot.type) + (slot.topics?.length ? `: ${slot.topics.join(", ")}` : "")).join(" · ") || "No regular drafts planned";
   const suggestedDays = campaignStartDate ? Array.from({length: days}, (_, index) => {
     const date = dateForDay(index + 1), label = specialDayForDate(date);
     return label ? {date: date.toISOString().slice(0,10), label} : null;
@@ -152,7 +157,6 @@ export default function Create() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          organizationId: suggestionContext?.organizationId,
           url: productUrl.trim(),
         }),
       });
@@ -197,6 +201,8 @@ export default function Create() {
           "content-type": "application/json",
         },
         body: JSON.stringify({
+          organizationId: suggestionContext?.organizationId,
+          campaignTopics: appliedTopics,
           brief,
           goal,
           days,
@@ -361,6 +367,27 @@ export default function Create() {
     }
   }
 
+  const topicIdeas = suggestionContext?.suggestions || briefSuggestions({name:"your business"});
+  const chosenTopics = topicIdeas.filter(idea => selectedTopics === null || selectedTopics.includes(idea.label));
+  async function readWebsiteTopics() {
+    if (!suggestionContext || busy || readingWebsite) return;
+    setReadingWebsite(true); setTopicStatus("Reading topic ideas from this business’s website…");
+    try {
+      const response = await fetch("/api/campaigns/brief-suggestions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({organizationId:suggestionContext.organizationId})});
+      const data = await response.json();
+      if(!response.ok)throw new Error(data.error || "Could not read website topics.");
+      setSuggestionContext(data); setSelectedTopics(null);setTopicStatus("Website topics loaded. Choose the ones you want, then fill the brief.");
+    }catch(error){setTopicStatus(error instanceof Error ? error.message : "Could not read website topics.");}
+    finally{setReadingWebsite(false);}
+  }
+  function useMixedTopics() {
+    if(!chosenTopics.length)return;
+    const sourceLinks=[...new Set(chosenTopics.map(idea=>idea.sourceUrl).filter(Boolean))];
+    setBrief(mixedTopicBrief(suggestionContext?.brandName || "your business",chosenTopics.map(idea=>idea.label)) + (sourceLinks.length ? ` Website pages for these topics: ${JSON.stringify(sourceLinks)}.` : ""));
+    setAppliedTopics(chosenTopics.map(idea=>idea.label));
+    setGoal("education");
+  }
+
   return (
     <>
       <div className="eyebrow">CREATE EVERYTHING · V3</div>
@@ -370,8 +397,20 @@ export default function Create() {
       <div className="form">
         <section aria-label="Campaign ideas" style={{marginBottom:20}}>
           <h3>Need an idea? Choose a starting point.</h3>
-          <p>{suggestionContext ? `Suggestions for ${suggestionContext.brandName}.` : suggestionsLoading ? "Loading ideas for your workspace…" : "Choose a general idea, then add your business details."} Click an idea to fill the box below. You can edit it before creating your drafts.</p>
-          {!suggestionsLoading && <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>{(suggestionContext?.suggestions || briefSuggestions({name:"your business"})).map(suggestion=><button type="button" key={suggestion.label} disabled={busy} onClick={()=>{setBrief(suggestion.brief);setGoal(suggestion.goal);}}>{suggestion.label}</button>)}</div>}
+          <p>{suggestionContext ? `Ideas for ${suggestionContext.brandName}.` : suggestionsLoading ? "Loading ideas for your workspace…" : "Choose general ideas, then add your business details."} Use several topics for variety, or turn off the mix for a single-topic campaign.</p>
+          {suggestionContext?.website && <button type="button" disabled={busy || readingWebsite} onClick={readWebsiteTopics}>{readingWebsite ? "Reading website…" : "Find topics from my website"}</button>}
+          {suggestionContext && !suggestionContext.website && <p>Add your website in <a href="/brand">Brand Brain</a> to find website topics.</p>}
+          {suggestionContext?.source === "website" && <p>These topics come from this business’s website headings and linked pages. Review them before using.</p>}
+          {topicStatus && <p role="status">{topicStatus}</p>}
+          {!suggestionsLoading && <>
+            <label style={{display:"flex",alignItems:"center",gap:8,marginTop:16,marginBottom:12}}><input type="checkbox" style={{width:18,height:18,margin:0}} checked={mixTopics} disabled={busy} onChange={e=>setMixTopics(e.target.checked)}/> Mix topics across this campaign</label>
+            {mixTopics ? <>
+              <p>Select or deselect topics. The campaign will alternate them and explore different angles over longer periods.</p>
+              <div style={{display:"grid",gap:10}}>{topicIdeas.map(idea=><label key={idea.label} style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" style={{width:18,height:18,margin:0}} disabled={busy} checked={selectedTopics === null || selectedTopics.includes(idea.label)} onChange={()=>setSelectedTopics(current=>{const selected=current||topicIdeas.map(topic=>topic.label);return selected.includes(idea.label)?selected.filter(label=>label!==idea.label):[...selected,idea.label];})}/>{idea.label}{idea.sourceUrl && <a href={idea.sourceUrl} target="_blank" rel="noreferrer" style={{fontWeight:400}}>View source</a>}</label>)}</div>
+              <button type="button" style={{marginTop:16}} disabled={busy || !chosenTopics.length} onClick={useMixedTopics}>Fill brief with {chosenTopics.length} selected topics</button>
+            </> : <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>{topicIdeas.map(idea=><button type="button" key={idea.label} disabled={busy} onClick={()=>{setBrief(idea.brief);setAppliedTopics([]);setGoal(idea.goal);}}>{idea.label}</button>)}</div>}
+            <p>You can edit the brief below. Editing it switches to your custom instructions. Choosing topics does not generate content or spend credits.</p>
+          </>}
         </section>
         <label htmlFor="campaign-brief">What do you want to promote?</label>
 
@@ -379,7 +418,7 @@ export default function Create() {
           id="campaign-brief"
           rows={6}
           value={brief}
-          onChange={(e) => setBrief(e.target.value)}
+          onChange={(e) => {setBrief(e.target.value);setAppliedTopics([]);}}
           placeholder="Describe the product, service, or topic you want this campaign to promote…"
         />
 
