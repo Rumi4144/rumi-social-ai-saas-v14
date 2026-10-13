@@ -30,6 +30,9 @@ test('campaign scene plan opens four timed scenes with concise captions and a fi
  assert.equal(result.scenes.length,4);assert.deepEqual(Array.from(result.scenes,s=>s.seconds),[3,4,4,4]);assert.equal(timeline.reelDuration(result),15);
  assert.equal(result.scenes[0].headline,'When your thoughts feel busy...');assert.equal(result.scenes[0].detail,'');assert.match(result.scenes[0].direction,/restless hands/);
  assert.ok(result.scenes.every(s=>s.src==='/own'));assert.equal(result.closingSeconds,0);
+ data.sources.push({id:'generated-scene2',src:'/scene2-photo',kind:'image',contentItemId:'own',sceneId:'own-planned-2'});
+ const reopened=context.selectedPostProject(data,'own').project;
+ assert.equal(reopened.scenes[1].src,'/scene2-photo');assert.equal(reopened.scenes[0].src,'/own');assert.equal(reopened.scenes[2].src,'/own');
  const last=timeline.frameAt(result,15);assert.equal(last.closing,false);assert.equal(last.progress,1);
 });
 test('scene parser rejects incomplete, overlapping and oversized plans rather than inventing timing',()=>{

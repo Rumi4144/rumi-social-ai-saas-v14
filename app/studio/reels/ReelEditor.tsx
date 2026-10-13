@@ -7,6 +7,7 @@ import { REEL_STYLES, frameAt, reelDuration, type ReelProject, type ReelScene, t
 import { loadDraft, saveDraft } from "@/lib/reels/drafts";
 import WeeklyReels from "./WeeklyReels";
 import MusicControls from "./MusicControls";
+import ScenePhotoControls from "./ScenePhotoControls";
 import { DEFAULT_MUSIC_VOLUME, musicSettings, type MusicChoice } from "@/lib/reels/music";
 import styles from "./ReelEditor.module.css";
 import { appendScenes, mergeSources, restoreLibrary, uploadSelection } from "@/lib/reels/source-library";
@@ -192,6 +193,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         </div>)}</div>
         {project.scenes.length === 1 && <p className={styles.hint}>One photo selected. It appears once in the collage. Add another photo for a multi-photo layout.</p>}
         {project.scenes.map((scene, index) => <div key={scene.id} style={{ borderTop: "1px solid #7775", marginTop: 20, paddingTop: 14 }}><h3>Scene {index + 1}</h3>
+          <ScenePhotoControls organizationId={organizationId} campaignId={campaignId} contentItemId={contentItemId} sceneId={scene.id} sceneNumber={index+1} direction={scene.direction ?? `${scene.headline}. ${scene.detail}`} disabled={busy || previewing || loadingPhotos} onBusy={setBusy} onDirection={direction=>changeScene(index,{direction})} onPhoto={source=>{setSources(old=>mergeSources(old,[source]));setProject(old=>({...old,scenes:old.scenes.map(item=>item.id===scene.id?{...item,src:source.src,kind:"image"}:item)}));setRendered(undefined);setSavedAsset("");request.current=undefined;}}/>
           <label>Photo or clip<select value={scene.src} onChange={event => { const source = sources.find(source => source.src === event.target.value); if (source) changeScene(index, { src: source.src, kind: source.kind, seconds: scene.seconds }); }}>{!sources.some(source => source.src === scene.src) && <option value={scene.src}>Current {scene.kind}</option>}{sources.map((source, i) => <option key={source.id} value={source.src}>{source.label || `${source.kind === "video" ? "Video clip" : "Photo"} ${i + 1}`}</option>)}</select></label>
           {scene.direction && <p><strong>Planned shot:</strong> {scene.direction}</p>}
           <label>Headline<input value={scene.headline} maxLength={120} onChange={event => changeScene(index, { headline: event.target.value })} /></label>

@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   try {
     const ctx = await tenantContext(), query = new URL(req.url).searchParams;
     let source: string | null = null;
-    if (query.get("assetId")) source = (await prisma.mediaAsset.findFirst({ where: { id: query.get("assetId")!, organizationId: ctx.organizationId, kind: { in: ["ai_image", "product_photo"] }, status: "ready" } }))?.url || null;
+    if (query.get("assetId")) source = (await prisma.mediaAsset.findFirst({ where: { id: query.get("assetId")!, organizationId: ctx.organizationId, kind: { in: ["ai_image", "product_photo", "reel_scene_image"] }, status: "ready" } }))?.url || null;
     else if (query.get("brandId")) source = (await prisma.brand.findFirst({ where: { id: query.get("brandId")!, organizationId: ctx.organizationId } }))?.logoUrl || null;
     if (!source) return new NextResponse("Image not found", { status: 404 });
     let bytes: Buffer;
