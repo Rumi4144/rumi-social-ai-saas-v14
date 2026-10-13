@@ -5,6 +5,7 @@ import { recentBrandConcepts } from "@/lib/ai/visual-history";
 import { generateCampaign } from "@/lib/ai/campaign";
 import { applyContentPlan, type ContentSlot } from "@/lib/campaign/content-plan";
 import { renderSocialSvg } from "@/lib/render/svg";
+import { occasionVisualConcept, savedPostOccasion } from "@/lib/ai/occasion";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
 import { buildVisualConcept, isSubjectCategory, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "@/lib/ai/visual-plan";
 import { imageToJpegDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
@@ -154,6 +155,7 @@ export async function POST(req: Request) {
         visualConcept?: VisualConcept;
         businessContext?: VisualBusinessContext;
         recentConcepts?: RecentVisualConcept[];
+        occasion?: string;
       };
 
       const format = p.format || "portrait";
@@ -183,6 +185,13 @@ export async function POST(req: Request) {
       targetAudience: visualBrand.targetAudience || p.businessContext?.targetAudience,
     };
 
+    let occasion = p.occasion;
+    if (visualContentItem.type === "holiday_post" && !occasion) {
+      const planningJob = await prisma.job.findFirst({where:{organizationId:job.organizationId,type:"CREATE_EVERYTHING",status:"succeeded",payload:{path:["campaignId"],equals:p.campaignId}},orderBy:{createdAt:"desc"},select:{payload:true,result:true}});
+      occasion = savedPostOccasion(planningJob?.payload,planningJob?.result,visualContentItem) || visualContentItem.headline || "This post's special day";
+    }
+    if (visualContentItem.type === "holiday_post" && p.sourceImageUrl) throw new Error("This special-day draft needs an occasion photo. Generate a matching image instead of reusing an unrelated website photo.");
+
     const visualDirectorPrompt = buildVisualDirection({
       brand: {
         name: visualBrand.name,
@@ -194,6 +203,7 @@ export async function POST(req: Request) {
         accentColor: visualBrand.accentColor,
         designStyle: visualBrand.designStyle,
       },
+      occasion,
       campaignGoal: visualCampaign.goal,
       platform: visualContentItem.platform,
       contentType: visualContentItem.type,
@@ -273,6 +283,7 @@ export async function POST(req: Request) {
           format,
           size,
           subjectCategory: p.visualConcept?.subjectCategory || "unrecorded",
+          occasion: occasion || null,
         },
       };
 
@@ -494,7 +505,8 @@ export async function POST(req: Request) {
           : [];
 
       for (const x of pack.posts) {
-      const concept = buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });
+      const occasion = p.contentPlan?.find(slot=>slot.planKey===x.planKey && slot.extra)?.occasion;
+      const concept = occasion ? occasionVisualConcept(occasion) : buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });
       const priorConcepts = plannedConcepts.slice(-6);
       plannedConcepts.push({ subjectCategory: concept.subjectCategory, direction: `${concept.direction} Campaign direction: ${x.visualDirection}` });
       const scheduledDay = p.dailyPlan?.find(
@@ -521,7 +533,7 @@ export async function POST(req: Request) {
         });
 
         if (
-          p.photoSource !== "none" && (
+          p.photoSource !== "none" && !(x.type === "holiday_post" && p.photoSource === "website") && (
         x.visualDirection?.trim() ||
         x.headline?.trim() ||
         x.caption?.trim() ||
@@ -539,6 +551,7 @@ export async function POST(req: Request) {
                 visualConcept: concept,
                 recentConcepts: priorConcepts,
                 originalDirection: x.visualDirection,
+                occasion: occasion || undefined,
                 sourceImageUrl:
                   p.photoSource === "website" && websitePhotos.length > 0
                     ? websitePhotos[websitePhotoIndex % websitePhotos.length]

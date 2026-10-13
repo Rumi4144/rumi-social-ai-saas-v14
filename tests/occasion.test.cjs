@@ -1,0 +1,31 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript'),path=require('node:path');
+function load(file,deps={},cache=new Map()){file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;const module={exports:{}};cache.set(file,module);const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;vm.runInNewContext(js,{module,exports:module.exports,process,Date,Intl,require:n=>n in deps?deps[n]:n.startsWith('.')||n.startsWith('@/')?load(n.startsWith('@/')?path.resolve(n.slice(2)+'.ts'):path.resolve(path.dirname(file),n+'.ts'),deps,cache):require(n)});return module.exports;}
+const occasion=load('lib/ai/occasion.ts'),plan=load('lib/campaign/content-plan.ts'),director=load('lib/ai/visual-director.ts');
+test('all eleven US federal holidays are available on their calendar dates in 2026 and 2027',()=>{
+ const holidays={
+  2026:{'01-01':"New Year's Day",'01-19':'Martin Luther King Jr. Day','02-16':'Presidents Day','05-25':'Memorial Day','06-19':'Juneteenth','07-04':'Independence Day','09-07':'Labor Day','10-12':'Columbus Day','11-11':'Veterans Day','11-26':'Thanksgiving','12-25':'Christmas Day'},
+  2027:{'01-01':"New Year's Day",'01-18':'Martin Luther King Jr. Day','02-15':'Presidents Day','05-31':'Memorial Day','06-19':'Juneteenth','07-04':'Independence Day','09-06':'Labor Day','10-11':'Columbus Day','11-11':'Veterans Day','11-25':'Thanksgiving','12-25':'Christmas Day'},
+ };
+ for(const [year,dates] of Object.entries(holidays))for(const [date,label] of Object.entries(dates)){assert.equal(plan.specialDayForDate(new Date(`${year}-${date}T12:00:00Z`)),label);assert.match(occasion.occasionVisualConcept(label).direction,/OCCASION PHOTO/);}
+});
+test('occasion subjects override industry product heroes and generic wellness rotations',()=>{
+ const input={brand:{name:'Rumi Guitars'},businessContext:{industry:'Guitar retail'},visualConcept:{subjectCategory:'product',direction:'A full guitar product hero'},occasion:'Thanksgiving',visualDirection:'An everyday coffee cup'};
+ const prompt=director.buildVisualDirection(input);assert.match(prompt,/Thanksgiving table/);assert.match(prompt,/SPECIAL-DAY PRIORITY/);assert.match(prompt,/takes priority over generic campaign subjects/);assert.doesNotMatch(prompt,/A full guitar product hero/);
+ const kind=director.buildVisualDirection({...input,brand:{name:'Master Mind'},businessContext:{industry:'Hypnosis'},occasion:'World Kindness Day'});assert.match(kind,/act of kindness/);assert.doesNotMatch(kind,/Rumi Guitars/);
+ assert.match(occasion.occasionVisualConcept('Memorial Day').direction,/no party, fireworks or sales celebration/);
+ assert.match(occasion.occasionVisualConcept('Our open day').direction,/Do not invent the details/);
+});
+test('saved occasion is read only from the matching holiday slot, not another post or a forged label',()=>{
+ const post={type:'holiday_post',headline:'A kind moment',caption:'Community message',planKey:'extra-1'};
+ const payload={contentPlan:[{planKey:'regular',extra:false,occasion:null},{planKey:'extra-1',extra:true,occasion:'World Kindness Day'}]};
+ assert.equal(occasion.savedPostOccasion(payload,{posts:[post]},post),'World Kindness Day');
+ assert.equal(occasion.savedPostOccasion(payload,{posts:[post]},{...post,type:'post'}),undefined);
+ assert.equal(occasion.savedPostOccasion(payload,{posts:[post]},{...post,headline:'Other'}),undefined);
+});
+test('regenerating an existing holiday photo retrieves its saved occasion within the current tenant',async()=>{
+ let providerPrompt,stored;
+ const post={id:'post',type:'holiday_post',headline:'A kind moment',caption:'Community message',campaign:{goal:'education',brand:{id:'mind',name:'Master Mind',industry:'Hypnosis'}}};
+ const prisma={contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'own');return post;}},onboardingState:{findUnique:async()=>({businessType:'service'})},job:{findFirst:async q=>{assert.equal(q.where.organizationId,'own');assert.equal(q.where.payload.equals,'campaign');return {payload:{contentPlan:[{planKey:'extra',extra:true,occasion:'World Kindness Day'}]},result:{posts:[{...post,planKey:'extra'}]}};},create:async()=>{}},mediaAsset:{findFirst:async()=>null,create:async q=>{stored=q.data;return {id:'new-photo'};}}};
+ const api=load('app/api/creative/generate-image/route.ts',{'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},'@/lib/prisma':{prisma},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'own'})},'@/lib/ai/visual-history':{recentBrandConcepts:async()=>[]},openai:class {images={generate:async q=>{providerPrompt=q.prompt;return {data:[{b64_json:'mock-only'}]};}}}});
+ const prior=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='mock';try{const r=await api.POST({json:async()=>({campaignId:'campaign',contentItemId:'post',prompt:'Make a fresh photo'})});assert.equal(r.status,200);assert.match(providerPrompt,/act of kindness/);assert.equal(stored.metadata.occasion,'World Kindness Day');}finally{if(prior===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=prior;}
+});

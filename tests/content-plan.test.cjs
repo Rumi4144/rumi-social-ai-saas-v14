@@ -76,7 +76,7 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
   const api=load('app/api/jobs/run/route.ts',{
    'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},openai:class {},
    '@/lib/prisma':{prisma:{job:{findFirst:async()=>job,updateMany:async()=>({count:1}),update:async()=>{}},campaign:{findUnique:async q=>{assert.equal(q.where.brand.organizationId,'master-mind');return {id:'campaign',brandId:'brand',brand:{name:'Master Mind',description:'Hypnosis service'}};}},$transaction:async fn=>{transactions++;return fn(tx);}}},
-   '@/lib/campaign/content-plan':plan,'@/lib/ai/visual-history':{recentBrandConcepts:async()=>[]},
+   '@/lib/ai/occasion':load('lib/ai/occasion.ts'),'@/lib/campaign/content-plan':plan,'@/lib/ai/visual-history':{recentBrandConcepts:async()=>[]},
    '@/lib/ai/campaign':{generateCampaign:async()=>{const p=pack();if(invalid)p.posts[1].planKey=p.posts[0].planKey;return p;}},
    '@/lib/render/svg':{},'@/lib/render/raster':{},'@/lib/ai/visual-director':{},
    '@/lib/ai/visual-plan':{buildVisualConcept:()=>({subjectCategory:'human',direction:'Service scene'})},
@@ -85,6 +85,8 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
   assert.equal((await api.POST(req)).status,200);assert.equal(items.length,9);assert.equal(items[8].type,"story_post");assert.equal(media.length,0);assert.equal(items[1].type,'reel_post');assert.equal(items[1].platform,'');assert.equal(items[2].type,'presenter_post');assert.equal(items[7].type,'holiday_post');assert.equal(items[3].scheduledFor.getTime(),items[7].scheduledFor.getTime());assert.ok(items.every(i=>i.status==='draft'));assert.equal(result.result.posts[2].visualDirection,'Scene and spoken plan');
   invalid=true;assert.equal((await api.POST(req)).status,500);assert.equal(transactions,1);
   invalid=false;job.payload.photoSource="ai";assert.equal((await api.POST(req)).status,200);assert.equal(media.length,9);assert.equal(media.filter(j=>j.data.payload.format==="story").length,1);
+  const extraJob=media.find(j=>j.data.payload.occasion);assert.equal(extraJob.data.payload.occasion,'Kindness event');assert.match(extraJob.data.payload.visualConcept.direction,/Kindness event/);
+  media.length=0;job.payload.photoSource="website";job.payload.imageUrls=['https://business.example/product.jpg'];assert.equal((await api.POST(req)).status,200);assert.equal(media.length,8);assert.ok(media.every(j=>!j.data.payload.occasion));
  } finally {if(previous===undefined)delete process.env.WORKER_SECRET;else process.env.WORKER_SECRET=previous;}
 });
 for(const route of ['schedule','now']) test(`${route} refuses unfinished reel and presenter drafts before accessing publishing accounts`,async()=>{

@@ -1,4 +1,5 @@
 import { buildVisualConcept, buildVisualPlanPrompt, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "./visual-plan";
+import { occasionVisualConcept } from "./occasion";
 
 type BrandVisualInput = {
   name: string;
@@ -22,6 +23,7 @@ type VisualDirectorInput = {
   businessContext?: VisualBusinessContext;
   visualConcept?: VisualConcept;
   recentConcepts?: RecentVisualConcept[];
+  occasion?: string | null;
 };
 
 const treatments = [
@@ -92,6 +94,7 @@ export function buildVisualDirection(
     businessContext = {},
     visualConcept,
     recentConcepts = [],
+    occasion,
   } = input;
 
   const index = Math.abs(variationIndex);
@@ -142,7 +145,9 @@ Use ${composition}.
 ORIGINAL CREATIVE DIRECTION
 ${visualDirection || "Interpret the campaign message visually."}
 
-${buildVisualPlanPrompt({ businessContext, concept: visualConcept || buildVisualConcept({ businessContext, variationIndex, recentConcepts }), recentConcepts })}
+${buildVisualPlanPrompt({ businessContext, concept: occasion ? occasionVisualConcept(occasion) : visualConcept || buildVisualConcept({ businessContext, variationIndex, recentConcepts }), recentConcepts })}
+
+${occasion ? `SPECIAL-DAY PRIORITY — AUTHORITATIVE\nOccasion: ${occasion}\nThe occasion-specific subject plan above takes priority over generic campaign subjects, product-hero instructions, and the general abstract-object filter below. Appropriate holiday symbols and decorations are intentional subjects. Do not merely add a holiday caption to an unrelated photo. Respect the tone of remembrance days; do not treat them as sales celebrations. Generate a fresh occasion-specific photo, not a recycled regular campaign photo.` : ""}
 
 COLOR INTELLIGENCE
 Choose a palette appropriate to this specific brand, audience and message.

@@ -3,6 +3,7 @@ import { z } from "zod";
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
+import { occasionVisualConcept, savedPostOccasion } from "@/lib/ai/occasion";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
 import { buildVisualConcept } from "@/lib/ai/visual-plan";
 import { recentBrandConcepts } from "@/lib/ai/visual-history";
@@ -39,8 +40,13 @@ export async function POST(req: Request) {
     const onboarding = await prisma.onboardingState.findUnique({ where: { organizationId: ctx.organizationId }, select: { businessType: true } });
     const businessContext = { businessType: onboarding?.businessType, industry: brand.industry, description: brand.description, targetAudience: brand.targetAudience };
     const recentConcepts = await recentBrandConcepts(ctx.organizationId, brand.id);
-    const concept = buildVisualConcept({ businessContext, variationIndex: recentConcepts.length, recentConcepts });
-    const prompt = buildVisualDirection({ brand, businessContext, campaignGoal: contentItem.campaign.goal, headline: contentItem.headline, contentType: contentItem.type, platform: contentItem.platform, visualDirection: p.data.prompt, visualConcept: concept, recentConcepts, variationIndex: recentConcepts.length });
+    let occasion: string | undefined;
+    if (contentItem.type === "holiday_post") {
+      const planningJob = await prisma.job.findFirst({where:{organizationId:ctx.organizationId,type:"CREATE_EVERYTHING",status:"succeeded",payload:{path:["campaignId"],equals:p.data.campaignId}},orderBy:{createdAt:"desc"},select:{payload:true,result:true}});
+      occasion = savedPostOccasion(planningJob?.payload,planningJob?.result,contentItem) || contentItem.headline || "This post's special day";
+    }
+    const concept = occasion ? occasionVisualConcept(occasion) : buildVisualConcept({ businessContext, variationIndex: recentConcepts.length, recentConcepts });
+    const prompt = buildVisualDirection({ brand, businessContext, occasion, campaignGoal: contentItem.campaign.goal, headline: contentItem.headline, contentType: contentItem.type, platform: contentItem.platform, visualDirection: p.data.prompt, visualConcept: concept, recentConcepts, variationIndex: recentConcepts.length });
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
@@ -103,6 +109,7 @@ export async function POST(req: Request) {
         format: p.data.format,
         size,
         subjectCategory: concept.subjectCategory,
+        occasion: occasion || null,
       },
     };
 
@@ -117,7 +124,7 @@ export async function POST(req: Request) {
 
     await prisma.job.create({ data: {
       organizationId: ctx.organizationId, type: "GENERATE_IMAGE", status: "succeeded", progress: 100,
-      payload: { campaignId: p.data.campaignId, contentItemId: p.data.contentItemId, visualConcept: concept, originalDirection: p.data.prompt, format: p.data.format },
+      payload: { campaignId: p.data.campaignId, contentItemId: p.data.contentItemId, visualConcept: concept, occasion: occasion || null, originalDirection: p.data.prompt, format: p.data.format },
       result: { assetId: asset.id, regenerated: true },
     } });
 

@@ -25,7 +25,7 @@ export default function Create() {
   const [goal, setGoal] = useState("launch");
   const [days, setDays] = useState(7);
   const [quantities, setQuantities] = useState<ContentQuantities>({post:2,reel_post:4,story_post:7,presenter_post:1});
-  const [includeSpecialDays, setIncludeSpecialDays] = useState(false);
+  const [includeSpecialDays, setIncludeSpecialDays] = useState(true);
   const [excludedSpecialDays, setExcludedSpecialDays] = useState<string[]>([]);
   const [customSpecialDays, setCustomSpecialDays] = useState<SpecialDay[]>([]);
   const [specialDate, setSpecialDate] = useState("");
@@ -680,7 +680,9 @@ export default function Create() {
         <section style={{marginTop:24}} aria-label="Extra holiday and special-day posts">
           <h3>Extra holiday and special-day posts</h3>
           <label style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" style={{width:18,height:18,margin:0}} checked={includeSpecialDays} disabled={busy} onChange={e=>setIncludeSpecialDays(e.target.checked)}/> Add extra posts for selected occasions</label>
-          <p>U.S. holidays and wellness observances are suggestions. Choose only those relevant to this workspace. Extra posts are added alongside your regular daily content.</p>
+          <p>U.S. national holidays and wellness observances within your campaign dates are selected by default. Uncheck any you do not want. Extra posts are added alongside your regular content, with photos directed to match each occasion.</p>
+          <details><summary>Included U.S. national holidays</summary><p>New Year's Day, Martin Luther King Jr. Day, Presidents Day, Memorial Day, Juneteenth, Independence Day, Labor Day, Columbus Day, Veterans Day, Thanksgiving and Christmas Day.</p><p>Posts use the holiday's actual calendar date. Wellness and kindness days are included separately when they fall within your campaign dates.</p></details>
+          <p>Draft-only campaigns do not generate photos automatically. With website photos, special-day drafts wait for an occasion photo rather than recycling an unrelated product photo.</p>
           {includeSpecialDays && <>
             {!availableSpecialDays.length && <p>No suggested dates in this period. You can add your own below.</p>}
             {availableSpecialDays.map(day => <div key={specialKey(day)}><label style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><input type="checkbox" style={{width:18,height:18,margin:0}} disabled={busy} checked={!excludedSpecialDays.includes(specialKey(day))} onChange={()=>setExcludedSpecialDays(current=>current.includes(specialKey(day))?current.filter(key=>key!==specialKey(day)):[...current,specialKey(day)])}/> {day.date} · {day.label}</label></div>)}
