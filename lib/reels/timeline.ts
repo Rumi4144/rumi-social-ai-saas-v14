@@ -7,7 +7,7 @@ export const REEL_STYLES = [
   { value: "split", label: "Split-screen details", description: "Two different scene photos side by side, or one large photo when only one is available." },
 ] as const;
 export type ReelStyle = typeof REEL_STYLES[number]["value"];
-export type ReelScene = { id: string; src: string; kind: "image" | "video"; headline: string; detail: string; seconds: number };
+export type ReelScene = { id: string; src: string; kind: "image" | "video"; headline: string; detail: string; seconds: number; direction?: string };
 export type ReelProject = { brand: string; website: string; cta: string; color: string; accent: string; style: ReelStyle; logo?: string; scenes: ReelScene[]; closingSeconds: number };
 export const REEL_WIDTH = 1080, REEL_HEIGHT = 1920;
 export function distinctSceneIndexes(scenes: ReelScene[], current: number, limit = 3) {
@@ -26,6 +26,7 @@ export function frameAt(project: ReelProject, time: number) {
     if (time < start + scene.seconds) return { index, start, elapsed: Math.max(0, time - start), progress: Math.max(0, Math.min(1, (time - start) / scene.seconds)), closing: false };
     start += scene.seconds;
   }
+  if(project.closingSeconds<=0)return {index:project.scenes.length-1,start,elapsed:project.scenes.at(-1)?.seconds||0,progress:1,closing:false};
   return { index: project.scenes.length - 1, start, elapsed: Math.max(0, time - start), progress: Math.max(0, Math.min(1, (time - start) / project.closingSeconds)), closing: true };
 }
 export function safeColor(color: string, fallback: string) { return /^#[a-f0-9]{6}$/i.test(color) ? color : fallback; }

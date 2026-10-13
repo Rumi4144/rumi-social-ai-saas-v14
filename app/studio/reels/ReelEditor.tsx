@@ -12,7 +12,7 @@ import styles from "./ReelEditor.module.css";
 import { appendScenes, mergeSources, restoreLibrary, uploadSelection } from "@/lib/reels/source-library";
 import {reelDraftKey,selectedPostProject,matchingDraft,type ReelSource} from "@/lib/reels/post-context";
 type Source = ReelSource;
-type Post = { id: string; headline: string | null; caption: string | null };
+type Post = { id: string; headline: string | null; caption: string | null; visualDirection?: string | null };
 const empty: ReelProject = { brand: "", website: "", cta: "Explore more", color: "#132342", accent: "#dec184", style: "editorial", scenes: [], closingSeconds: 3 };
 
 export default function ReelEditor({ initialCampaignId, initialContentItemId, initialCampaigns }: { initialCampaignId: string; initialContentItemId: string; initialCampaigns?: { id: string; title: string }[] }) {
@@ -31,6 +31,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const canvas = useRef<HTMLCanvasElement>(null), media = useRef<ReelMedia[]>([]), logo = useRef<HTMLImageElement | undefined>(undefined), playTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const controller = useRef<AbortController | undefined>(undefined), localFiles = useRef(new Map<string, Blob>()), localUrls = useRef(new Set<string>());
   const request = useRef<{ pathname: string; blob: Blob } | undefined>(undefined);
+  const [campaignScenePlan, setCampaignScenePlan] = useState<ReelProject | null>(null);
   const draftKey = reelDraftKey(organizationId,campaignId,contentItemId);
   const ownUrl = (blob: Blob) => { const url = URL.createObjectURL(blob); localUrls.current.add(url); return url; };
   const finishPreview = () => { if (playTimer.current) clearInterval(playTimer.current); playTimer.current = undefined; media.current.forEach(item => { if (item instanceof HTMLVideoElement) item.pause(); }); setPreviewing(false); };
@@ -50,11 +51,13 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   useEffect(() => {
     photoController.current?.abort(); photoController.current = undefined; setLoadingPhotos(false); setPhotoMessage(""); setProductUrl("");
     if (!campaignId) { setOrganizationId(""); setLoadingProject(false); return; }
-    let disposed = false; setLoadingProject(true); finishPreview(); setMessage(""); setProject(empty); setSources([]); setPosts([]); setOrganizationId(""); setContentItemId(""); setRendered(undefined); setSavedAsset(""); request.current=undefined;
+    let disposed = false; setLoadingProject(true); finishPreview(); setMessage(""); setCampaignScenePlan(null); setProject(empty); setSources([]); setPosts([]); setOrganizationId(""); setContentItemId(""); setRendered(undefined); setSavedAsset(""); request.current=undefined;
     fetch(`/api/reels/project?campaignId=${encodeURIComponent(campaignId)}${requestedPostId?`&contentItemId=${encodeURIComponent(requestedPostId)}`:""}`, { cache: "no-store", signal: AbortSignal.timeout(15000) }).then(async response => {
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not load campaign."); if (disposed) return;
       const context=selectedPostProject(data,requestedPostId);
       let next=context.project;
+      setCampaignScenePlan(context.project.scenes.some(scene=>scene.direction) ? context.project : null);
+      if(context.project.scenes.some(scene=>scene.direction))setMessage("Campaign scenes loaded. Existing photos are placeholders for the planned shots; replace them with your own matching photos or clips.");
       let library: Source[] = data.sources.filter((source: Source) => source.contentItemId === context.post.id);
       const stored = await loadDraft(reelDraftKey(data.organizationId,campaignId,context.post.id)).catch(() => undefined);
       if(disposed)return;
@@ -173,7 +176,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     {!loadingCampaigns && !campaigns.length && <section className="card"><h2>No campaigns available in this workspace</h2><p>Open an existing campaign from the Campaigns page, or create a campaign first to use its photos and save your reel.</p><a href="/campaigns">Open Campaigns</a> · <a href="/create">Create a campaign</a></section>}
     {!organizationId && <button type="button" disabled={loadingCampaigns || loadingProject} onClick={refreshCampaigns}>Refresh campaigns</button>}
     {campaignId && organizationId && <div className={styles.layout}>
-      <section className="card"><h2>Your scenes</h2><fieldset disabled={busy || previewing || loadingPhotos} style={{ border: 0, padding: 0 }}>
+      <section className="card"><h2>Your scenes</h2>{campaignScenePlan && <><p>The campaign’s scene timings and short on-screen text are available. Photos are placeholders until you choose matching media.</p><button type="button" disabled={busy || previewing || loadingPhotos} onClick={()=>{setProject(campaignScenePlan);setRendered(undefined);setSavedAsset("");request.current=undefined;setMessage("Campaign scene plan applied. Review each photo or clip before export.");}}>Use campaign scene plan</button></>}<fieldset disabled={busy || previewing || loadingPhotos} style={{ border: 0, padding: 0 }}>
         <label>Visual style<select value={project.style} onChange={event => setProject({ ...project, style: event.target.value as ReelStyle })}>{REEL_STYLES.map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</select></label>
         <p className={styles.hint}>{REEL_STYLES.find(style => style.value === project.style)?.description}</p>
         <h3>Photos and clips for this post</h3>
@@ -189,14 +192,15 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         </div>)}</div>
         {project.scenes.length === 1 && <p className={styles.hint}>One photo selected. It appears once in the collage. Add another photo for a multi-photo layout.</p>}
         {project.scenes.map((scene, index) => <div key={scene.id} style={{ borderTop: "1px solid #7775", marginTop: 20, paddingTop: 14 }}><h3>Scene {index + 1}</h3>
-          <label>Photo or clip<select value={scene.src} onChange={event => { const source = sources.find(source => source.src === event.target.value); if (source) changeScene(index, { src: source.src, kind: source.kind, seconds: source.seconds || 4 }); }}>{!sources.some(source => source.src === scene.src) && <option value={scene.src}>Current {scene.kind}</option>}{sources.map((source, i) => <option key={source.id} value={source.src}>{source.label || `${source.kind === "video" ? "Video clip" : "Photo"} ${i + 1}`}</option>)}</select></label>
+          <label>Photo or clip<select value={scene.src} onChange={event => { const source = sources.find(source => source.src === event.target.value); if (source) changeScene(index, { src: source.src, kind: source.kind, seconds: scene.seconds }); }}>{!sources.some(source => source.src === scene.src) && <option value={scene.src}>Current {scene.kind}</option>}{sources.map((source, i) => <option key={source.id} value={source.src}>{source.label || `${source.kind === "video" ? "Video clip" : "Photo"} ${i + 1}`}</option>)}</select></label>
+          {scene.direction && <p><strong>Planned shot:</strong> {scene.direction}</p>}
           <label>Headline<input value={scene.headline} maxLength={120} onChange={event => changeScene(index, { headline: event.target.value })} /></label>
           <label>Supporting caption<textarea value={scene.detail} maxLength={160} onChange={event => changeScene(index, { detail: event.target.value })} /></label>
-          <label>Scene length<select value={scene.seconds} onChange={event => changeScene(index, { seconds: Number(event.target.value) })}>{[3,4,5,6,8,10,15].map(seconds => <option key={seconds} value={seconds}>{seconds} seconds</option>)}</select></label>
+          <label>Scene length<select value={scene.seconds} onChange={event => changeScene(index, { seconds: Number(event.target.value) })}>{Array.from({length:15},(_,index)=>index+1).map(seconds => <option key={seconds} value={seconds}>{seconds} seconds</option>)}</select></label>
           <button type="button" disabled={index === 0} onClick={() => { const scenes = [...project.scenes]; [scenes[index - 1], scenes[index]] = [scenes[index], scenes[index - 1]]; setProject({ ...project, scenes }); }}>Move earlier</button> <button type="button" onClick={() => setProject({ ...project, scenes: project.scenes.filter((_, i) => i !== index) })}>Remove scene</button>
         </div>)}
         <p>Up to 6 scenes. Short clips loop to fill their scene.</p><button type="button" disabled={project.scenes.length >= 6 || !sources.length} onClick={() => addSource(sources.find(source => !project.scenes.some(scene => scene.src === source.src)) || sources[0])}>Add scene</button>
-        <h2>Closing screen</h2><label>Brand name<input value={project.brand} maxLength={80} onChange={event => setProject({ ...project, brand: event.target.value })} /></label><label>Call to action<input value={project.cta} maxLength={70} onChange={event => setProject({ ...project, cta: event.target.value })} /></label><label>Website<input value={project.website} maxLength={140} onChange={event => setProject({ ...project, website: event.target.value })} /></label>
+        <h2>Closing screen</h2><label>Closing screen length<select value={project.closingSeconds} onChange={event=>setProject({...project,closingSeconds:Number(event.target.value)})}>{[0,1,2,3,4,5].map(seconds=><option key={seconds} value={seconds}>{seconds===0 ? "No separate closing screen" : `${seconds} seconds`}</option>)}</select></label><label>Brand name<input value={project.brand} maxLength={80} onChange={event => setProject({ ...project, brand: event.target.value })} /></label><label>Call to action<input value={project.cta} maxLength={70} onChange={event => setProject({ ...project, cta: event.target.value })} /></label><label>Website<input value={project.website} maxLength={140} onChange={event => setProject({ ...project, website: event.target.value })} /></label>
         <label>Brand color<input type="color" value={/^#[a-f0-9]{6}$/i.test(project.color) ? project.color : "#132342"} onChange={event => setProject({ ...project, color: event.target.value })} /></label><label>Accent color<input type="color" value={/^#[a-f0-9]{6}$/i.test(project.accent) ? project.accent : "#dec184"} onChange={event => setProject({ ...project, accent: event.target.value })} /></label>
         <label>Upload brand logo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => { const file = event.target.files?.[0]; if (!file || file.size > 5_000_000 || !["image/png","image/jpeg","image/webp"].includes(file.type)) { setMessage("Choose a PNG, JPEG or WebP logo under 5 MB."); return; } const src = ownUrl(file); localFiles.current.set(src, file); setProject({ ...project, logo: src }); }} /></label>{project.logo && <button type="button" onClick={() => setProject({ ...project, logo: undefined })}>Remove logo</button>}
         <h2>Sound</h2><MusicControls key={contentItemId} music={music} musicStyle={musicStyle} musicVolume={musicVolume} musicFile={musicFile} disabled={busy || previewing || loadingPhotos} onMusic={setMusic} onStyle={setMusicStyle} onVolume={setMusicVolume} onFile={setMusicFile} />

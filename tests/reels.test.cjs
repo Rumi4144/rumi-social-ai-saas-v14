@@ -22,6 +22,33 @@ function load(file, mocks = {}, cache = new Map()) {
   return module.exports;
 }
 const timeline = load('lib/reels/timeline.ts');
+const screenshotPlan='Concise 15-second lifestyle reel. Scene 1, 0–3 seconds: close shot of restless hands beside a closed laptop; on-screen text, “When your thoughts feel busy...” Scene 2, 3–7 seconds: wider view as the person looks around; text, “Notice where you are.” Scene 3, 7–11 seconds: feet resting naturally on the floor; text, “Feel what supports you.” Scene 4, 11–15 seconds: relaxed profile near a window; text, “Stay curious, not forceful.” End card: “Learn more about Master Mind Advanced Hypnosis.”';
+test('campaign scene plan opens four timed scenes with concise captions and a fifteen-second total',()=>{
+ const context=load('lib/reels/post-context.ts');
+ const data={brand:{name:'Master Mind',website:'https://mind.example',color:'#123456',accent:'#abcdef'},posts:[{id:'own',headline:'Post heading',caption:'A long full social caption',visualDirection:screenshotPlan}],sources:[{id:'foreign',src:'/foreign',kind:'image',contentItemId:'other'},{id:'photo',src:'/own',kind:'image',contentItemId:'own'}]};
+ const result=context.selectedPostProject(data,'own').project;
+ assert.equal(result.scenes.length,4);assert.deepEqual(Array.from(result.scenes,s=>s.seconds),[3,4,4,4]);assert.equal(timeline.reelDuration(result),15);
+ assert.equal(result.scenes[0].headline,'When your thoughts feel busy...');assert.equal(result.scenes[0].detail,'');assert.match(result.scenes[0].direction,/restless hands/);
+ assert.ok(result.scenes.every(s=>s.src==='/own'));assert.equal(result.closingSeconds,0);
+ const last=timeline.frameAt(result,15);assert.equal(last.closing,false);assert.equal(last.progress,1);
+});
+test('scene parser rejects incomplete, overlapping and oversized plans rather than inventing timing',()=>{
+ const parser=load('lib/reels/scene-plan.ts');
+ assert.equal(parser.parseReelScenePlan('Scene 1, 0–3 seconds: hello. Scene 2, 2–7 seconds: overlap'),null);
+ assert.equal(parser.parseReelScenePlan('Scene 2, 0–3 seconds: missing first'),null);
+ assert.equal(parser.parseReelScenePlan('x'.repeat(17000)),null);
+ assert.equal(parser.parseReelScenePlan('A regular photo direction'),null);
+ assert.equal(parser.parseReelScenePlan('Scene 1, 0–3 seconds: photo; text, "Don\'t rush."').scenes[0].headline,"Don't rush.");
+});
+test('reel project reads the saved plan only for the active organization and matching post',async()=>{
+ let query;
+ const api=load('app/api/reels/project/route.ts',{
+  'next/server':{NextResponse:{json:body=>body}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'master-mind'})},
+  '@/lib/prisma':{prisma:{campaign:{findFirst:async()=>({id:'campaign',title:'Campaign',brand:{id:'brand',name:'Master Mind'},items:[{id:'own',type:'reel_post',headline:'Own',caption:'Caption'}]})},mediaAsset:{findMany:async()=>[]},job:{findFirst:async q=>{query=q;return {result:{posts:[{type:'reel_post',headline:'Own',caption:'Caption',visualDirection:screenshotPlan}]}};}}}},
+ });
+ const result=await api.GET(new Request('https://app.test/api/reels/project?campaignId=campaign&contentItemId=own'));
+ assert.equal(query.where.organizationId,'master-mind');assert.equal(query.where.payload.equals,'campaign');assert.equal(result.posts[0].visualDirection,screenshotPlan);
+});
 test('reel crosses scene boundaries and closes after all scenes', () => {
   const project = { scenes: [{seconds:3},{seconds:5}], closingSeconds:3 };
   assert.equal(timeline.reelDuration(project),11);
