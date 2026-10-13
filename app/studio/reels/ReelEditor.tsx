@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { drawReel, type ReelMedia } from "@/lib/reels/draw";
 import { exportReel, loadReelMedia } from "@/lib/reels/export";
-import { REEL_STYLES, frameAt, reelDuration, type ReelProject, type ReelScene, type ReelStyle } from "@/lib/reels/timeline";
+import { REEL_STYLES, REEL_ANIMATIONS, frameAt, reelDuration, type ReelProject, type ReelScene, type ReelStyle, type ReelAnimation } from "@/lib/reels/timeline";
 import { loadDraft, saveDraft } from "@/lib/reels/drafts";
 import WeeklyReels from "./WeeklyReels";
 import MusicControls from "./MusicControls";
@@ -181,6 +181,8 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       <section className="card"><h2>Your scenes</h2>{campaignScenePlan && <><p>The campaign’s scene timings and short on-screen text are available. Photos are placeholders until you choose matching media.</p><button type="button" disabled={busy || previewing || loadingPhotos} onClick={()=>{setProject(campaignScenePlan);setRendered(undefined);setSavedAsset("");request.current=undefined;setMessage("Campaign scene plan applied. Review each photo or clip before export.");}}>Use campaign scene plan</button></>}<fieldset disabled={busy || previewing || loadingPhotos} style={{ border: 0, padding: 0 }}>
         <label>Visual style<select value={project.style} onChange={event => setProject({ ...project, style: event.target.value as ReelStyle })}>{REEL_STYLES.map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</select></label>
         <p className={styles.hint}>{REEL_STYLES.find(style => style.value === project.style)?.description}</p>
+        <label>Animation<select value={project.animation || "gentle"} onChange={event=>setProject({...project,animation:event.target.value as ReelAnimation})}>{REEL_ANIMATIONS.map(animation=><option key={animation.value} value={animation.value}>{animation.label}</option>)}</select></label>
+        <p className={styles.hint}>{REEL_ANIMATIONS.find(animation=>animation.value===(project.animation || "gentle"))?.description} Applies to every scene automatically. No AI credits needed.</p>
         <h3>Photos and clips for this post</h3>
         <p className={styles.hint}>Reuse saved campaign photos, load this product’s gallery or upload your own photos. Add different photos to separate scenes; collages use those photos together.</p>
         <PhotoLibraryPicker key={`${campaignId}:${contentItemId}:library`} organizationId={organizationId} campaignId={campaignId} disabled={busy || previewing || loadingPhotos || project.scenes.length >= 6} onPhoto={source=>{setSources(old=>mergeSources(old,[source]));addSource(source);}} />

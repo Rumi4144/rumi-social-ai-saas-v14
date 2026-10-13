@@ -7,8 +7,15 @@ export const REEL_STYLES = [
   { value: "split", label: "Split-screen details", description: "Two different scene photos side by side, or one large photo when only one is available." },
 ] as const;
 export type ReelStyle = typeof REEL_STYLES[number]["value"];
+export const REEL_ANIMATIONS = [
+  {value:"gentle",label:"Gentle movement",description:"Slow photo zoom, soft caption entrances and smooth fades. Good for wellness and hypnosis."},
+  {value:"pan",label:"Slow pan",description:"Alternate left and right photo movement with smooth scene transitions."},
+  {value:"lively",label:"Lively movement",description:"Stronger zoom and sliding transitions for energetic product reels."},
+  {value:"none",label:"No animation",description:"Still photos and direct scene cuts."},
+] as const;
+export type ReelAnimation = typeof REEL_ANIMATIONS[number]["value"];
 export type ReelScene = { id: string; src: string; kind: "image" | "video"; headline: string; detail: string; seconds: number; direction?: string };
-export type ReelProject = { brand: string; website: string; cta: string; color: string; accent: string; style: ReelStyle; logo?: string; scenes: ReelScene[]; closingSeconds: number };
+export type ReelProject = { brand: string; website: string; cta: string; color: string; accent: string; style: ReelStyle; animation?: ReelAnimation; logo?: string; scenes: ReelScene[]; closingSeconds: number };
 export const REEL_WIDTH = 1080, REEL_HEIGHT = 1920;
 export function distinctSceneIndexes(scenes: ReelScene[], current: number, limit = 3) {
   const seen = new Set<string>(), indexes: number[] = [];
