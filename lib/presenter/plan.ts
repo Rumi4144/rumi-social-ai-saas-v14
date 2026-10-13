@@ -11,6 +11,7 @@ export const PRESENTER_DELIVERIES = {
  british:"British English accent, warm and clear.",
  australian:"Australian English accent, warm and clear.",
  french:"English with a light French accent, warm and clear.",
+ persian:"Speak English with a natural, gentle Persian (Iranian/Farsi-influenced) accent, warm conversational delivery and clear pronunciation. Keep the accent subtle and authentic, without exaggeration or stereotypes. Speak the supplied English script without translating it into Persian.",
  cowboy:"English with a warm Southern American country accent, a gentle drawl and friendly conversational delivery. Keep it natural and clear, without exaggeration.",
  newyork:"English with a natural New York City accent, friendly conversational delivery and clear pronunciation. Keep it subtle, without exaggerated stereotypes."
 };
