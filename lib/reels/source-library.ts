@@ -16,10 +16,14 @@ export function mergeSources(...groups: ReelSource[][]): ReelSource[] {
   return [...new Map(groups.flat().map(source => [source.src, source])).values()];
 }
 
-export function restoreLibrary(draft: ReelDraft, restored: Map<string, string>, postId: string) {
+export function restoreLibrary(draft: ReelDraft, restored: Map<string, string>, postId: string, brandId?: string) {
   // Older drafts stored only their scenes. Never revive another post's library.
-  const sources = draft.sources || draft.project.scenes.map(scene => ({ ...scene, contentItemId: postId, label: "Saved photo or clip" }));
-  return mergeSources(sources.filter(source => !source.contentItemId || source.contentItemId === postId)
+  const sources: ReelSource[] = draft.sources || draft.project.scenes.map(scene => ({ ...scene, contentItemId: postId, label: "Saved photo or clip" }));
+  return mergeSources(sources.filter(source => source.libraryBrandId ? !!brandId && source.libraryBrandId === brandId : !source.contentItemId || source.contentItemId === postId)
     .filter(source => !source.src.startsWith("blob:") || restored.has(source.src))
-    .map(source => ({ ...source, contentItemId: postId, src: restored.get(source.src) || source.src })));
+    .map(source => ({ ...source, contentItemId: source.libraryBrandId ? source.contentItemId : postId, src: restored.get(source.src) || source.src })));
+}
+
+export function replaceScenePhoto(project: ReelProject, sceneId: string, source: ReelSource): ReelProject {
+  return { ...project, scenes: project.scenes.map(scene => scene.id === sceneId ? { ...scene, src: source.src, kind: source.kind } : scene) };
 }

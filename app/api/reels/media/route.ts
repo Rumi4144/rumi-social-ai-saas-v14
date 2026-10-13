@@ -9,7 +9,15 @@ export async function GET(req: Request) {
   try {
     const ctx = await tenantContext(), query = new URL(req.url).searchParams;
     let source: string | null = null;
-    if (query.get("assetId")) source = (await prisma.mediaAsset.findFirst({ where: { id: query.get("assetId")!, organizationId: ctx.organizationId, kind: { in: ["ai_image", "product_photo", "reel_scene_image"] }, status: "ready" } }))?.url || null;
+    if (query.get("assetId")) {
+      let campaignIds: string[] | undefined;
+      if (query.get("campaignId")) {
+        const current = await prisma.campaign.findFirst({ where: { id: query.get("campaignId")!, brand: { organizationId: ctx.organizationId } }, select: { brandId: true } });
+        if (!current) return new NextResponse("Image not found", { status: 404 });
+        campaignIds = (await prisma.campaign.findMany({ where: { brandId: current.brandId, brand: { organizationId: ctx.organizationId } }, select: { id: true } })).map(campaign => campaign.id);
+      }
+      source = (await prisma.mediaAsset.findFirst({ where: { id: query.get("assetId")!, organizationId: ctx.organizationId, ...(campaignIds ? { campaignId: { in: campaignIds } } : {}), kind: { in: ["ai_image", "product_photo", "reel_scene_image"] }, status: "ready" } }))?.url || null;
+    }
     else if (query.get("brandId")) source = (await prisma.brand.findFirst({ where: { id: query.get("brandId")!, organizationId: ctx.organizationId } }))?.logoUrl || null;
     if (!source) return new NextResponse("Image not found", { status: 404 });
     let bytes: Buffer;
@@ -19,7 +27,8 @@ export async function GET(req: Request) {
     } else {
       bytes = (await fetchPublicBytes(source, 20_000_000)).bytes;
     }
-    const image = await sharp(bytes, { limitInputPixels: 30_000_000 }).rotate().resize(1920, 1920, { fit: "inside", withoutEnlargement: true }).png().toBuffer();
+    const size = query.get("thumbnail") === "1" ? 256 : 1920;
+    const image = await sharp(bytes, { limitInputPixels: 30_000_000 }).rotate().resize(size, size, { fit: "inside", withoutEnlargement: true }).png().toBuffer();
     return new NextResponse(new Uint8Array(image), { headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store" } });
   } catch (error) { return apiError(error, "Could not load this image. Upload its photo instead."); }
 }

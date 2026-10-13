@@ -8,9 +8,10 @@ import { loadDraft, saveDraft } from "@/lib/reels/drafts";
 import WeeklyReels from "./WeeklyReels";
 import MusicControls from "./MusicControls";
 import ScenePhotoControls from "./ScenePhotoControls";
+import PhotoLibraryPicker from "./PhotoLibraryPicker";
 import { DEFAULT_MUSIC_VOLUME, musicSettings, type MusicChoice } from "@/lib/reels/music";
 import styles from "./ReelEditor.module.css";
-import { appendScenes, mergeSources, restoreLibrary, uploadSelection } from "@/lib/reels/source-library";
+import { appendScenes, mergeSources, restoreLibrary, uploadSelection, replaceScenePhoto } from "@/lib/reels/source-library";
 import {reelDraftKey,selectedPostProject,matchingDraft,type ReelSource} from "@/lib/reels/post-context";
 type Source = ReelSource;
 type Post = { id: string; headline: string | null; caption: string | null; visualDirection?: string | null };
@@ -68,7 +69,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         const restored = new Map<string, string>();
         draft.files.forEach(([old, file]) => { const url = ownUrl(file); restored.set(old, url); localFiles.current.set(url, file); });
         next = { ...draft.project, scenes: draft.project.scenes.map(scene => ({ ...scene, src: restored.get(scene.src) || scene.src })), logo: restored.get(draft.project.logo || "") || draft.project.logo };
-        library = mergeSources(library, restoreLibrary(draft, restored, context.post.id));
+        library = mergeSources(library, restoreLibrary(draft, restored, context.post.id, data.brand.id));
         const sound = musicSettings(draft);
         setMusic(sound.music); setMusicStyle(sound.musicStyle); setMusicVolume(sound.musicVolume); setOriginalAudio(draft.originalAudio); setMusicFile(draft.musicFile); setVoiceFile(draft.voiceFile);
 
@@ -181,7 +182,8 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <label>Visual style<select value={project.style} onChange={event => setProject({ ...project, style: event.target.value as ReelStyle })}>{REEL_STYLES.map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</select></label>
         <p className={styles.hint}>{REEL_STYLES.find(style => style.value === project.style)?.description}</p>
         <h3>Photos and clips for this post</h3>
-        <p className={styles.hint}>Load this product’s gallery or upload your own photos. Add different photos to separate scenes; collages use those photos together.</p>
+        <p className={styles.hint}>Reuse saved campaign photos, load this product’s gallery or upload your own photos. Add different photos to separate scenes; collages use those photos together.</p>
+        <PhotoLibraryPicker key={`${campaignId}:${contentItemId}:library`} organizationId={organizationId} campaignId={campaignId} disabled={busy || previewing || loadingPhotos || project.scenes.length >= 6} onPhoto={source=>{setSources(old=>mergeSources(old,[source]));addSource(source);}} />
         <button type="button" disabled={loadingPhotos} onClick={loadProductPhotos}>{loadingPhotos ? "Loading photos…" : "Load product photos"}</button>
         <details><summary>Choose a product page</summary><label>Product page address<input type="url" placeholder="https://your-website.com/product/…" value={productUrl} onChange={event => setProductUrl(event.target.value)} /></label><p className={styles.hint}>Use this brand’s website. Leave blank to find the product link in the selected post.</p></details>
         <label>Upload photos or presenter clips<input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={event => { importFiles(event.target.files); event.target.value = ""; }} /></label>
@@ -193,6 +195,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         </div>)}</div>
         {project.scenes.length === 1 && <p className={styles.hint}>One photo selected. It appears once in the collage. Add another photo for a multi-photo layout.</p>}
         {project.scenes.map((scene, index) => <div key={scene.id} style={{ borderTop: "1px solid #7775", marginTop: 20, paddingTop: 14 }}><h3>Scene {index + 1}</h3>
+          <PhotoLibraryPicker key={`${campaignId}:${contentItemId}:${scene.id}`} organizationId={organizationId} campaignId={campaignId} selectedSrc={scene.src} disabled={busy || previewing || loadingPhotos} onPhoto={source=>{setSources(old=>mergeSources(old,[source]));setProject(old=>replaceScenePhoto(old,scene.id,source));}} />
           <ScenePhotoControls organizationId={organizationId} campaignId={campaignId} contentItemId={contentItemId} sceneId={scene.id} sceneNumber={index+1} direction={scene.direction ?? `${scene.headline}. ${scene.detail}`} disabled={busy || previewing || loadingPhotos} onBusy={setBusy} onDirection={direction=>changeScene(index,{direction})} onPhoto={source=>{setSources(old=>mergeSources(old,[source]));setProject(old=>({...old,scenes:old.scenes.map(item=>item.id===scene.id?{...item,src:source.src,kind:"image"}:item)}));setRendered(undefined);setSavedAsset("");request.current=undefined;}}/>
           <label>Photo or clip<select value={scene.src} onChange={event => { const source = sources.find(source => source.src === event.target.value); if (source) changeScene(index, { src: source.src, kind: source.kind, seconds: scene.seconds }); }}>{!sources.some(source => source.src === scene.src) && <option value={scene.src}>Current {scene.kind}</option>}{sources.map((source, i) => <option key={source.id} value={source.src}>{source.label || `${source.kind === "video" ? "Video clip" : "Photo"} ${i + 1}`}</option>)}</select></label>
           {scene.direction && <p><strong>Planned shot:</strong> {scene.direction}</p>}
