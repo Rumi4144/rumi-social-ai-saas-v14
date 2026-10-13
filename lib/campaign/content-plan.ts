@@ -161,6 +161,9 @@ export function specialDayForDate(date: Date) {
     if (sameDay(date, nthWeekday(9, 1, 1)))
       return "Labor Day";
 
+    if (sameDay(date, nthWeekday(10, 1, 2)))
+      return "Columbus Day";
+
     if (sameDay(date, nthWeekday(11, 4, 4)))
       return "Thanksgiving";
 

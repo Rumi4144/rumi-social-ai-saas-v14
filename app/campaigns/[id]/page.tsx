@@ -1,4 +1,5 @@
 import { contentTypeLabel, requiresVideo } from "@/lib/campaign/content-plan";
+import { campaignSummary } from "@/lib/campaign/summary";
 import RestoreCalendarButton from "@/components/RestoreCalendarButton";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
@@ -80,6 +81,7 @@ export default async function Campaign({
   const plannedPosts = (planningJob?.result as {posts?:Array<{headline:string;caption:string;type:string;day:number;planKey?:string;visualDirection?:string}>})?.posts || [];
   const contentSlots = (planningJob?.payload as {contentPlan?:Array<{planKey:string;occasion?:string;topics?:string[]}>})?.contentPlan || [];
   const calendarDates = [...new Set(dailyItems.filter(item=>item.type!=="holiday_post").map(item=>item.scheduledFor?.toISOString().slice(0,10)).filter(Boolean))];
+  const summary=campaignSummary(planningJob?.payload,dailyItems);
 
   console.log(
     "[CAMPAIGN PERF] before JSX return:",
@@ -97,6 +99,13 @@ export default async function Campaign({
       <p>
         {campaign.brand.name} · Goal: {campaign.goal}
       </p>
+      <section aria-label="Campaign plan summary" className="card" style={{marginBottom:20}}>
+        <h2>{summary.days ? `${summary.days}-day campaign` : "Campaign drafts"}</h2>
+        {summary.start && <p>{summary.start} to {summary.end}</p>}
+        <p>{summary.formats.map(format=>`${format.count} ${format.label.toLowerCase()} draft${format.count===1?"":"s"}`).join(" · ")} · {summary.extras} extra special-day drafts</p>
+        <p>{summary.total} drafts in total. Several drafts can share a date; the number of drafts is different from the campaign length.</p>
+        {summary.formats.some(format=>(format.label==="Reel" || format.label==="Presenter video") && format.count>0) && <p>Reel and presenter drafts need a finished video before scheduling. Use the video links on each draft.</p>}
+      </section>
       <p style={{ opacity: 0.65, fontSize: "14px" }}>
         Created {new Date(campaign.createdAt).toLocaleString()}
       </p>

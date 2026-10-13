@@ -9,6 +9,17 @@ function load(file,deps={}) {
 const plan=load('lib/campaign/content-plan.ts');
 const mix=['post','reel_post','presenter_post'];
 const calendar=(days,start='2026-11-01')=>Array.from({length:days},(_,i)=>({day:i+1,date:plan.campaignDate(start,i+1).toISOString().slice(0,10),platforms:['facebook'],contentType:plan.contentTypeForDay(i+1,mix)}));
+test('campaign summary distinguishes seven dates from fifteen drafts and shows missing formats honestly',()=>{
+ const summary=load('lib/campaign/summary.ts',{'./content-plan':plan});
+ const rows=calendar(7),items=Array.from({length:15},(_,i)=>({type:i===14?'holiday_post':i<4?'reel_post':'post',scheduledFor:new Date(rows[i%7].date+'T12:00:00Z')}));
+ const result=summary.campaignSummary({days:7,dailyPlan:rows},items);
+ assert.equal(result.days,7);assert.equal(result.total,15);assert.equal(result.start,'2026-11-01');assert.equal(result.end,'2026-11-07');assert.equal(result.extras,1);assert.equal(result.formats.find(f=>f.label==='Reel').count,4);
+ assert.equal(summary.campaignSummary({days:15},items.filter(i=>i.type==='post')).formats.find(f=>f.label==='Reel').count,0);
+});
+test('October federal holiday is suggested on its actual date',()=>{
+ assert.equal(plan.specialDayForDate(new Date('2026-10-12T12:00:00Z')),'Columbus Day');
+ assert.equal(plan.specialDayForDate(new Date('2027-10-11T12:00:00Z')),'Columbus Day');
+});
 test('topics rotate through regular drafts and never replace special occasions',()=>{
  const slots=plan.buildContentPlan(calendar(7),7,[{date:'2026-11-04',label:'Kindness event'}]);
  const result=plan.applyCampaignTopics(slots,['Relaxation','Confidence','Habits']);
