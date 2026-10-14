@@ -90,6 +90,7 @@ export default async function CampaignsPage() {
               >
                 Open Campaign
               </a>
+              <p><Link href={`/studio/reels/quick?campaignId=${encodeURIComponent(campaign.id)}`}>Create reel automatically</Link></p>
             </section>
           ))}
         </div>

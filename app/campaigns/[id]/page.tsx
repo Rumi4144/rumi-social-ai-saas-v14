@@ -259,7 +259,7 @@ export default async function Campaign({
               {item.type === "story_post" && <p>Vertical Story draft · review and download for manual Story publishing. {displayAsset?.url && <a href={displayAsset.url} download>Download Story creative</a>}</p>}
               {needsVideo && <p>Finish and select this video before scheduling it.</p>}
               <p><a href={`/studio/presenters?campaignId=${campaign.id}&contentItemId=${item.id}`}>Make a presenter video for this post</a></p>
-              <p><a href={`/studio/reels?campaignId=${campaign.id}&contentItemId=${item.id}`}>Make a finished reel for this post</a></p>
+              <p><a href={`/studio/reels/quick?campaignId=${campaign.id}&contentItemId=${item.id}`}>Create reel automatically</a> · <a href={`/studio/reels?campaignId=${campaign.id}&contentItemId=${item.id}`}>Make a finished reel for this post</a></p>
               <CampaignVideoTools campaignId={campaign.id} contentItemId={item.id} sourceAssetId={originalImage?.id} pendingJobId={pendingVideo?.id} />
 
               <div className="approval">
