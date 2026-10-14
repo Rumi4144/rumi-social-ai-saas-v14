@@ -11,7 +11,12 @@ function drawPicture(ctx: CanvasRenderingContext2D, media: ReelMedia | undefined
   ctx.drawImage(media, x + (width - mw * scale) / 2 + width * motion.x, y + (height - mh * scale) / 2 + height * motion.y, mw * scale, mh * scale); ctx.restore();
 }
 function drawText(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, size: number, width: number, color: string, maxLines = 4, align: CanvasTextAlign = "left", serif = false) {
-  ctx.font = `${serif ? "italic " : ""}600 ${size}px ${serif ? "Georgia" : "Arial"}`; ctx.fillStyle = color; ctx.textAlign = align;
+  // Fit older, longer drafts before truncating: fixed caption zones must never overlap.
+  const setFont = () => { ctx.font = `${serif ? "italic " : ""}600 ${size}px ${serif ? "Georgia" : "Arial"}`; };
+  setFont();
+  const minimum = size * .76;
+  while (size > minimum && wrappedLines(value, width, text => ctx.measureText(text).width, 100).length > maxLines) { size -= 2; setFont(); }
+  ctx.fillStyle = color; ctx.textAlign = align;
   const lines = wrappedLines(value, width, text => ctx.measureText(text).width, maxLines);
   lines.forEach((line, index) => ctx.fillText(line, x, y + index * size * 1.16));
   return lines.length * size * 1.16;
@@ -31,38 +36,41 @@ function drawFrame(ctx: CanvasRenderingContext2D, project: ReelProject, media: R
   if (frame.closing) {
     const glow = ctx.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, 900); glow.addColorStop(0, "rgba(255,255,255,.12)"); glow.addColorStop(1, "rgba(255,255,255,0)"); ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
     if (logo) picture(ctx, logo, 260, 440, 560, 290, 0, true);
-    text(ctx, project.brand, W / 2, logo ? 860 : 720, 92, 900, "#ffffff", 3, "center", project.style === "editorial");
+    text(ctx, project.brand, W / 2, logo ? 860 : 720, 82, 880, "#ffffff", 3, "center", project.style === "editorial");
     ctx.strokeStyle = accent; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(340, 1170); ctx.lineTo(740, 1170); ctx.stroke();
-    text(ctx, project.cta, W / 2, 1300, 62, 880, accent, 2, "center");
-    text(ctx, project.website, W / 2, 1490, 38, 880, "#ffffff", 3, "center");
+    text(ctx, project.cta, W / 2, 1300, 58, 880, accent, 2, "center");
+    text(ctx, project.website, W / 2, 1550, 34, 880, "#ffffff", 2, "center");
   } else if (project.style === "cinematic") {
     picture(ctx, media[frame.index], 0, 0, W, H, frame.progress);
-    const shade = ctx.createLinearGradient(0, 850, 0, H); shade.addColorStop(0, "rgba(0,0,0,0)"); shade.addColorStop(1, "rgba(0,0,0,.94)"); ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(0, 0, W, 210); text(ctx, project.brand, 72, 142, 40, 940, "#ffffff", 1);
-    const height = text(ctx, scene.headline, 72, 1270, 84, 920, accent, 3, "left", true);
-    text(ctx, scene.detail, 72, 1300 + height, 44, 920, "#ffffff", 3);
+    const shade = ctx.createLinearGradient(0, 800, 0, H); shade.addColorStop(0, "rgba(0,0,0,0)"); shade.addColorStop(.45, "rgba(0,0,0,.58)"); shade.addColorStop(1, "rgba(0,0,0,.92)"); ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
+    const topShade = ctx.createLinearGradient(0, 0, 0, 350); topShade.addColorStop(0, "rgba(0,0,0,.62)"); topShade.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = topShade; ctx.fillRect(0, 0, W, 350);
+    text(ctx, project.brand, 84, 148, 32, 880, "#ffffff", 1);
+    ctx.fillStyle = accent; ctx.fillRect(84, 1200, 100, 4);
+    const height = text(ctx, scene.headline, 84, 1310, 78, 880, "#ffffff", 3, "left", true);
+    text(ctx, scene.detail, 84, 1340 + height, 38, 880, "#ffffff", 2);
   } else if (project.style === "gallery") {
     picture(ctx, media[frame.index], 60, 255, 960, 1070, frame.progress, true);
     ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.strokeRect(60, 255, 960, 1070);
     text(ctx, project.brand, 72, 145, 36, 930, accent, 1);
     const height = text(ctx, scene.headline, 78, 1450, 76, 920, "#ffffff", 2, "left", true);
-    text(ctx, scene.detail, 78, 1480 + height, 40, 920, accent, 2);
+    text(ctx, scene.detail, 78, 1480 + height, 38, 920, accent, 2);
   } else if (project.style === "spotlight") {
     const glow = ctx.createRadialGradient(540, 780, 50, 540, 780, 850);
     glow.addColorStop(0, "rgba(255,255,255,.22)"); glow.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
     text(ctx, project.brand, 540, 145, 38, 930, accent, 1, "center");
-    picture(ctx, media[frame.index], 80, 240, 920, 1000, frame.progress, true);
-    const height = text(ctx, scene.headline, 540, 1390, 76, 920, "#ffffff", 3, "center");
-    text(ctx, scene.detail, 540, 1420 + height, 38, 900, "#ffffff", 3, "center");
-    text(ctx, project.cta, 540, 1830, 40, 900, accent, 1, "center");
+    ctx.fillStyle = "rgba(255,255,255,.06)"; ctx.beginPath(); ctx.roundRect(72, 240, 936, 1000, 32); ctx.fill();
+    picture(ctx, media[frame.index], 104, 272, 872, 936, frame.progress, true);
+    const height = text(ctx, scene.headline, 540, 1370, 74, 880, "#ffffff", 3, "center");
+    text(ctx, scene.detail, 540, 1400 + height, 36, 880, "#ffffff", 2, "center");
+    text(ctx, project.cta, 540, 1810, 36, 880, accent, 1, "center");
   } else if (project.style === "minimal") {
     ctx.fillStyle = "#f8f7f2"; ctx.fillRect(0, 0, W, H);
     text(ctx, project.brand, 76, 142, 36, 930, "#17212c", 1);
     picture(ctx, media[frame.index], 60, 225, 960, 1020, frame.progress, true);
     ctx.fillStyle = accent; ctx.fillRect(76, 1300, 170, 6);
     const height = text(ctx, scene.headline, 76, 1420, 72, 920, "#17212c", 3);
-    text(ctx, scene.detail, 76, 1450 + height, 38, 920, "#394452", 3);
+    text(ctx, scene.detail, 76, 1450 + height, 36, 920, "#394452", 2);
     text(ctx, project.cta, 76, 1830, 40, 920, "#17212c", 1);
   } else if (project.style === "split") {
     text(ctx, project.brand, 72, 140, 38, 936, accent, 1);
@@ -79,18 +87,18 @@ function drawFrame(ctx: CanvasRenderingContext2D, project: ReelProject, media: R
     // A moving photo collage with a stable caption panel, like the supplied examples.
     ctx.fillStyle = "#edf0e5"; ctx.fillRect(0, 0, W, 510);
     text(ctx, project.brand, 64, 125, 34, 940, bg, 1);
-    const height = text(ctx, scene.headline, 64, 245, 70, 940, bg, 2, "left", true);
-    text(ctx, scene.detail, 64, 270 + height, 36, 940, bg, 2);
-    const drift = animation === "none" ? 0 : Math.sin(frame.progress * Math.PI) * 32;
+    const height = text(ctx, scene.headline, 64, 230, 66, 940, bg, 2, "left", true);
+    text(ctx, scene.detail, 64, 250 + height, 32, 940, bg, 2);
+    const drift = animation === "none" ? 0 : Math.sin(frame.progress * Math.PI) * 12;
     const indexes = distinctSceneIndexes(project.scenes, frame.index);
     if (indexes.length === 1) picture(ctx, media[frame.index], 22, 534, 1036, 970, frame.progress, true);
     else if (indexes.length === 2) {
       picture(ctx, media[indexes[0]], 22, 534, 506, 970, frame.progress, true);
       picture(ctx, media[indexes[1]], 552, 534, 506, 970, frame.progress, true);
     } else {
-      picture(ctx, media[indexes[0]], 22, 534, 650, 970, frame.progress);
-      picture(ctx, media[indexes[1]], 694, 534 - drift, 364, 470, frame.progress);
-      picture(ctx, media[indexes[2]], 694, 1026 + drift, 364, 478, frame.progress);
+      picture(ctx, media[indexes[0]], 22, 534, 650, 970, frame.progress, true);
+      picture(ctx, media[indexes[1]], 694, 534 - drift, 364, 470, frame.progress, true);
+      picture(ctx, media[indexes[2]], 694, 1026 + drift, 364, 478, frame.progress, true);
     }
     text(ctx, project.cta, 64, 1650, 48, 940, accent, 2);
   }
