@@ -22,6 +22,9 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const [planning, setPlanning] = useState(false), [planned, setPlanned] = useState(false);
   const planController = useRef<AbortController | undefined>(undefined);
   const selection = useRef("");
+  const selectionIdentity = useRef("");
+  const selectionRevision = useRef(0);
+  const renderedContext = useRef("");
   const [campaigns, setCampaigns] = useState<{ id: string; title: string }[]>(initialCampaigns || []), [campaignId, setCampaignId] = useState(initialCampaignId);
   const [loadingCampaigns, setLoadingCampaigns] = useState(initialCampaigns === undefined), [loadingProject, setLoadingProject] = useState(false);
   const [organizationId, setOrganizationId] = useState(""), [posts, setPosts] = useState<Post[]>([]), [sources, setSources] = useState<Source[]>([]);
@@ -38,7 +41,9 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const controller = useRef<AbortController | undefined>(undefined), localFiles = useRef(new Map<string, Blob>()), localUrls = useRef(new Set<string>());
   const request = useRef<{ pathname: string; blob: Blob } | undefined>(undefined);
   const [campaignScenePlan, setCampaignScenePlan] = useState<ReelProject | null>(null);
-  selection.current = `${organizationId}:${campaignId}:${requestedPostId || contentItemId}`;
+  const contextIdentity = `${organizationId}:${campaignId}:${requestedPostId || contentItemId}`;
+  if (selectionIdentity.current !== contextIdentity) { selectionIdentity.current = contextIdentity; selectionRevision.current += 1; }
+  selection.current = `${contextIdentity}:${selectionRevision.current}`;
   const draftKey = reelDraftKey(organizationId,campaignId,contentItemId);
   const ownUrl = (blob: Blob) => { const url = URL.createObjectURL(blob); localUrls.current.add(url); return url; };
   const finishPreview = () => { if (playTimer.current) clearInterval(playTimer.current); playTimer.current = undefined; media.current.forEach(item => { if (item instanceof HTMLVideoElement) item.pause(); }); setPreviewing(false); };
@@ -181,12 +186,12 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     finishPreview(); setBusy(true); setRendering(true); setMessage("Exporting your reel. Keep this tab visible until it finishes."); setProgress(0);
     let audio: AudioContext | undefined; controller.current = new AbortController();
     const visibility = () => { if (document.hidden) controller.current?.abort(); }; document.addEventListener("visibilitychange", visibility);
-    try { audio = new AudioContext(); await audio.resume(); const blob = await exportReel({ project, canvas: canvas.current!, audioContext: audio, audioFile: musicFile, voiceFile, music, musicStyle, musicVolume, originalAudio, signal: controller.current.signal, progress: value => { if (reelOperationIsCurrent(key, selection.current, controller.current?.signal)) setProgress(value); } }); if (!reelOperationIsCurrent(key, selection.current, controller.current.signal)) return; setRendered(blob); setProgress(100); setMessage(blob.type === "video/mp4" ? "Your finished MP4 is ready. Watch it before saving or publishing." : "Your finished WebM is ready to download. For Facebook MP4 export, use a recent Chrome or Safari browser."); }
+    try { audio = new AudioContext(); await audio.resume(); const blob = await exportReel({ project, canvas: canvas.current!, audioContext: audio, audioFile: musicFile, voiceFile, music, musicStyle, musicVolume, originalAudio, signal: controller.current.signal, progress: value => { if (reelOperationIsCurrent(key, selection.current, controller.current?.signal)) setProgress(value); } }); if (!reelOperationIsCurrent(key, selection.current, controller.current.signal)) return; renderedContext.current = key; setRendered(blob); setProgress(100); setMessage(blob.type === "video/mp4" ? "Your finished MP4 is ready. Watch it before saving or publishing." : "Your finished WebM is ready to download. For Facebook MP4 export, use a recent Chrome or Safari browser."); }
     catch (error) { if (reelOperationIsCurrent(key, selection.current)) setMessage(error instanceof Error ? error.message : "Export failed."); }
     finally { document.removeEventListener("visibilitychange", visibility); await audio?.close(); controller.current = undefined; setRendering(false); setBusy(false); }
   }
   async function save() {
-    if (!rendered || !contentItemId || busy || loadingProject) return; const key = selection.current; setBusy(true);
+    if (!rendered || !contentItemId || busy || loadingProject || renderedContext.current !== selection.current) return; const key = selection.current; setBusy(true);
     try {
       const ext = rendered.type === "video/mp4" ? "mp4" : "webm";
       if (!request.current || request.current.blob !== rendered) request.current = { pathname: `reels/${organizationId}/${contentItemId}/${crypto.randomUUID()}.${ext}`, blob: rendered };

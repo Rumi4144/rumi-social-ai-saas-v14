@@ -43,6 +43,7 @@ function verify(file) {
   await page.getByRole('button',{name:'Create reel draft',exact:true}).click();
   await page.waitForFunction(()=>document.body.textContent.includes('Arranging your saved photos'));
   await page.getByLabel('Campaign post',{exact:true}).selectOption('post-b');
+  while (!releasePlan) await page.waitForTimeout(10);
   releasePlan(); await page.waitForTimeout(300);
   assert.equal(await page.getByRole('link',{name:'Download finished reel'}).count(),0);
   assert.equal(await page.getByRole('button',{name:'Export finished reel',exact:true}).isDisabled(),true);
