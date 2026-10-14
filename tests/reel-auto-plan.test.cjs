@@ -79,3 +79,12 @@ test('Rumi product drafts keep whole guitar photos visible and do not reuse hypn
  const result=plan([asset('mind','Classical guitars'),asset('guitar','Classical guitar wood grain',{brandId:guitarBrand.id})],{brand:guitarBrand,post:guitarPost});
  assert.equal(result.project.style,'spotlight');assert.equal(result.sources[0].id,'guitar');assert.ok(result.sources.every(s=>s.libraryBrandId===guitarBrand.id));
 });
+
+test('draft failures identify the failed step without exposing database details',async()=>{
+ const api=route({contentItem:{findFirst:async()=>{throw Object.assign(new Error('private database connection details'),{code:'P2022'});}}});
+ const result=await api.POST(request());
+ assert.equal(result.status,500);
+ assert.match(result.body.error,/loading the selected post/);
+ assert.match(result.body.error,/P2022/);
+ assert.doesNotMatch(result.body.error,/private database/);
+});
