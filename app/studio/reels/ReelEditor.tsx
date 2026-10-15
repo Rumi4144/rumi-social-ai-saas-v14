@@ -19,7 +19,7 @@ type Source = ReelSource;
 type Post = { id: string; headline: string | null; caption: string | null; visualDirection?: string | null };
 const empty: ReelProject = { brand: "", website: "", cta: "Explore more", color: "#132342", accent: "#dec184", style: "editorial", scenes: [], closingSeconds: 3 };
 
-export default function ReelEditor({ initialCampaignId, initialContentItemId, initialCampaigns, quick = false }: { quick?: boolean; initialCampaignId: string; initialContentItemId: string; initialCampaigns?: { id: string; title: string }[] }) {
+export default function ReelEditor({ initialCampaignId, initialContentItemId, initialCampaigns, quick = false, embedded = false }: { embedded?: boolean; quick?: boolean; initialCampaignId: string; initialContentItemId: string; initialCampaigns?: { id: string; title: string }[] }) {
   const [planning, setPlanning] = useState(false), [planned, setPlanned] = useState(false);
   const planController = useRef<AbortController | undefined>(undefined);
   const selection = useRef("");
@@ -216,8 +216,8 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     finally { setBusy(false); }
   }
   const readyAsset = savedAsset && rendered?.type === "video/mp4" ? savedAsset : !rendered && !rendering && !planning ? savedReels.find(asset => asset.contentItemId === contentItemId)?.id : undefined;
-  return <div className={styles.editor}><div className="eyebrow">{quick ? "AUTOMATIC REEL" : "REEL EDITOR"}</div><h1>Make a finished reel.</h1>{quick ? <p>Choose a campaign post. We arrange its saved photos, captions, music and branding into a reel. Review it, export it and save it to your campaign. No subscription or AI credits needed.</p> : <><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p><p><a href="/studio/reels/quick">Create reel automatically</a></p></>}
-    <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingPhotos || loadingCampaigns} onChange={event => {setRequestedPostId("");setCampaignId(event.target.value);}}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>
+  return <div className={styles.editor}><div className="eyebrow">{quick ? "AUTOMATIC REEL" : "REEL EDITOR"}</div>{embedded ? <h3>Create and post your reel</h3> : <h1>Make a finished reel.</h1>}{quick ? <p>Choose a campaign post. We arrange its saved photos, captions, music and branding into a reel. Review it, export it, then choose your accounts and posting time here. No subscription or AI credits needed.</p> : <><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p><p><a href="/studio/reels/quick">Create reel automatically</a></p></>}
+    {!embedded && <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingPhotos || loadingCampaigns} onChange={event => {setRequestedPostId("");setCampaignId(event.target.value);}}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>}
     {!organizationId && <p role="status">{loadingCampaigns ? "Loading your campaigns…" : loadingProject ? "Opening campaign…" : message}</p>}
     {!loadingCampaigns && !campaigns.length && <section className="card"><h2>No campaigns available in this workspace</h2><p>Open an existing campaign from the Campaigns page, or create a campaign first to use its photos and save your reel.</p><a href="/campaigns">Open Campaigns</a> · <a href="/create">Create a campaign</a></section>}
     {!organizationId && <button type="button" disabled={loadingCampaigns || loadingProject} onClick={refreshCampaigns}>Refresh campaigns</button>}
@@ -282,7 +282,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
             }} />
             <p><a href="/publishing">Check posting status</a></p>
           </section>}
-        <p role="status">{message}</p><a href={`/campaigns/${campaignId}`}>Return to campaign</a>
+        <p role="status">{message}</p>{!embedded && <a href={`/campaigns/${campaignId}`}>Return to campaign</a>}
       </section>
     </div>}
     {!quick && campaignId && organizationId && <><a href={`/studio/presenters?campaignId=${encodeURIComponent(campaignId)}`}>Create an AI presenter with a real product photo</a><WeeklyReels key={campaignId} project={project} campaignId={campaignId} organizationId={organizationId} music={music} musicStyle={musicStyle} musicVolume={musicVolume} originalAudio={originalAudio} musicFile={musicFile} voiceFile={voiceFile}/></>}
