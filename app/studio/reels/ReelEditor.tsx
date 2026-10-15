@@ -168,7 +168,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       if (!response.ok) throw new Error(data.error || "Could not create this reel draft.");
       if (!autoPlanMatches(data, context)) throw new Error("This draft belongs to a different post. Select your post and try again.");
       const plan = data as AutoReelPlan;
-      setProject(plan.project); setSources(plan.sources); setMusic(true); setMusicStyle(automaticMusic(plan.brand.name)); setMusicVolume(DEFAULT_MUSIC_VOLUME); setMusicFile(undefined); setVoiceFile(undefined); setOriginalAudio(false);
+      setProject(plan.project); setSources(plan.sources); setMusic(true); setMusicStyle(automaticMusic(plan.brand.name, plan.brand.industry)); setMusicVolume(DEFAULT_MUSIC_VOLUME); setMusicFile(undefined); setVoiceFile(undefined); setOriginalAudio(false);
       setPlanned(plan.project.scenes.length > 0);
       setMessage([...plan.warnings, plan.project.scenes.length ? "Draft ready. Preview the photos and captions, then export your finished reel." : "Add a matching saved photo to this post in the campaign, then try again."].join(" "));
     } catch (error) {

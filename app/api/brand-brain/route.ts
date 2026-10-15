@@ -5,6 +5,7 @@ import { z } from "zod";
 
 const Schema = z.object({
   name: z.string().min(1),
+  industry: z.string().max(120).optional(),
   voice: z.string().optional(),
   positioning: z.string().optional(),
   preferredWords: z.string().optional(),

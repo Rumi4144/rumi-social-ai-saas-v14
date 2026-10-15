@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       name: p.data.brand,
       voice: p.data.voice,
       positioning: `Primary goal: ${p.data.goal}`,
-      industry: p.data.industry || null,
+      industry: p.data.industry || brand?.industry || null,
       websiteUrl: p.data.website || null,
       description: p.data.description || null,
       targetAudience: p.data.targetAudience || null,

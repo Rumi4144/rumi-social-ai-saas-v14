@@ -1,6 +1,8 @@
 const { test } = require("node:test"), assert = require("node:assert/strict"), fs = require("node:fs"), vm = require("node:vm"), ts = require("typescript");
+const industryModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync("lib/industries.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module: industryModule, exports: industryModule.exports });
 const moduleContext = { exports: {} };
-vm.runInNewContext(ts.transpileModule(fs.readFileSync("lib/reels/automatic.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module: moduleContext, exports: moduleContext.exports });
+vm.runInNewContext(ts.transpileModule(fs.readFileSync("lib/reels/automatic.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module: moduleContext, exports: moduleContext.exports, require: name => { if(name === "@/lib/industries") return industryModule.exports; throw new Error(name); } });
 const { autoPlanMatches, automaticMusic, reelOperationIsCurrent } = moduleContext.exports;
 test("automatic draft cannot cross business, campaign or post boundaries", () => {
   const context = { organizationId: "hypnosis", campaignId: "week", contentItemId: "calm" };

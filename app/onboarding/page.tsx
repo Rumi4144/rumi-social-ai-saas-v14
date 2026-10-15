@@ -1,6 +1,7 @@
 "use client";
+import { INDUSTRIES } from "@/lib/industries";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const roles = [
@@ -12,19 +13,7 @@ const roles = [
   "Other",
 ];
 
-const industries = [
-  "E-commerce & Retail",
-  "Professional Services",
-  "Health & Wellness",
-  "Education & Coaching",
-  "Technology & SaaS",
-  "Music & Arts",
-  "Real Estate",
-  "Food & Hospitality",
-  "Travel & Lifestyle",
-  "Creator / Personal Brand",
-  "Other",
-];
+const industries = INDUSTRIES;
 
 const voices = [
   "Premium",
@@ -72,6 +61,18 @@ export default function OnboardingPage() {
   const [approvalRequired, setApprovalRequired] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/onboarding/profile", { cache: "no-store" }).then(async response => {
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!active) return;
+      setBrand(current => current || data.brand?.name || "");
+      setIndustry(current => current || data.brand?.industry || "");
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   function next() {
     setMessage("");

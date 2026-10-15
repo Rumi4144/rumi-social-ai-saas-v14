@@ -21,7 +21,7 @@ function load(file, mocks = {}, cache = new Map()) {
   vm.runInNewContext(js, { module, exports: module.exports, require: requireFile, process, Buffer, URL, console, fetch: mocks.__fetch || fetch, AbortSignal, FormData, Blob, Response, Uint8Array, Headers, ReadableStream, setTimeout, clearTimeout }, { filename: file });
   return module.exports;
 }
-const {automaticReelPlan} = load('lib/reels/auto-plan.ts');
+const {automaticReelPlan,automaticReelStyle} = load('lib/reels/auto-plan.ts');
 const {reelDuration} = load('lib/reels/timeline.ts');
 const brand={id:'mind-brand',name:'Master Mind Advanced Hypnosis',color:'#123456',accent:'#abcdef',website:'https://mind.example'};
 const post={id:'post',type:'reel_post',headline:'Notice your breathing',caption:'Pause and notice your breathing. Stay curious. Find a quiet place.'};
@@ -119,4 +119,13 @@ test('smoking and weight-loss reels can still use their own relevant photos',()=
   const result=plan([asset('topic',prompt,{contentItemId:'post'})],{post:{...post,headline,caption:headline}});
   assert.equal(result.sources[0].id,'topic');
  }
+});
+
+test('brand appearance overrides industry defaults and new businesses receive fitting layouts',()=>{
+ assert.equal(automaticReelStyle({...brand,name:'A new retailer',industry:'Retail'}),'spotlight');
+ assert.equal(automaticReelStyle({...brand,name:'Neighborhood Bakery',industry:'Restaurant'}),'bold');
+ assert.equal(automaticReelStyle({...brand,name:'Wellness Studio',industry:'Wellness'}),'boutique');
+ assert.equal(automaticReelStyle({...brand,name:'A new retailer',industry:'Retail',designStyle:'Luxury Editorial'}),'boutique');
+ assert.equal(automaticReelStyle({...brand,designStyle:'Bold and vibrant'}),'bold');
+ assert.equal(automaticReelStyle({...brand,designStyle:'Clean minimal'}),'minimal');
 });

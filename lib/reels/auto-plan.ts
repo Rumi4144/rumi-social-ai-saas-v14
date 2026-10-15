@@ -1,9 +1,22 @@
 import { parseReelScenePlan } from "./scene-plan";
-import type { ReelProject } from "./timeline";
+import type { ReelProject, ReelStyle } from "./timeline";
 import type { ReelSource } from "./post-context";
 import { occasionVisualConcept } from "@/lib/ai/occasion";
+import { industryReelDefaults } from "@/lib/industries";
 
-export type AutoPlanBrand = { id: string; name: string; color: string; accent: string; website: string; logo?: string };
+export type AutoPlanBrand = { id: string; name: string; color: string; accent: string; website: string; logo?: string; industry?: string | null; designStyle?: string | null };
+export function automaticReelStyle(brand: AutoPlanBrand, holiday = false): ReelStyle {
+  const preference = brand.designStyle || "";
+  if (/bold|energetic|playful|vibrant/i.test(preference)) return "bold";
+  if (/minimal|clean/i.test(preference)) return "minimal";
+  if (/luxury|editorial|elegant|premium/i.test(preference)) return "boutique";
+  const defaults = industryReelDefaults(brand.industry);
+  if (defaults) return defaults.style;
+  const business = `${brand.industry || ""} ${brand.name}`;
+  if (!holiday && /guitar|retail|e.?commerce|product|jewel|furniture/i.test(business)) return "spotlight";
+  if (/fitness|sport|restaurant|food|entertainment|event/i.test(business)) return "bold";
+  return "boutique";
+}
 export type AutoPlanPost = { id: string; headline: string | null; caption: string | null; type: string; visualDirection?: string | null; occasion?: string };
 export type AutoPlanAsset = { id: string; organizationId: string; brandId: string; campaignId: string; contentItemId?: string | null; kind: string; status: string; url: string | null; prompt?: string | null; metadata?: unknown; post?: AutoPlanPost };
 const ignored = new Set("a an and are as at be by can do for from has have how in is it its may more of on or our that the their them there these they this to with you your photo image scene text shot close wide calm moment business brand premium campaign create realistic vertical photograph background lighting caption product fidelity critical no not people person adult hypnosis hypnotherapy session support journey step discover learn today help helping feel feeling take taking change positive advanced mind master explore book appointment consultation gentle safe natural practice personal professional approach".split(" "));
@@ -112,6 +125,7 @@ export function automaticReelPlan(input: { organizationId: string; campaignId: s
       scenes.forEach((scene, index) => { scene.seconds = Math.floor(available / scenes.length) + (index < available % scenes.length ? 1 : 0); });
     }
   }
-  const project: ReelProject = { brand: brand.name, website: brand.website, logo: brand.logo, color: brand.color, accent: brand.accent, cta: concise(saved?.cta || "Explore more", 70) || "Explore more", style: /guitar/i.test(brand.name) && !holiday ? "spotlight" : "cinematic", animation: "gentle", closingSeconds, scenes };
+  const style = automaticReelStyle(brand, holiday);
+  const project: ReelProject = { brand: brand.name, website: brand.website, logo: brand.logo, color: brand.color, accent: brand.accent, cta: concise(saved?.cta || "Explore more", 70) || "Explore more", style, animation: style === "bold" ? "lively" : "gentle", closingSeconds, scenes };
   return { project, sources, warnings };
 }

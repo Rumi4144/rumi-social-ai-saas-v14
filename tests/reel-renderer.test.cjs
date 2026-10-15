@@ -45,7 +45,7 @@ visual('actual frames preserve short captions, whole products, transitions and o
   const base = {brand:'RUMI STUDIO', website:'rumi.example', cta:'Explore the collection', color:'#142b2c', accent:'#ead7ad', animation:'gentle', closingSeconds:3,
     scenes:[{id:'a',src:'qa-product-a',kind:'image',headline:'Crafted to be heard',detail:'A quieter kind of quality.',seconds:4},{id:'b',src:'qa-product-b',kind:'image',headline:'Every detail matters',detail:'Discover your next favorite.',seconds:4},{id:'c',src:'qa-product-c',kind:'image',headline:'Make room for music',detail:'',seconds:4}]};
   const output = process.env.REEL_QA_OUTPUT;
-  const sheet = createCanvas(1080,2560), sheetCtx = sheet.getContext('2d');
+  const sheet = createCanvas(1080,Math.ceil(REEL_STYLES.length*2/3)*640), sheetCtx = sheet.getContext('2d');
   let tile=0;
   for (const {value:style} of REEL_STYLES) {
     for (const long of [false,true]) {

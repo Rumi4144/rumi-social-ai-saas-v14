@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       return { id: item.id, type: item.type, headline: item.headline, caption: item.caption, visualDirection: direction, occasion: savedPostOccasion(job?.payload, job?.result, item) };
     }
     const sourcePosts = new Map(posts.map(item => [item.id, enrich(item)]));
-    const brand = { id: brandRecord.id, name: brandRecord.name, color: brandRecord.primaryColor || "#132342", accent: brandRecord.accentColor || "#dec184", website: brandRecord.websiteUrl || "", ...(brandRecord.logoUrl ? { logo: `/api/reels/media?brandId=${encodeURIComponent(brandRecord.id)}` } : {}) };
+    const brand = { id: brandRecord.id, name: brandRecord.name, industry: brandRecord.industry, designStyle: brandRecord.designStyle, color: brandRecord.primaryColor || "#132342", accent: brandRecord.accentColor || "#dec184", website: brandRecord.websiteUrl || "", ...(brandRecord.logoUrl ? { logo: `/api/reels/media?brandId=${encodeURIComponent(brandRecord.id)}` } : {}) };
     const enrichedPost = enrich(post);
     step = "arranging the reel scenes";
     const plan = automaticReelPlan({ organizationId: ctx.organizationId, campaignId: post.campaignId, brand, post: enrichedPost, assets: assets.filter(asset => asset.campaignId && ids.includes(asset.campaignId)).map(asset => ({ ...asset, url: photoUrls.get(asset.id) || null, campaignId: asset.campaignId!, brandId: brand.id, post: asset.contentItemId ? sourcePosts.get(asset.contentItemId) : undefined })) });

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { INDUSTRIES } from "@/lib/industries";
 
 export default function Brand() {
   const [form, setForm] = useState({
-    name: "Rumi Guitars",
+    name: "",
+    industry: "",
     voice: "Refined, knowledgeable, warm and concise",
     positioning: "",
     preferredWords: "",
@@ -16,7 +18,7 @@ export default function Brand() {
     accentColor: "#D9BD7A",
     headingFont: "Georgia",
     bodyFont: "Arial",
-    designStyle: "Luxury Editorial",
+    designStyle: "Automatic by industry",
   });
 
   const [status, setStatus] = useState("");
@@ -40,6 +42,7 @@ export default function Brand() {
         setForm((old) => ({
           ...old,
           name: brand.name ?? old.name,
+          industry: brand.industry ?? "",
           voice: brand.voice ?? "",
           positioning: brand.positioning ?? "",
           preferredWords: brand.preferredWords ?? "",
@@ -108,6 +111,13 @@ export default function Brand() {
           onChange={(e) => set("name", e.target.value)}
         />
 
+        <label>Business industry</label>
+        <select value={form.industry} onChange={e => set("industry", e.target.value)}>
+          <option value="">Choose your industry</option>
+          {form.industry && !INDUSTRIES.some(value => value === form.industry) && <option value={form.industry}>{form.industry}</option>}
+          {INDUSTRIES.map(value => <option key={value} value={value}>{value}</option>)}
+        </select>
+        <p>Used for automatic reel layouts and music. Set your design style to “Automatic by industry” to use these defaults.</p>
         <label>Voice</label>
         <textarea
           rows={3}

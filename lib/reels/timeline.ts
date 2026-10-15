@@ -1,4 +1,6 @@
 export const REEL_STYLES = [
+  { value: "boutique", label: "Luxury brand story", description: "Elegant photo frames, oversized editorial headlines and varied scene compositions." },
+  { value: "bold", label: "Bold brand story", description: "Strong color panels, large animated headlines and alternating photo layouts." },
   { value: "cinematic", label: "Cinematic close-ups / presenter", description: "A full-screen photo or clip with gentle movement and captions." },
   { value: "editorial", label: "Animated photo collage", description: "Distinct scene photos together. With one photo, a single large panel is used." },
   { value: "gallery", label: "Framed photo gallery", description: "Keep the whole photo visible in a frame with your brand colors." },
