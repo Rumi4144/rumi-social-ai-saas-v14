@@ -98,3 +98,25 @@ test('draft failures identify the failed step without exposing database details'
  assert.equal(result.status,500);assert.ok(result.body.error.includes(label));assert.doesNotMatch(result.body.error,/private connection/);
  }
  });
+
+test('stress reels exclude smoking and weight-loss photos despite shared stress and hypnosis wording',()=>{
+ const stress={...post,headline:'Managing daily stress',caption:'Discover support for stress. Take the first step with Master Mind Advanced Hypnosis. Pause and breathe.'};
+ const result=plan([
+  asset('smoking','A stressed adult holding a cigarette',{post:{...post,headline:'Quit smoking',caption:'Take the first step. Stress support with hypnosis.'}}),
+  asset('weight','An adult standing on bathroom scales',{post:{...post,headline:'Weight loss support',caption:'Discover support for stress and healthier habits.'}}),
+  asset('generic','Professional hypnosis session and personal journey',{post:{...post,headline:'Book a consultation',caption:'Take the first step with Master Mind Advanced Hypnosis.'}}),
+  asset('stress','An overwhelmed adult taking a quiet break to manage daily stress'),
+ ],{post:stress});
+ assert.deepEqual(Array.from(result.sources,s=>s.id),['stress']);
+});
+test('a wrongly attached smoking photo cannot override a stress scene plan',()=>{
+ const stress={...post,headline:'Reduce stress',caption:'Take a quiet breathing break.'};
+ const result=plan([asset('wrong','A cigarette beside a stressed adult',{contentItemId:'post',kind:'reel_scene_image',metadata:{sceneId:'post-planned-1'}}),asset('wrong-primary','Bathroom scales for weight loss',{contentItemId:'post'})],{post:stress});
+ assert.equal(result.sources.length,0);assert.match(result.warnings.join(' '),/relevant ready photos/);
+});
+test('smoking and weight-loss reels can still use their own relevant photos',()=>{
+ for(const [headline,prompt] of [['Quit smoking','Discarded cigarettes and tobacco'],['Weight loss support','Weight management with a bathroom scale']]) {
+  const result=plan([asset('topic',prompt,{contentItemId:'post'})],{post:{...post,headline,caption:headline}});
+  assert.equal(result.sources[0].id,'topic');
+ }
+});
