@@ -70,8 +70,8 @@ test('post ownership and campaign membership are validated before media access',
 });
 test('API gathers only same-brand ready photos and leaves original posts untouched',async()=>{
  let mediaQuery,jobQuery;const item={...post,campaignId:'current',campaign:{id:'current',title:'Calm moments',brand:{id:brand.id,name:brand.name}}};
- const api=route({contentItem:{findFirst:async()=>item,findMany:async()=>[item]},campaign:{findMany:async q=>{assert.equal(q.where.brandId,brand.id);assert.equal(q.where.brand.organizationId,'mind');return [{id:'current'},{id:'past'}]}},mediaAsset:{findMany:async q=>{mediaQuery=q;return [asset('breath','Notice breathing',{contentItemId:'post'})]}},job:{findMany:async q=>{jobQuery=q;return []}}});
- const result=await api.POST(request());assert.equal(result.status,200);assert.equal(mediaQuery.where.organizationId,'mind');assert.deepEqual(Array.from(mediaQuery.where.campaignId.in),['current','past']);assert.equal(mediaQuery.where.status,'ready');assert.equal(jobQuery.where.organizationId,'mind');assert.equal(result.body.post.caption,post.caption);assert.equal(result.body.brand.id,brand.id);assert.equal(result.body.sources[0].id,'breath');
+ const api=route({$queryRaw:async q=>{assert.ok(q.values.includes('mind'));assert.ok(q.values.includes('breath'));assert.match(q.sql,/md5/);return [{id:'breath',url:'saved-photo:fingerprint'}]},contentItem:{findFirst:async()=>item,findMany:async()=>[item]},campaign:{findMany:async q=>{assert.equal(q.where.brandId,brand.id);assert.equal(q.where.brand.organizationId,'mind');return [{id:'current'},{id:'past'}]}},mediaAsset:{findMany:async q=>{mediaQuery=q;return [asset('breath','Notice breathing',{contentItemId:'post'})]}},job:{findMany:async q=>{jobQuery=q;return []}}});
+ const result=await api.POST(request());assert.equal(result.status,200);assert.equal(mediaQuery.where.organizationId,'mind');assert.deepEqual(Array.from(mediaQuery.where.campaignId.in),['current','past']);assert.equal(mediaQuery.where.status,'ready');assert.equal(mediaQuery.select.url,undefined);assert.equal(jobQuery.where.organizationId,'mind');assert.equal(result.body.post.caption,post.caption);assert.equal(result.body.brand.id,brand.id);assert.equal(result.body.sources[0].id,'breath');
 });
 
 test('Rumi product drafts keep whole guitar photos visible and do not reuse hypnosis images',()=>{
@@ -88,3 +88,13 @@ test('draft failures identify the failed step without exposing database details'
  assert.match(result.body.error,/P2022/);
  assert.doesNotMatch(result.body.error,/private database/);
 });
+
+ test('separate photo caption and history failures retain a specific safe message',async()=>{
+ const item={...post,campaignId:'current',campaign:{id:'current',title:'Calm moments',brand:{id:brand.id,name:brand.name}}};
+ for(const [model,label] of [['mediaAsset','loading saved photo details'],['contentItem','loading saved captions'],['job','loading saved campaign history']]) {
+ const db={contentItem:{findFirst:async()=>item,findMany:async()=>[]},campaign:{findMany:async()=>[{id:'current'}]},mediaAsset:{findMany:async()=>[]},job:{findMany:async()=>[]}};
+ db[model].findMany=async()=>{throw new Error('private connection details')};
+ const result=await route(db).POST(request());
+ assert.equal(result.status,500);assert.ok(result.body.error.includes(label));assert.doesNotMatch(result.body.error,/private connection/);
+ }
+ });
