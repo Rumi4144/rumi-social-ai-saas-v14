@@ -10,7 +10,7 @@ import MusicControls from "./MusicControls";
 import ScenePhotoControls from "./ScenePhotoControls";
 import PhotoLibraryPicker from "./PhotoLibraryPicker";
 import SchedulePostButton from "@/components/SchedulePostButton";
-import { DEFAULT_MUSIC_VOLUME, musicSettings, type MusicChoice } from "@/lib/reels/music";
+import { DEFAULT_MUSIC_VOLUME, musicSettings, prepareMusic, type MusicChoice } from "@/lib/reels/music";
 import styles from "./ReelEditor.module.css";
 import { appendScenes, mergeSources, restoreLibrary, uploadSelection, replaceScenePhoto } from "@/lib/reels/source-library";
 import {reelDraftKey,selectedPostProject,matchingDraft,type ReelSource} from "@/lib/reels/post-context";
@@ -40,6 +40,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [progress, setProgress] = useState(0), [previewing, setPreviewing] = useState(false);
   const [rendered, setRendered] = useState<Blob>(), [downloadUrl, setDownloadUrl] = useState(""), [savedAsset, setSavedAsset] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null), media = useRef<ReelMedia[]>([]), logo = useRef<HTMLImageElement | undefined>(undefined), playTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const previewAudio = useRef<{ context: AudioContext; controller: AbortController; stopMusic?: () => void; voice?: AudioBufferSourceNode } | undefined>(undefined);
   const controller = useRef<AbortController | undefined>(undefined), localFiles = useRef(new Map<string, Blob>()), localUrls = useRef(new Set<string>());
   const request = useRef<{ pathname: string; blob: Blob } | undefined>(undefined);
   const [campaignScenePlan, setCampaignScenePlan] = useState<ReelProject | null>(null);
@@ -48,7 +49,18 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   selection.current = `${contextIdentity}:${selectionRevision.current}`;
   const draftKey = reelDraftKey(organizationId,campaignId,contentItemId);
   const ownUrl = (blob: Blob) => { const url = URL.createObjectURL(blob); localUrls.current.add(url); return url; };
-  const finishPreview = () => { if (playTimer.current) clearInterval(playTimer.current); playTimer.current = undefined; media.current.forEach(item => { if (item instanceof HTMLVideoElement) item.pause(); }); setPreviewing(false); };
+  const finishPreview = () => {
+    if (playTimer.current) clearInterval(playTimer.current); playTimer.current = undefined;
+    const active = previewAudio.current; previewAudio.current = undefined;
+    if (active) { active.controller.abort(); active.stopMusic?.(); try { active.voice?.stop(); } catch {} active.voice?.disconnect(); void active.context.close().catch(() => {}); }
+    media.current.forEach(item => { if (item instanceof HTMLVideoElement) { item.pause(); item.muted = true; } });
+    setPreviewing(false);
+  };
+  useEffect(() => {
+    const hidden = () => { if (document.hidden) finishPreview(); };
+    document.addEventListener("visibilitychange", hidden);
+    return () => { document.removeEventListener("visibilitychange", hidden); finishPreview(); };
+  }, []);
 
   async function refreshCampaigns() {
     setLoadingCampaigns(true); setMessage("");
@@ -172,13 +184,31 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       setMessage("Draft saved in this browser, including your photo library and uploaded files.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save draft."); }
   }
-  function preview() {
+  async function preview() {
     if (previewing) { finishPreview(); return; }
     if (!canvas.current || media.current.length !== project.scenes.length) { setMessage("The scene media is still loading."); return; }
-    setPreviewing(true); const started = performance.now(); let previous = -1;
+    const active = { context: new AudioContext(), controller: new AbortController(), stopMusic: undefined as (() => void) | undefined, voice: undefined as AudioBufferSourceNode | undefined };
+    previewAudio.current = active; setPreviewing(true); setMessage("Preparing preview with your selected sound…");
+    try {
+      await active.context.resume();
+      const beginMusic = await prepareMusic(active.context, active.context.destination, { music, musicStyle, musicVolume, musicFile }, reelDuration(project), active.controller.signal);
+      if (voiceFile) {
+        const buffer = await active.context.decodeAudioData(await voiceFile.arrayBuffer());
+        if (active.controller.signal.aborted || previewAudio.current !== active) return;
+        const voice = active.context.createBufferSource(), gain = active.context.createGain();
+        voice.buffer = buffer; gain.gain.value = .85; voice.connect(gain).connect(active.context.destination); active.voice = voice;
+      }
+      if (active.controller.signal.aborted || previewAudio.current !== active) return;
+      active.stopMusic = beginMusic(); active.voice?.start();
+      setMessage("Playing your reel with the selected sound.");
+    } catch (error) {
+      if (previewAudio.current === active) { finishPreview(); setMessage(error instanceof Error ? error.message : "Could not play preview audio. Choose another sound and try again."); }
+      return;
+    }
+    const started = performance.now(); let previous = -1;
     playTimer.current = setInterval(() => {
       const time = (performance.now() - started) / 1000, frame = frameAt(project, time), current = frame.closing ? -1 : frame.index;
-      if (current !== previous) { media.current.forEach((item, index) => { if (item instanceof HTMLVideoElement) { if (index === current) { item.currentTime = 0; item.loop = true; void item.play().catch(() => {}); } else item.pause(); } }); previous = current; }
+      if (current !== previous) { media.current.forEach((item, index) => { if (item instanceof HTMLVideoElement) { item.muted = !originalAudio; item.volume = .65; if (index === current) { item.currentTime = 0; item.loop = true; void item.play().catch(() => {}); } else item.pause(); } }); previous = current; }
       if (canvas.current) drawReel(canvas.current.getContext("2d")!, project, media.current, time, logo.current);
       if (time >= reelDuration(project)) finishPreview();
     }, 1000 / 30);
@@ -265,7 +295,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <button type="button" onClick={persist}>Save draft in this browser</button>
       </fieldset></details></section>
       <section className={`card ${styles.preview}`}><h2>Preview · {reelDuration(project)} seconds</h2><canvas ref={canvas} width={1080} height={1920} style={{ width: "100%", maxWidth: 350, background: project.color, borderRadius: 12 }} /><p>1080 × 1920 · vertical reel</p>
-        <button type="button" disabled={busy || planning || loadingProject || loadingPhotos || (quick && !planned) || !project.scenes.length} onClick={preview}>{previewing ? "Stop preview" : "Preview visuals"}</button> <button type="button" disabled={busy || planning || loadingProject || loadingPhotos || (quick && !planned) || !project.scenes.length || !project.brand.trim()} onClick={render}>Export finished reel</button>
+        <button type="button" disabled={busy || planning || loadingProject || loadingPhotos || (quick && !planned) || !project.scenes.length} onClick={preview}>{previewing ? "Stop preview" : "Preview reel with sound"}</button> <button type="button" disabled={busy || planning || loadingProject || loadingPhotos || (quick && !planned) || !project.scenes.length || !project.brand.trim()} onClick={render}>Export finished reel</button>
         {rendering && <><progress max={100} value={progress} aria-label="Reel export progress" /><button type="button" onClick={() => controller.current?.abort()}>Cancel export</button></>}
         {downloadUrl && <div style={{ marginTop: 20 }}><video controls playsInline src={downloadUrl} style={{ width: "100%", maxWidth: 350 }} /><p><a href={downloadUrl} download={`finished-reel.${rendered?.type === "video/mp4" ? "mp4" : "webm"}`}>Download finished reel</a></p>
           <p>Save to: {posts.find(post => post.id === contentItemId)?.headline || "Selected post"}</p><button type="button" disabled={busy || !contentItemId || !!savedAsset} onClick={save}>{savedAsset ? "Reel saved" : "Save reel and continue to posting"}</button>
