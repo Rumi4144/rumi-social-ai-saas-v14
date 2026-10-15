@@ -9,6 +9,7 @@ import WeeklyReels from "./WeeklyReels";
 import MusicControls from "./MusicControls";
 import ScenePhotoControls from "./ScenePhotoControls";
 import PhotoLibraryPicker from "./PhotoLibraryPicker";
+import SchedulePostButton from "@/components/SchedulePostButton";
 import { DEFAULT_MUSIC_VOLUME, musicSettings, type MusicChoice } from "@/lib/reels/music";
 import styles from "./ReelEditor.module.css";
 import { appendScenes, mergeSources, restoreLibrary, uploadSelection, replaceScenePhoto } from "@/lib/reels/source-library";
@@ -29,6 +30,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const [loadingCampaigns, setLoadingCampaigns] = useState(initialCampaigns === undefined), [loadingProject, setLoadingProject] = useState(false);
   const [organizationId, setOrganizationId] = useState(""), [posts, setPosts] = useState<Post[]>([]), [sources, setSources] = useState<Source[]>([]);
   const [project, setProject] = useState<ReelProject>(empty), [contentItemId, setContentItemId] = useState(initialContentItemId);
+  const [savedReels, setSavedReels] = useState<Array<{id: string; contentItemId: string}>>([]);
   const [requestedPostId,setRequestedPostId]=useState(initialContentItemId);
   const [music, setMusic] = useState(true), [originalAudio, setOriginalAudio] = useState(false), [musicFile, setMusicFile] = useState<File>(), [voiceFile, setVoiceFile] = useState<File>();
   const [musicStyle, setMusicStyle] = useState<MusicChoice>("ambient"), [musicVolume, setMusicVolume] = useState(DEFAULT_MUSIC_VOLUME);
@@ -64,7 +66,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     planController.current?.abort(); setPlanning(false); setPlanned(false); controller.current?.abort();
     photoController.current?.abort(); photoController.current = undefined; setLoadingPhotos(false); setPhotoMessage(""); setProductUrl("");
     if (!campaignId) { setOrganizationId(""); setLoadingProject(false); return; }
-    let disposed = false; setLoadingProject(true); finishPreview(); setMessage(""); setCampaignScenePlan(null); setProject(empty); setSources([]); setPosts([]); setOrganizationId(""); setContentItemId(""); setRendered(undefined); setSavedAsset(""); request.current=undefined;
+    let disposed = false; setLoadingProject(true); finishPreview(); setMessage(""); setCampaignScenePlan(null); setSavedReels([]); setProject(empty); setSources([]); setPosts([]); setOrganizationId(""); setContentItemId(""); setRendered(undefined); setSavedAsset(""); request.current=undefined;
     fetch(`/api/reels/project?campaignId=${encodeURIComponent(campaignId)}${requestedPostId?`&contentItemId=${encodeURIComponent(requestedPostId)}`:""}`, { cache: "no-store", signal: AbortSignal.timeout(15000) }).then(async response => {
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not load campaign."); if (disposed) return;
       const context=selectedPostProject(data,requestedPostId);
@@ -86,7 +88,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
 
         setMessage("Your saved draft was restored.");
       }
-      setSources(library);setPosts(data.posts);setContentItemId(context.post.id);setProject(next);setOrganizationId(data.organizationId);setLoadingProject(false);
+      setSavedReels(data.savedReels || []);setSources(library);setPosts(data.posts);setContentItemId(context.post.id);setProject(next);setOrganizationId(data.organizationId);setLoadingProject(false);
       if(!next.scenes.length)setMessage("This post has no ready matching photo or clip. Finish its photo in the campaign or upload media for this post.");
     }).catch(error => { if (!disposed) { setMessage(error.message || "Could not open campaign. Try again."); setLoadingProject(false); } });
     return () => { disposed = true; };
@@ -200,19 +202,20 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       const existing = await fetch(`/api/reels/upload?pathname=${encodeURIComponent(pathname)}`);
       const existingData = existing.ok ? await existing.json() : {};
       if (!reelOperationIsCurrent(key, selection.current)) return;
-      if (existingData.assetId) { setSavedAsset(existingData.assetId); setMessage("Reel saved. Return to the campaign to review and select it for publishing."); return; }
+      if (existingData.assetId) { setSavedAsset(existingData.assetId); setMessage("Reel saved. Choose your account and posting time below."); return; }
       await upload(pathname, rendered, { access: "private", contentType: rendered.type, multipart: true, handleUploadUrl: "/api/reels/upload", clientPayload: JSON.stringify({ campaignId, contentItemId, title: project.scenes[0]?.headline || project.brand, duration: reelDuration(project) }) });
       if (!reelOperationIsCurrent(key, selection.current)) return;
       for (let attempt = 0; attempt < 12; attempt++) {
         const response = await fetch(`/api/reels/upload?pathname=${encodeURIComponent(pathname)}`), data = await response.json();
         if (!reelOperationIsCurrent(key, selection.current)) return;
-        if (response.ok && data.assetId) { setSavedAsset(data.assetId); setMessage("Reel saved. Return to the campaign to review and select it for publishing."); return; }
+        if (response.ok && data.assetId) { setSavedAsset(data.assetId); setMessage("Reel saved. Choose your account and posting time below."); return; }
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
       setMessage("Your upload completed. The campaign library is still updating; check the campaign shortly. Keep your downloaded copy.");
     } catch (error) { if (reelOperationIsCurrent(key, selection.current)) setMessage(error instanceof Error ? error.message : "Could not save reel. Download your copy."); }
     finally { setBusy(false); }
   }
+  const readyAsset = savedAsset && rendered?.type === "video/mp4" ? savedAsset : !rendered && !rendering && !planning ? savedReels.find(asset => asset.contentItemId === contentItemId)?.id : undefined;
   return <div className={styles.editor}><div className="eyebrow">{quick ? "AUTOMATIC REEL" : "REEL EDITOR"}</div><h1>Make a finished reel.</h1>{quick ? <p>Choose a campaign post. We arrange its saved photos, captions, music and branding into a reel. Review it, export it and save it to your campaign. No subscription or AI credits needed.</p> : <><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p><p><a href="/studio/reels/quick">Create reel automatically</a></p></>}
     <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingPhotos || loadingCampaigns} onChange={event => {setRequestedPostId("");setCampaignId(event.target.value);}}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>
     {!organizationId && <p role="status">{loadingCampaigns ? "Loading your campaigns…" : loadingProject ? "Opening campaign…" : message}</p>}
@@ -265,8 +268,20 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <button type="button" disabled={busy || planning || loadingProject || loadingPhotos || (quick && !planned) || !project.scenes.length} onClick={preview}>{previewing ? "Stop preview" : "Preview visuals"}</button> <button type="button" disabled={busy || planning || loadingProject || loadingPhotos || (quick && !planned) || !project.scenes.length || !project.brand.trim()} onClick={render}>Export finished reel</button>
         {rendering && <><progress max={100} value={progress} aria-label="Reel export progress" /><button type="button" onClick={() => controller.current?.abort()}>Cancel export</button></>}
         {downloadUrl && <div style={{ marginTop: 20 }}><video controls playsInline src={downloadUrl} style={{ width: "100%", maxWidth: 350 }} /><p><a href={downloadUrl} download={`finished-reel.${rendered?.type === "video/mp4" ? "mp4" : "webm"}`}>Download finished reel</a></p>
-          <p>Save to: {posts.find(post => post.id === contentItemId)?.headline || "Selected post"}</p><button type="button" disabled={busy || !contentItemId || !!savedAsset} onClick={save}>{savedAsset ? "Saved to campaign" : "Save finished reel to campaign"}</button>
+          <p>Save to: {posts.find(post => post.id === contentItemId)?.headline || "Selected post"}</p><button type="button" disabled={busy || !contentItemId || !!savedAsset} onClick={save}>{savedAsset ? "Reel saved" : "Save reel and continue to posting"}</button>
+          {savedAsset && rendered?.type !== "video/mp4" && <p>Download this version, or export an MP4 using a recent Chrome or Safari browser to post from this page.</p>}
         </div>}
+          {readyAsset && <section key={`${contentItemId}:${readyAsset}`} aria-label="Post this reel" style={{ marginTop: 20 }}>
+            <h3>{savedAsset ? "Ready to post" : "Previously saved reel · ready to post"}</h3>{!downloadUrl && <video controls playsInline src={`/api/video/media/${readyAsset}`} style={{ width: "100%", maxWidth: 350 }} />}<p>{project.brand}</p><p><strong>Caption</strong></p><p style={{ whiteSpace: "pre-wrap" }}>{posts.find(post => post.id === contentItemId)?.caption || posts.find(post => post.id === contentItemId)?.headline}</p>
+            <SchedulePostButton contentItemId={contentItemId} initialStatus="approved" isVideo openByDefault allowPostNow beforeSchedule={async () => {
+              const post = posts.find(post => post.id === contentItemId);
+              if (!post?.headline) throw new Error("Reopen this reel to review its post title.");
+              const response = await fetch("/api/reels/prepare-publishing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, contentItemId, assetId: readyAsset, headline: post.headline, caption: post.caption }) });
+              const data = await response.json();
+              if (!response.ok) throw new Error(data.error || "Could not prepare this reel for posting.");
+            }} />
+            <p><a href="/publishing">Check posting status</a></p>
+          </section>}
         <p role="status">{message}</p><a href={`/campaigns/${campaignId}`}>Return to campaign</a>
       </section>
     </div>}

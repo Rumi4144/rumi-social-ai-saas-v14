@@ -23,11 +23,17 @@ export default function SchedulePostButton({
   initialStatus,
   initialScheduledFor,
   isVideo = false,
+  openByDefault = false,
+  allowPostNow = false,
+  beforeSchedule,
 }: {
   contentItemId: string;
   initialStatus: string;
   initialScheduledFor?: string | null;
   isVideo?: boolean;
+  openByDefault?: boolean;
+  allowPostNow?: boolean;
+  beforeSchedule?: () => Promise<void>;
 }) {
   const router = useRouter();
 
@@ -35,7 +41,9 @@ export default function SchedulePostButton({
   const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("public");
   const [madeForKids, setMadeForKids] = useState(false);
   const [synthetic, setSynthetic] = useState(true);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(openByDefault);
+  const [postNow, setPostNow] = useState(allowPostNow);
+  const [queuedNow, setQueuedNow] = useState(false);
   const schedulePanelRef = useRef<HTMLDivElement>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -138,7 +146,7 @@ export default function SchedulePostButton({
   }
 
   async function schedule() {
-    if (!scheduledFor) {
+    if (!postNow && !scheduledFor) {
       setError("Choose a date and time.");
       return;
     }
@@ -153,7 +161,8 @@ export default function SchedulePostButton({
     setError("");
 
     try {
-      const isoTime = new Date(scheduledFor).toISOString();
+      if (beforeSchedule) await beforeSchedule();
+      const isoTime = postNow ? new Date(Date.now() + 15_000).toISOString() : new Date(scheduledFor).toISOString();
 
       const res = await fetch("/api/publishing/schedule", {
         method: "POST",
@@ -179,6 +188,7 @@ export default function SchedulePostButton({
       }
 
       setStatus("scheduled");
+      setQueuedNow(postNow);
       setSavedTime(isoTime);
       setOpen(false);
 
@@ -203,8 +213,8 @@ export default function SchedulePostButton({
   if (status === "scheduled") {
     return (
       <span>
-        ✓ Scheduled
-        {savedTime ? ` · ${new Date(savedTime).toLocaleString()}` : ""}
+        {queuedNow ? "✓ Queued for posting. Check Publishing for delivery status." : "✓ Scheduled"}
+        {!queuedNow && savedTime ? ` · ${new Date(savedTime).toLocaleString()}` : ""}
       </span>
     );
   }
@@ -216,7 +226,7 @@ export default function SchedulePostButton({
   return (
     <>
       <button type="button" onClick={() => setOpen(!open)}>
-        Schedule
+        {allowPostNow ? "Choose accounts and time" : "Schedule"}
       </button>
 
       {open && (
@@ -230,7 +240,7 @@ export default function SchedulePostButton({
             width: "100%",
           }}
         >
-          <strong>Schedule Post</strong>
+          <strong>{allowPostNow ? "Post your reel" : "Schedule Post"}</strong>
           <p>Select a destination for this post. TikTok publishing setup is not complete yet.</p>
           {isVideo && <p>Google Business Profile is available for text and photo posts. Choose a photo for a Google post.</p>}
 
@@ -251,6 +261,7 @@ export default function SchedulePostButton({
               >
                 <input
                   type="checkbox"
+                  disabled={busy}
                   checked={selected.includes(connection.id)}
                   onChange={() => toggleConnection(connection.id)}
                 />{" "}
@@ -261,8 +272,10 @@ export default function SchedulePostButton({
           </div>
 
           {youtubeSelected && <div><p>The selected video, post headline and caption will be uploaded at the scheduled time.</p><label>Visibility <select value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label><input type="checkbox" checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> This video is made for kids</label><label><input type="checkbox" checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Contains realistic altered or synthetic content</label><label><input type="checkbox" checked={youtubeCertified} onChange={e=>setYoutubeCertified(e.target.checked)} /> I authorize this YouTube upload with the selected visibility, have rights to the video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
-          <input
+          {allowPostNow && <label>When<select value={postNow ? "now" : "later"} disabled={busy} onChange={event => setPostNow(event.target.value === "now")}><option value="now">Post now</option><option value="later">Schedule for later</option></select></label>}
+          {!postNow && <input
             type="datetime-local"
+            disabled={busy}
             value={scheduledFor}
             onChange={(e) => setScheduledFor(e.target.value)}
             style={{
@@ -270,14 +283,14 @@ export default function SchedulePostButton({
               marginTop: 12,
               marginBottom: 12,
             }}
-          />
+          />}
 
           <button
             type="button"
             onClick={schedule}
             disabled={busy || connections.length === 0}
           >
-            {busy ? "Scheduling..." : "Schedule Post"}
+            {busy ? "Preparing your post…" : postNow ? "Approve and post now" : allowPostNow ? "Approve and schedule" : "Schedule Post"}
           </button>
 
           {error && (
