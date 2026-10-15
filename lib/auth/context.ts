@@ -42,6 +42,15 @@ export async function tenantContext(requestedOrg?: string) {
     },
   });
 
+  // Selections are bound to the signed-in user and revalidated on every request.
+  if (!requestedOrg && !user.isSuperAdmin) {
+    const selected = (await cookies()).get("workspaceSelection")?.value;
+    try {
+      const saved = JSON.parse(selected || "null");
+      if (saved?.userId === userId && memberships.some(item => item.organizationId === saved.organizationId)) requestedOrg = saved.organizationId;
+    } catch { /* Ignore stale or malformed selections. */ }
+  }
+
   // SUPER ADMIN:
   // May explicitly enter any organization.
   if (user.isSuperAdmin && requestedOrg) {

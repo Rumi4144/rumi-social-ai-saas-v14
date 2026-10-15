@@ -1,1 +1,8 @@
-import {tenantContext} from "@/lib/auth/context";export default async function Workspaces(){const ctx=await tenantContext();return <><div className="eyebrow">WORKSPACES</div><h1>Choose a brand workspace.</h1><p>Signed in with access to {ctx.memberships.length} workspace{ctx.memberships.length===1?"":"s"}.</p><div className="workspacegrid">{ctx.memberships.map(m=><article className="card" key={m.id}><span className="eyebrow">{m.role}</span><h2>{m.organization.name}</h2><p>{m.organization.slug}</p><a className="button" href="/dashboard">Open workspace</a></article>)}</div></>}
+import { studioPageContext } from "@/lib/studio/page-context";
+import StudioRecovery from "@/components/StudioRecovery";
+import OpenWorkspace from "@/components/OpenWorkspace";
+export default async function Workspaces() {
+  const { context: ctx, recovery } = await studioPageContext();
+  if (recovery) return <StudioRecovery recovery={recovery} />;
+  return <><div className="eyebrow">WORKSPACES</div><h1>Choose a brand workspace.</h1><p>Current workspace: {ctx.organization.name}.</p><div className="workspacegrid">{ctx.memberships.map(m => <article className="card" key={m.id}><span className="eyebrow">{m.role}</span><h2>{m.organization.name}</h2>{m.organizationId === ctx.organizationId ? <p>Currently open</p> : <OpenWorkspace organizationId={m.organizationId} />}</article>)}</div></>;
+}
