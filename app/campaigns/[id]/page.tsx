@@ -198,7 +198,7 @@ export default async function Campaign({
             <article className="card" key={item.id}>
               <div style={{marginBottom:20,padding:16,borderRadius:12,border:item.type === "story_post" ? "2px solid #9a5b12" : "1px solid #315943",background:item.type === "story_post" ? "#fff4dd" : "#edf5ef",color:"#172b24"}}>
                 <strong style={{fontSize:20}}>{contentTypeLabel(item.type)}</strong>
-                {item.type === "story_post" ? <><p style={{margin:"8px 0"}}><strong>Stories cannot be scheduled here.</strong> Download this Story and upload it in Facebook or Instagram.</p>{displayAsset?.url && <a href={displayAsset.url} download>Download Story creative</a>}</> : <p style={{margin:"8px 0"}}>{needsVideo ? "Finish and select the video to enable scheduling." : ["scheduled","published"].includes(item.status) ? `This post is ${item.status}.` : item.status === "approved" ? "Ready to schedule below." : "Review and approve this post to enable scheduling below."}</p>}
+                {item.type === "story_post" ? <><p style={{margin:"8px 0"}}><strong>Stories cannot be scheduled here.</strong> Download this Story and upload it in Facebook or Instagram.</p>{displayAsset?.url && <a href={`/api/reels/media?assetId=${encodeURIComponent(displayAsset.id)}&download=1`} download="story-creative.png">Download Story creative</a>}</> : <p style={{margin:"8px 0"}}>{needsVideo ? "Finish and select the video to enable scheduling." : ["scheduled","published"].includes(item.status) ? `This post is ${item.status}.` : item.status === "approved" ? "Ready to schedule below." : "Review and approve this post to enable scheduling below."}</p>}
               </div>
               {videoAsset && <div style={{ marginBottom: 20 }}>
                 <video controls playsInline preload="metadata" src={`/api/video/media/${videoAsset.id}`} style={{ width: "100%", maxHeight: 600 }} />
@@ -265,7 +265,7 @@ export default async function Campaign({
               <p>{item.caption}</p>
               <CampaignProductPicker campaignId={campaign.id} contentItemId={item.id} />
               {requiresVideo(item.type) && plannedPost?.visualDirection && <details><summary>Video draft plan</summary><p style={{whiteSpace:"pre-wrap"}}>{plannedPost.visualDirection}</p></details>}
-              {item.type === "story_post" && <p>Vertical Story draft · review and download for manual Story publishing. {displayAsset?.url && <a href={displayAsset.url} download>Download Story creative</a>}</p>}
+              {item.type === "story_post" && <p>Vertical Story draft · review and download for manual Story publishing. {displayAsset?.url && <a href={`/api/reels/media?assetId=${encodeURIComponent(displayAsset.id)}&download=1`} download="story-creative.png">Download Story creative</a>}</p>}
               {needsVideo && <p>Finish and select this video before scheduling it.</p>}
               <p><a href={`/studio/presenters?campaignId=${campaign.id}&contentItemId=${item.id}`}>Make a presenter video for this post</a></p>
               {item.type !== "story_post" && <CampaignReelButton campaignId={campaign.id} contentItemId={item.id} />}
