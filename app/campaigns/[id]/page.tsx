@@ -1,3 +1,4 @@
+import CampaignProductPicker from "@/components/CampaignProductPicker";
 import CampaignReelWorkspace, { CampaignReelButton } from "@/components/CampaignReelWorkspace";
 import { contentTypeLabel, requiresVideo } from "@/lib/campaign/content-plan";
 import { campaignSummary } from "@/lib/campaign/summary";
@@ -127,6 +128,7 @@ export default async function Campaign({
             );
 
           const originalImage =
+            itemAssets.find(asset => asset.kind === "product_photo" && asset.provider === "website") ||
             itemAssets.find(
               (asset) =>
                 asset.kind === "ai_image" && asset.provider === "openai",
@@ -194,6 +196,10 @@ export default async function Campaign({
           const needsVideo = requiresVideo(item.type) && !item.mediaUrl?.startsWith("/api/video/media/");
           return (
             <article className="card" key={item.id}>
+              <div style={{marginBottom:20,padding:16,borderRadius:12,border:item.type === "story_post" ? "2px solid #9a5b12" : "1px solid #315943",background:item.type === "story_post" ? "#fff4dd" : "#edf5ef",color:"#172b24"}}>
+                <strong style={{fontSize:20}}>{contentTypeLabel(item.type)}</strong>
+                {item.type === "story_post" ? <><p style={{margin:"8px 0"}}><strong>Stories cannot be scheduled here.</strong> Download this Story and upload it in Facebook or Instagram.</p>{displayAsset?.url && <a href={displayAsset.url} download>Download Story creative</a>}</> : <p style={{margin:"8px 0"}}>{needsVideo ? "Finish and select the video to enable scheduling." : ["scheduled","published"].includes(item.status) ? `This post is ${item.status}.` : item.status === "approved" ? "Ready to schedule below." : "Review and approve this post to enable scheduling below."}</p>}
+              </div>
               {videoAsset && <div style={{ marginBottom: 20 }}>
                 <video controls playsInline preload="metadata" src={`/api/video/media/${videoAsset.id}`} style={{ width: "100%", maxHeight: 600 }} />
                 <UseCampaignVideo assetId={videoAsset.id} contentItemId={item.id} selected={item.mediaUrl === `/api/video/media/${videoAsset.id}`} />
@@ -257,6 +263,7 @@ export default async function Campaign({
           {item.scheduledFor && <p>Planned date: {item.scheduledFor.toISOString().slice(0, 10)}</p>}
 
               <p>{item.caption}</p>
+              <CampaignProductPicker campaignId={campaign.id} contentItemId={item.id} />
               {requiresVideo(item.type) && plannedPost?.visualDirection && <details><summary>Video draft plan</summary><p style={{whiteSpace:"pre-wrap"}}>{plannedPost.visualDirection}</p></details>}
               {item.type === "story_post" && <p>Vertical Story draft · review and download for manual Story publishing. {displayAsset?.url && <a href={displayAsset.url} download>Download Story creative</a>}</p>}
               {needsVideo && <p>Finish and select this video before scheduling it.</p>}
@@ -265,6 +272,7 @@ export default async function Campaign({
               <CampaignVideoTools campaignId={campaign.id} contentItemId={item.id} sourceAssetId={originalImage?.id} pendingJobId={pendingVideo?.id} />
 
               <div className="approval">
+                {item.type === "story_post" && <p role="note"><strong>Manual Story upload only — scheduling is unavailable for this format.</strong></p>}
                 <ApproveContentButton
                   contentItemId={item.id}
                   headline={item.headline || "Creative"}
