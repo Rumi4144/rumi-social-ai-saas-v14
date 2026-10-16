@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import SavedVideoPicker from "./SavedVideoPicker";
 
 export default function CampaignVideoTools({ campaignId, contentItemId, sourceAssetId, pendingJobId }: { campaignId: string; contentItemId: string; sourceAssetId?: string; pendingJobId?: string }) {
   const [prompt, setPrompt] = useState("Slow, natural camera movement around the existing subject. Keep the scene and product faithful to the source image.");
@@ -52,7 +53,7 @@ export default function CampaignVideoTools({ campaignId, contentItemId, sourceAs
     finally { setBusy(false); }
   }
 
-  return <details style={{ marginTop: 16 }}><summary>Add a video to this post</summary>
+  return <><SavedVideoPicker contentItemId={contentItemId} /><details style={{ marginTop: 16 }}><summary>Add a video to this post</summary>
     <p>Attach a real clip or make a short AI video from this post’s source image. Review the clip, then choose Use video for this post to publish or schedule it on Facebook, or upload it to YouTube. Instagram video posting is available by downloading the clip.</p>
     <label>Real clip · MP4 / WebM, up to 3 MB · no AI credits<input type="file" accept="video/mp4,video/webm" disabled={busy} onChange={event => upload(event.target.files?.[0])} /></label>
     {sourceAssetId && <><label>AI video motion<textarea value={prompt} maxLength={800} disabled={busy || !!jobId} onChange={event => setPrompt(event.target.value)} /></label>
@@ -61,5 +62,5 @@ export default function CampaignVideoTools({ campaignId, contentItemId, sourceAs
       <p>AI video adds motion to the existing scene; it does not record real performances or customer audio. Generated clips are saved in your private video library.</p>
     </>}
     {status && <p role="status">{status}</p>}
-  </details>;
+  </details></>;
 }

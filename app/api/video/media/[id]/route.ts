@@ -1,3 +1,4 @@
+import { resolveVideoAsset } from "@/lib/video/reuse";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
@@ -8,8 +9,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   try {
     const ctx = await tenantContext();
     const { id } = await params;
-    const asset = await prisma.mediaAsset.findFirst({ where: { id, organizationId: ctx.organizationId, kind: "campaign_video", status: "ready" } });
+    let asset = await prisma.mediaAsset.findFirst({ where: { id, organizationId: ctx.organizationId, kind: "campaign_video", status: "ready" } });
     if (!asset?.url) return new NextResponse("Not found", { status: 404 });
+    asset = await resolveVideoAsset(asset) as typeof asset;
+    if (!asset.url) return new NextResponse("Not found", { status: 404 });
     if (asset.url.startsWith("data:")) {
       const clip = decodeClip(asset.url);
       const headers = { "Content-Type": clip.contentType, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Accept-Ranges": "bytes" };

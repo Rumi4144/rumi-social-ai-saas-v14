@@ -263,7 +263,12 @@ export default async function Campaign({
           {item.scheduledFor && <p>Planned date: {item.scheduledFor.toISOString().slice(0, 10)}</p>}
 
               <p>{item.caption}</p>
-              <CampaignProductPicker campaignId={campaign.id} contentItemId={item.id} />
+              <CampaignProductPicker campaignId={campaign.id} contentItemId={item.id}>                <RegenerateImageButton label="Generate AI image"
+                  campaignId={campaign.id}
+                  contentItemId={item.id}
+                  headline={item.headline || "Campaign Creative"}
+                  format={item.type === "story_post" ? "story" : "portrait"}
+                /></CampaignProductPicker>
               {requiresVideo(item.type) && plannedPost?.visualDirection && <details><summary>Video draft plan</summary><p style={{whiteSpace:"pre-wrap"}}>{plannedPost.visualDirection}</p></details>}
               {item.type === "story_post" && <p>Vertical Story draft · review and download for manual Story publishing. {displayAsset?.url && <a href={`/api/reels/media?assetId=${encodeURIComponent(displayAsset.id)}&download=1`} download="story-creative.png">Download Story creative</a>}</p>}
               {needsVideo && <p>Finish and select this video before scheduling it.</p>}
@@ -312,12 +317,7 @@ export default async function Campaign({
                 Preview Published Image
               </a>
             ) : null}
-                <RegenerateImageButton
-                  campaignId={campaign.id}
-                  contentItemId={item.id}
-                  headline={item.headline || "Campaign Creative"}
-                  format={item.type === "story_post" ? "story" : "portrait"}
-                />
+
               </div>
             </article>
           );

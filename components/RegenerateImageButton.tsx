@@ -7,11 +7,13 @@ export default function RegenerateImageButton({
   contentItemId,
   headline,
   format = "portrait",
+  label = "Regenerate Image",
 }: {
   campaignId: string;
   contentItemId: string;
   headline: string;
   format?: "portrait" | "story";
+  label?: string;
 }) {
   const [status, setStatus] = useState("");
 
@@ -91,7 +93,7 @@ Generate underlying photography or artwork only, with no text or branding; leave
         onClick={regenerate}
         disabled={status === "Generating..."}
       >
-        Regenerate Image
+        {label}
       </button>
 
       {status && (

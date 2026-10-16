@@ -1,8 +1,10 @@
+import { resolveVideoAsset } from "./reuse";
 import { privateReelPath } from "@/lib/reels/storage";
 import { get } from "@vercel/blob";
 import { decodeClip } from "./clips";
 
 export async function videoBytes(asset: { url: string | null; metadata: unknown; organizationId: string; id: string; contentItemId?: string | null }) {
+  asset = await resolveVideoAsset(asset);
   if (asset.url?.startsWith("data:")) return decodeClip(asset.url);
   const metadata = asset.metadata as { pathname?: string; contentType?: string } | null;
   const pathname = metadata?.pathname;
