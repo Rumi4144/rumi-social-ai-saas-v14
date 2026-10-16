@@ -263,7 +263,7 @@ export default async function Campaign({
           {item.scheduledFor && <p>Planned date: {item.scheduledFor.toISOString().slice(0, 10)}</p>}
 
               <p>{item.caption}</p>
-              <CampaignProductPicker campaignId={campaign.id} contentItemId={item.id}>                <RegenerateImageButton label="Generate AI image"
+              <CampaignProductPicker campaignId={campaign.id} contentItemId={item.id}>                <RegenerateImageButton label="Generate AI image" showRegenerate
                   campaignId={campaign.id}
                   contentItemId={item.id}
                   headline={item.headline || "Campaign Creative"}

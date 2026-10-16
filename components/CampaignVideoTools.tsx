@@ -1,8 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import SavedVideoPicker from "./SavedVideoPicker";
 
 export default function CampaignVideoTools({ campaignId, contentItemId, sourceAssetId, pendingJobId }: { campaignId: string; contentItemId: string; sourceAssetId?: string; pendingJobId?: string }) {
+  const regenerationPanel = useRef<HTMLDetailsElement>(null);
+  const [regenerating,setRegenerating] = useState(false);
+  function openRegeneration(){setRegenerating(true);if(regenerationPanel.current){regenerationPanel.current.open=true;regenerationPanel.current.scrollIntoView({behavior:"smooth",block:"center"});}}
   const [prompt, setPrompt] = useState("Slow, natural camera movement around the existing subject. Keep the scene and product faithful to the source image.");
   const [duration, setDuration] = useState<5 | 10>(5);
   const [status, setStatus] = useState("");
@@ -53,12 +56,13 @@ export default function CampaignVideoTools({ campaignId, contentItemId, sourceAs
     finally { setBusy(false); }
   }
 
-  return <><SavedVideoPicker contentItemId={contentItemId} /><details style={{ marginTop: 16 }}><summary>Add a video to this post</summary>
+  return <><SavedVideoPicker contentItemId={contentItemId}><button type="button" disabled={busy} onClick={openRegeneration}>Regenerate video</button></SavedVideoPicker><details ref={regenerationPanel} style={{ marginTop: 16 }}><summary>Add a video to this post</summary>
     <p>Attach a real clip or make a short AI video from this post’s source image. Review the clip, then choose Use video for this post to publish or schedule it on Facebook, or upload it to YouTube. Instagram video posting is available by downloading the clip.</p>
     <label>Real clip · MP4 / WebM, up to 3 MB · no AI credits<input type="file" accept="video/mp4,video/webm" disabled={busy} onChange={event => upload(event.target.files?.[0])} /></label>
+    {regenerating && <><h3>Regenerate video</h3><p>Create a new AI motion clip from this post’s image. Your previous saved video stays available. This does not recreate a presenter’s speech or a finished reel.</p>{!sourceAssetId && <p>Choose a website photo or generate an image above before making a new video.</p>}</>}
     {sourceAssetId && <><label>AI video motion<textarea value={prompt} maxLength={800} disabled={busy || !!jobId} onChange={event => setPrompt(event.target.value)} /></label>
       <label>Length<select value={duration} disabled={busy || !!jobId} onChange={event => setDuration(Number(event.target.value) as 5 | 10)}><option value={5}>5 seconds · 40 credits</option><option value={10}>10 seconds · 80 credits</option></select></label>
-      <button type="button" onClick={generate} disabled={busy || prompt.trim().length < 10}>{busy ? "Processing…" : jobId ? "Resume video" : `Generate AI video · ${duration === 10 ? 80 : 40} credits charged upfront`}</button>
+      <button type="button" onClick={generate} disabled={busy || prompt.trim().length < 10}>{busy ? "Processing…" : jobId ? "Resume video" : `${regenerating ? "Generate new video" : "Generate AI video"} · ${duration === 10 ? 80 : 40} credits charged upfront`}</button>
       <p>AI video adds motion to the existing scene; it does not record real performances or customer audio. Generated clips are saved in your private video library.</p>
     </>}
     {status && <p role="status">{status}</p>}

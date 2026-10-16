@@ -8,16 +8,21 @@ export default function RegenerateImageButton({
   headline,
   format = "portrait",
   label = "Regenerate Image",
+  showRegenerate = false,
 }: {
   campaignId: string;
   contentItemId: string;
   headline: string;
   format?: "portrait" | "story";
   label?: string;
+  showRegenerate?: boolean;
 }) {
+  const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
 
   async function regenerate() {
+    if (busy) return;
+    setBusy(true);
     setStatus("Generating...");
 
     const prompt = `Create a fresh, brand-relevant visual concept for this campaign message: ${headline}.
@@ -83,19 +88,20 @@ Generate underlying photography or artwork only, with no text or branding; leave
           ? error.message
           : "Image generation failed"
       );
-    }
+    } finally { setBusy(false); }
   }
 
   return (
-    <div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"center"}}>
       <button
         type="button"
         onClick={regenerate}
-        disabled={status === "Generating..."}
+        disabled={busy}
       >
         {label}
       </button>
 
+      {showRegenerate && <button type="button" disabled={busy} onClick={regenerate}>Regenerate image</button>}
       {status && (
         <span style={{ marginLeft: 10 }}>
           {status}
