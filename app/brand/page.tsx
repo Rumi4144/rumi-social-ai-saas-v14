@@ -7,6 +7,9 @@ export default function Brand() {
   const [form, setForm] = useState({
     name: "",
     industry: "",
+    websiteUrl: "",
+    description: "",
+    targetAudience: "",
     voice: "Refined, knowledgeable, warm and concise",
     positioning: "",
     preferredWords: "",
@@ -23,6 +26,8 @@ export default function Brand() {
 
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     async function loadBrand() {
@@ -32,7 +37,8 @@ export default function Brand() {
           cache: "no-store",
         });
 
-        if (!res.ok) return;
+        if (res.status === 404) return;
+        if (!res.ok) throw new Error("Could not load Brand Brain. Refresh before saving changes.");
 
         const result = await res.json();
         const brand = result.brand;
@@ -43,6 +49,9 @@ export default function Brand() {
           ...old,
           name: brand.name ?? old.name,
           industry: brand.industry ?? "",
+          websiteUrl: brand.websiteUrl ?? "",
+          description: brand.description ?? "",
+          targetAudience: brand.targetAudience ?? "",
           voice: brand.voice ?? "",
           positioning: brand.positioning ?? "",
           preferredWords: brand.preferredWords ?? "",
@@ -57,8 +66,9 @@ export default function Brand() {
           designStyle: brand.designStyle ?? old.designStyle,
         }));
       } catch {
-        // Keep local defaults if Brand Brain cannot be loaded.
-      }
+        setLoadError(true);
+        setStatus("Could not load your saved Brand Brain. Refresh this page before saving.");
+      } finally { setLoading(false); }
     }
 
     loadBrand();
@@ -69,6 +79,7 @@ export default function Brand() {
   }
 
   async function save() {
+    if (loading || loadError || saving) return;
     setSaving(true);
     setStatus("Saving...");
 
@@ -111,6 +122,14 @@ export default function Brand() {
           onChange={(e) => set("name", e.target.value)}
         />
 
+        {loading && <p role="status">Loading your saved business profile…</p>}
+        <label>Business website</label>
+        <input type="url" value={form.websiteUrl} onChange={e=>set("websiteUrl",e.target.value)} placeholder="https://your-business.com" />
+        <p>Website photo selection uses this address for this business.</p>
+        <label>Business description</label>
+        <textarea rows={3} value={form.description} onChange={e=>set("description",e.target.value)} placeholder="Describe your services or products using verified facts." />
+        <label>Target audience</label>
+        <textarea rows={2} value={form.targetAudience} onChange={e=>set("targetAudience",e.target.value)} />
         <label>Business industry</label>
         <select value={form.industry} onChange={e => set("industry", e.target.value)}>
           <option value="">Choose your industry</option>
@@ -265,7 +284,7 @@ export default function Brand() {
             className="button"
             type="button"
             onClick={save}
-            disabled={saving}
+            disabled={saving || loading || loadError}
           >
             {saving ? "Saving..." : "Save Brand Brain"}
           </button>
