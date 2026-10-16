@@ -29,6 +29,9 @@ export default function Brand() {
   const [learning, setLearning] = useState(false);
   const [replaceFilled, setReplaceFilled] = useState(false);
   const [sources, setSources] = useState<string[]>([]);
+  const [aiSuggestedFields,setAiSuggestedFields] = useState<string[]>([]);
+  const [aiSuggestionValues,setAiSuggestionValues] = useState<Record<string,string>>({});
+  const isAiSuggested = (field:keyof typeof form) => aiSuggestedFields.includes(field) && aiSuggestionValues[field] === form[field];
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -97,7 +100,9 @@ export default function Brand() {
         return next;
       });
       setSources(data.sources || []);
-      setStatus(Object.keys(data.suggestions || {}).length ? "Website details filled for review. Existing entries were kept unless you chose to update them. Review the fields, then click Save Brand Brain. Unsupported details stay blank." : "No supported profile details were found on the checked pages. Please enter the missing information manually.");
+      setAiSuggestedFields(data.aiSuggestedFields || []);
+      setAiSuggestionValues(data.suggestions || {});
+      setStatus(Object.keys(data.suggestions || {}).length ? "Website details filled for review. Existing entries were kept unless you chose to update them. Review the fields, then click Save Brand Brain. Factual details without evidence stay blank. AI-suggested wording and visual guidelines are recommendations for your review." : "No supported profile details were found on the checked pages. Please enter the missing information manually.");
     } catch(error){setStatus(error instanceof Error ? error.message : "Could not fill Brand Brain from this website.");}
     finally{setLearning(false);}
   }
@@ -166,6 +171,7 @@ export default function Brand() {
         </select>
         <p>Used for automatic reel layouts and music. Set your design style to “Automatic by industry” to use these defaults.</p>
         <label>Voice</label>
+        {isAiSuggested("voice") && <p>AI-suggested tone for your review.</p>}
         <textarea
           rows={3}
           value={form.voice}
@@ -180,18 +186,21 @@ export default function Brand() {
         />
 
         <label>Preferred words</label>
+        {isAiSuggested("preferredWords") && <p>AI-suggested vocabulary for your review.</p>}
         <input
           value={form.preferredWords}
           onChange={(e) => set("preferredWords", e.target.value)}
         />
 
         <label>Banned words / claims</label>
+        {isAiSuggested("bannedWords") && <p>AI-suggested restrictions — review and edit before saving. These are recommendations, not rules quoted from your website.</p>}
         <input
           value={form.bannedWords}
           onChange={(e) => set("bannedWords", e.target.value)}
         />
 
         <label>Visual rules</label>
+        {isAiSuggested("visualRules") && <p>AI-suggested visual guidelines — review and edit to fit your business before saving.</p>}
         <textarea
           rows={4}
           value={form.visualRules}
