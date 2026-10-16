@@ -6,7 +6,7 @@ import { z } from "zod";
 const Schema = z.object({
   name: z.string().min(1),
   industry: z.string().max(120).optional(),
-  websiteUrl: z.string().trim().max(2000).refine(value => {if(!value)return true;try {const url=new URL(value);return url.protocol==="https:"&&!url.username&&!url.password&&!url.port;}catch{return false;}},"Enter a full HTTPS business website address.").transform(value=>value||null).optional(),
+  websiteUrl: z.string().trim().max(2000).refine(value => {if(!value)return true;try {const url=new URL(value);return url.protocol==="https:"&&!url.username&&!url.password&&!url.port;}catch{return false;}},"Enter a full HTTPS business website address.").transform(value=>value?new URL(value).href:null).optional(),
   description: z.string().max(8000).optional(),
   targetAudience: z.string().max(4000).optional(),
   voice: z.string().optional(),

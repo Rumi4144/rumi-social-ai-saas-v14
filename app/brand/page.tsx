@@ -26,6 +26,9 @@ export default function Brand() {
 
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const [learning, setLearning] = useState(false);
+  const [replaceFilled, setReplaceFilled] = useState(false);
+  const [sources, setSources] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -78,8 +81,29 @@ export default function Brand() {
     setForm((old) => ({ ...old, [field]: value }));
   }
 
+  async function learnWebsite() {
+    if (learning || loading || loadError || !form.websiteUrl.trim()) return;
+    const requestedWebsite = form.websiteUrl;
+    setLearning(true);setStatus("Reading your website and preparing Brand Brain…");setSources([]);
+    try {
+      const response = await fetch("/api/brand-brain/learn", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({websiteUrl:requestedWebsite}),signal:AbortSignal.timeout(85000)});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not read this website.");
+      const allowed = ["description","targetAudience","industry","voice","positioning","preferredWords","bannedWords","visualRules"];
+      setForm(current => {
+        if (current.websiteUrl !== requestedWebsite) return current;
+        const next = {...current, websiteUrl:data.websiteUrl || current.websiteUrl};
+        for(const field of allowed){const key=field as keyof typeof next;const value=data.suggestions?.[field];if(typeof value==="string"&&value.trim()&&(replaceFilled||!next[key].trim()))next[key]=value;}
+        return next;
+      });
+      setSources(data.sources || []);
+      setStatus(Object.keys(data.suggestions || {}).length ? "Website details filled for review. Existing entries were kept unless you chose to update them. Review the fields, then click Save Brand Brain. Unsupported details stay blank." : "No supported profile details were found on the checked pages. Please enter the missing information manually.");
+    } catch(error){setStatus(error instanceof Error ? error.message : "Could not fill Brand Brain from this website.");}
+    finally{setLearning(false);}
+  }
+
   async function save() {
-    if (loading || loadError || saving) return;
+    if (loading || loadError || saving || learning) return;
     setSaving(true);
     setStatus("Saving...");
 
@@ -124,8 +148,12 @@ export default function Brand() {
 
         {loading && <p role="status">Loading your saved business profile…</p>}
         <label>Business website</label>
-        <input type="url" value={form.websiteUrl} onChange={e=>set("websiteUrl",e.target.value)} placeholder="https://your-business.com" />
-        <p>Website photo selection uses this address for this business.</p>
+        <input type="url" disabled={learning} value={form.websiteUrl} onChange={e=>set("websiteUrl",e.target.value)} placeholder="https://your-business.com" />
+        <p>Use your website to fill Brand Brain, then review and save the details.</p>
+        <button type="button" className="button" disabled={learning || loading || saving || loadError || !form.websiteUrl.trim()} onClick={learnWebsite}>{learning ? "Reading your website…" : "Fill from my website"}</button>
+        <label style={{display:"flex",gap:8,alignItems:"center"}}><input type="checkbox" style={{width:"auto"}} checked={replaceFilled} disabled={learning} onChange={e=>setReplaceFilled(e.target.checked)} /> Also update fields that already contain text</label>
+        {sources.length>0 && <details><summary>Website pages used</summary>{sources.map(source=><p key={source}><a href={source} target="_blank" rel="noreferrer">{source}</a></p>)}</details>}
+        {status && <p role="status">{status}</p>}
         <label>Business description</label>
         <textarea rows={3} value={form.description} onChange={e=>set("description",e.target.value)} placeholder="Describe your services or products using verified facts." />
         <label>Target audience</label>
@@ -284,7 +312,7 @@ export default function Brand() {
             className="button"
             type="button"
             onClick={save}
-            disabled={saving || loading || loadError}
+            disabled={saving || loading || loadError || learning}
           >
             {saving ? "Saving..." : "Save Brand Brain"}
           </button>

@@ -19,7 +19,7 @@ export function extractWebsitePhotos(html:string,pageUrl:string,businessName:str
  return result.slice(0,40);
 }
 export function websitePage(website:string,page?:string){
- const root=new URL(/^https?:\/\//i.test(website)?website:`https://${website}`),url=new URL(page||root.href);
+ const root=new URL(/^https?:/i.test(website)?website:`https://${website}`),url=new URL(page||root.href);
  if(root.protocol!=="https:"||url.protocol!=="https:"||url.origin!==root.origin||url.username||url.password||url.port)throw Error("Choose a page on this business’s saved HTTPS website.");
  url.hash="";return url;
 }
