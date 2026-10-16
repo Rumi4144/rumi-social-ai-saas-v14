@@ -89,7 +89,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       const stored = await loadDraft(reelDraftKey(data.organizationId,campaignId,context.post.id)).catch(() => undefined);
       if(disposed)return;
       const draft=matchingDraft(stored,context.post.id);
-      localFiles.current.clear(); setMusicFile(undefined); setVoiceFile(undefined); setMusic(true); setMusicStyle("ambient"); setMusicVolume(DEFAULT_MUSIC_VOLUME); setOriginalAudio(false);
+      localFiles.current.clear(); setMusicFile(undefined); setVoiceFile(undefined); setMusic(true); setMusicStyle(quick ? automaticMusic(data.brand.name, data.brand.industry) : "ambient"); setMusicVolume(DEFAULT_MUSIC_VOLUME); setOriginalAudio(false);
       if (draft) {
         const restored = new Map<string, string>();
         draft.files.forEach(([old, file]) => { const url = ownUrl(file); restored.set(old, url); localFiles.current.set(url, file); });
@@ -168,7 +168,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       if (!response.ok) throw new Error(data.error || "Could not create this reel draft.");
       if (!autoPlanMatches(data, context)) throw new Error("This draft belongs to a different post. Select your post and try again.");
       const plan = data as AutoReelPlan;
-      setProject(plan.project); setSources(plan.sources); setMusic(true); setMusicStyle(automaticMusic(plan.brand.name, plan.brand.industry)); setMusicVolume(DEFAULT_MUSIC_VOLUME); setMusicFile(undefined); setVoiceFile(undefined); setOriginalAudio(false);
+      setProject(plan.project); setSources(plan.sources);
       setPlanned(plan.project.scenes.length > 0);
       setMessage([...plan.warnings, plan.project.scenes.length ? "Draft ready. Preview the photos and captions, then export your finished reel." : "Add a matching saved photo to this post in the campaign, then try again."].join(" "));
     } catch (error) {

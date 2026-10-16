@@ -26,10 +26,12 @@ function verify(file) {
    await route.fulfill({json:{organizationId:input.organizationId,campaign:{id:input.campaignId,title:'Demo'},post:{id:input.contentItemId,headline:'Find your next guitar',caption:'Saved caption'},brand:{id:'guitars',name:'Rumi Guitars'},project:{brand:'Rumi Guitars',website:'rumiguitars.com',cta:'Explore the collection',color:'#132342',accent:'#dec184',style:'cinematic',animation:'gentle',closingSeconds:1,scenes:[{id:'auto-a',src:'/photo.svg',kind:'image',seconds:4,headline:'Find your next guitar',detail:'Saved caption'}]},sources:[{id:'image-a',src:'/photo.svg',kind:'image',contentItemId:input.contentItemId}],warnings:[]}});
   });
   await page.getByLabel('Campaign',{exact:true}).selectOption('demo');
+  await page.getByLabel('Music style').first().waitFor();
+  await page.getByLabel('Music style').first().selectOption('soft-acoustic');
   await page.getByRole('button',{name:'Create reel draft',exact:true}).click();
   await page.getByRole('status').filter({hasText:'Draft ready'}).waitFor();
   const compactSound = page.locator('section').filter({has:page.getByRole('heading',{name:'Your automatic draft',exact:true})});
-  const musicChoice=compactSound.getByLabel('Music style').first(); assert.equal(await musicChoice.inputValue(),'classical');
+  const musicChoice=compactSound.getByLabel('Music style').first(); assert.equal(await musicChoice.inputValue(),'soft-acoustic','Creating a draft must preserve the selected soft music');
   await musicChoice.selectOption('ambient');
   for (const choice of ['ambient','rain']) {
    await musicChoice.selectOption(choice);
