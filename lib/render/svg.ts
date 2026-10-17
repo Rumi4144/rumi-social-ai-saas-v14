@@ -1,3 +1,4 @@
+import { isShowcaseStyle, renderShowcase } from "./showcase";
 function esc(s: string) {
   return s.replace(
     /[&<>"']/g,
@@ -40,6 +41,7 @@ export type SocialSvgInput = {
   brand: string;
   format?: "square" | "portrait" | "story";
   imageUrl?: string;
+  imageUrls?: string[];
   textPosition?: "left" | "right" | "top";
   logoUrl?: string;
   primaryColor?: string;
@@ -51,6 +53,7 @@ export type SocialSvgInput = {
 };
 
 export function renderSocialSvg(input: SocialSvgInput) {
+  if (isShowcaseStyle(input.designStyle)) return renderShowcase(input, input.designStyle);
   const size =
     input.format === "story"
       ? [1080, 1920]

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { renderSocialSvg } from "@/lib/render/svg";
+import { isShowcaseStyle } from "@/lib/render/showcase";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 import { imageToJpegDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
@@ -12,6 +13,7 @@ const S = z.object({
   subheadline: z.string().optional(),
   cta: z.string().optional(),
   imageUrl: z.string().optional(),
+  designStyle: z.enum(["automatic", "classic", "heritage", "gallery-story", "bold-spotlight"]).optional(),
   textPosition: z.enum(["left", "right", "top"]).optional(),
   format: z
     .enum(["square", "portrait", "story"])
@@ -33,14 +35,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const brand = await prisma.brand.findFirst({
-      where: {
-        organizationId: ctx.organizationId,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+    const post = parsed.data.contentItemId ? await prisma.contentItem.findFirst({ where: { id: parsed.data.contentItemId, ...(parsed.data.campaignId ? { campaignId: parsed.data.campaignId } : {}), campaign: { brand: { organizationId: ctx.organizationId } } }, include: { campaign: { include: { brand: true } } } }) : null;
+    if (parsed.data.contentItemId && !post) return NextResponse.json({ error: "Post not found in this workspace." }, { status: 404 });
+    const campaign = post?.campaign || (parsed.data.campaignId ? await prisma.campaign.findFirst({ where: { id: parsed.data.campaignId, brand: { organizationId: ctx.organizationId } }, include: { brand: true } }) : null);
+    if (parsed.data.campaignId && !campaign) return NextResponse.json({ error: "Campaign not found in this workspace." }, { status: 404 });
+    const brand = campaign?.brand || await prisma.brand.findFirst({ where: { organizationId: ctx.organizationId }, orderBy: { createdAt: "desc" } });
 
     if (!brand) {
       return NextResponse.json(
@@ -48,6 +47,10 @@ export async function POST(req: Request) {
         { status: 404 }
       );
     }
+
+    const variants = ["heritage", "gallery-story", "bold-spotlight"];
+    const seed = [...(post?.id || parsed.data.headline)].reduce((n, c) => n + c.charCodeAt(0), 0);
+    const designStyle = parsed.data.designStyle && parsed.data.designStyle !== "automatic" ? parsed.data.designStyle : isShowcaseStyle(brand.designStyle || undefined) ? brand.designStyle! : /guitar/i.test(brand.name) ? variants[seed % variants.length] : brand.designStyle || undefined;
 
     // Browser-captured raster is the source of truth: save exactly what the user saw.
     if (parsed.data.browserRasterDataUrl) {
@@ -80,7 +83,7 @@ export async function POST(req: Request) {
           width: 1080,
           height: parsed.data.format === "story" ? 1920 : parsed.data.format === "portrait" ? 1350 : 1080,
           brandId: brand.id,
-          designStyle: brand.designStyle,
+          designStyle,
           textPosition: parsed.data.textPosition || "left",
           rasterizedInBrowser: true,
         },
@@ -98,11 +101,20 @@ export async function POST(req: Request) {
       embeddedImageUrl = await imageToJpegDataUrl(embeddedImageUrl);
     }
 
+    const embeddedImages: string[] = [];
+    if (isShowcaseStyle(designStyle) && post) {
+      const photos = await prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, campaignId: post.campaignId, contentItemId: post.id, kind: { in: ["ai_image", "product_photo", "reel_scene_image"] }, status: "ready", url: { not: null } }, select: { url: true }, orderBy: { createdAt: "asc" }, take: 12 });
+      const extras = [...new Set(photos.map(photo => photo.url).filter((url): url is string => Boolean(url) && url !== parsed.data.imageUrl))].slice(0, 2);
+      const results = await Promise.allSettled(extras.map(url => imageToJpegDataUrl(url)));
+      for (const result of results) if (result.status === "fulfilled") embeddedImages.push(result.value);
+    }
+
     const svg = renderSocialSvg({
       headline: parsed.data.headline,
       subheadline: parsed.data.subheadline,
       cta: parsed.data.cta,
       imageUrl: embeddedImageUrl,
+      imageUrls: embeddedImages,
       format: parsed.data.format,
       textPosition: parsed.data.textPosition || "left",
 
@@ -113,7 +125,7 @@ export async function POST(req: Request) {
       accentColor: brand.accentColor || undefined,
       headingFont: brand.headingFont || undefined,
       bodyFont: brand.bodyFont || undefined,
-      designStyle: brand.designStyle || undefined,
+      designStyle,
     });
 
     if (parsed.data.prepareOnly) {
@@ -158,7 +170,7 @@ export async function POST(req: Request) {
               ? 1350
               : 1080,
         brandId: brand.id,
-        designStyle: brand.designStyle,
+        designStyle,
         textPosition: parsed.data.textPosition || "left",
       },
     };

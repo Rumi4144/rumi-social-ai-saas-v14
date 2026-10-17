@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SHOWCASE_STYLES } from "@/lib/render/showcase";
 
 export default function RenderCreativeButton({
   campaignId,
@@ -21,6 +22,7 @@ export default function RenderCreativeButton({
   existingCreative?: boolean;
   format?: "portrait" | "story";
 }) {
+  const [designStyle, setDesignStyle] = useState("automatic");
   const [status, setStatus] = useState("");
 
   async function render() {
@@ -36,6 +38,7 @@ export default function RenderCreativeButton({
         imageUrl,
         textPosition,
         format,
+        designStyle,
       };
 
       // Ask the server only to prepare the complete SVG. The browser then
@@ -85,6 +88,7 @@ export default function RenderCreativeButton({
 
   return (
     <div>
+      <label>Post design<select value={designStyle} disabled={status === "Creating..."} onChange={e => setDesignStyle(e.target.value)}><option value="automatic">Automatic variety</option>{SHOWCASE_STYLES.map(style => <option key={style.value} value={style.value}>{style.label}</option>)}<option value="classic">Classic photo overlay</option></select></label>
       <button
         type="button"
         onClick={render}
