@@ -24,29 +24,30 @@ export function renderShowcase(input: SocialSvgInput, style: ShowcaseStyle) {
   const text = (value: string, x: number, y: number, size: number, fill: string, limit: number, count: number, center = false, serif = false) => `<text fill="${fill}" font-family="${serif ? "Georgia, serif" : "Arial, sans-serif"}" font-size="${size}" font-weight="${serif ? 500 : 700}" text-anchor="${center ? "middle" : "start"}">${lines(value, limit, count).map((s, i) => `<tspan x="${x}" y="${y + i * size * 1.13}"${s.length * size * .9 > (center ? 960 : style === "bold-spotlight" ? 420 : 960) ? ` textLength="${center ? 960 : style === "bold-spotlight" ? 420 : 960}" lengthAdjust="spacingAndGlyphs"` : ""}>${esc(s)}</tspan>`).join("")}</text>`;
   const brand = (y: number, fill: string) => text(input.brand.toUpperCase(), 540, y, 23, fill, 50, 1, true);
   const footer = (fill: string) => `<line x1="60" y1="${h - 142}" x2="1020" y2="${h - 142}" stroke="${accent}" opacity=".65"/>${text(input.cta || "Explore more", 540, h - 85, 29, fill, 42, 1, true)}${brand(h - 38, fill)}`;
+  const panels = urls.length > 1 || input.detailCrops === true;
   let body = "";
   if (style === "heritage") {
     const y = 340, photoHeight = h - 540, half = (photoHeight - 22) / 2;
     body = `<rect width="1080" height="${h}" fill="${primary}"/><rect width="1080" height="${h}" fill="url(#glow)"/><rect x="25" y="25" width="1030" height="${h - 50}" rx="6" fill="none" stroke="${accent}" opacity=".5"/>
       ${brand(82, accent)}<path d="M430 106h92l18 10 18-10h92" stroke="${accent}" fill="none"/>
       ${text(input.headline, 540, 177, 68, paper, 25, 2, true, true)}${text(input.subheadline || "", 540, 292, 24, accent, 66, 1, true)}
-      <rect x="58" y="${y}" width="620" height="${photoHeight}" fill="#ffffff" opacity=".06"/>${image(urls[0], 70, y + 12, 596, photoHeight - 24)}
+      ${!panels ? image(urls[0], 70, y + 12, 940, photoHeight - 24) : `<rect x="58" y="${y}" width="620" height="${photoHeight}" fill="#ffffff" opacity=".06"/>${image(urls[0], 70, y + 12, 596, photoHeight - 24)}
       <rect x="702" y="${y}" width="320" height="${photoHeight}" fill="${paper}" opacity=".08"/>
-      ${image(urls[1] || urls[0], 714, y + 12, 296, half - 12, !urls[1])}${image(urls[2] || urls[0], 714, y + half + 22, 296, half - 12, urls[2] ? false : "lower")}
-      ${text(urls.length > 1 ? "MORE VIEWS" : "DETAIL STUDIES", 860, h - 168, 16, accent, 24, 1, true)}${footer(paper)}`;
+      ${image(urls[1] || urls[0], 714, y + 12, 296, half - 12, Boolean(input.detailCrops) && !urls[1])}${image(urls[2] || urls[0], 714, y + half + 22, 296, half - 12, urls[2] || !input.detailCrops ? false : "lower")}
+      ${text(urls.length > 1 ? "MORE VIEWS" : "DETAIL STUDIES", 860, h - 168, 16, accent, 24, 1, true)}`}${footer(paper)}`;
   } else if (style === "gallery-story") {
     const y = 330, photoHeight = h - 540;
     body = `<rect width="1080" height="${h}" fill="${paper}"/>${brand(78, primary)}<line x1="60" y1="108" x2="1020" y2="108" stroke="${primary}" opacity=".35"/>
       ${text(input.headline, 60, 182, 66, primary, 26, 2, false, true)}${text(input.subheadline || "", 60, 296, 24, primary, 68, 1)}
-      <rect x="60" y="${y}" width="600" height="${photoHeight}" fill="${primary}" opacity=".07"/>${image(urls[0], 72, y + 12, 576, photoHeight - 24)}
-      ${image(urls[1] || urls[0], 684, y, 336, photoHeight * .54 - 12, !urls[1])}${image(urls[2] || urls[0], 684, y + photoHeight * .54 + 12, 336, photoHeight * .46 - 12, urls[2] ? false : "lower")}
+      ${!panels ? image(urls[0], 60, y, 960, photoHeight) : `<rect x="60" y="${y}" width="600" height="${photoHeight}" fill="${primary}" opacity=".07"/>${image(urls[0], 72, y + 12, 576, photoHeight - 24)}
+      ${image(urls[1] || urls[0], 684, y, 336, photoHeight * .54 - 12, Boolean(input.detailCrops) && !urls[1])}${image(urls[2] || urls[0], 684, y + photoHeight * .54 + 12, 336, photoHeight * .46 - 12, urls[2] || !input.detailCrops ? false : "lower")}` }
       <rect x="60" y="${h - 178}" width="90" height="5" fill="${accent}"/>${footer(primary)}`;
   } else {
     const panelY = 120, panelH = h - 340;
     body = `<rect width="1080" height="${h}" fill="${primary}"/><rect x="540" width="540" height="${h - 190}" fill="${paper}"/>
       ${text(input.brand.toUpperCase(), 60, 76, 22, accent, 30, 1)}${text(input.headline, 60, 200, 66, paper, 12, 4)}
       <rect x="60" y="530" width="90" height="6" fill="${accent}"/>${text(input.subheadline || "", 60, 590, 26, paper, 28, 3)}
-      ${image(urls[0], 558, panelY, 504, panelH)}${h > 1200 ? image(urls[1] || urls[0], 60, 740, 418, Math.min(360, h - 1000), !urls[1]) : ""}${footer(paper)}`;
+      ${image(urls[0], 558, panelY, 504, panelH)}${h > 1200 && panels ? image(urls[1] || urls[0], 60, 740, 418, Math.min(360, h - 1000), Boolean(input.detailCrops) && !urls[1]) : ""}${footer(paper)}`;
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="${h}" viewBox="0 0 1080 ${h}"><defs><radialGradient id="glow"><stop stop-color="${accent}" stop-opacity=".18"/><stop offset="1" stop-color="${primary}" stop-opacity="0"/></radialGradient></defs>${body}</svg>`;
 }

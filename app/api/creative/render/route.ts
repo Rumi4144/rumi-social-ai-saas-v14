@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { renderSocialSvg } from "@/lib/render/svg";
+import { businessVisualMode } from "@/lib/ai/visual-plan";
 import { isShowcaseStyle } from "@/lib/render/showcase";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
 
     const variants = ["heritage", "gallery-story", "bold-spotlight"];
     const seed = [...(post?.id || parsed.data.headline)].reduce((n, c) => n + c.charCodeAt(0), 0);
-    const designStyle = parsed.data.designStyle && parsed.data.designStyle !== "automatic" ? parsed.data.designStyle : isShowcaseStyle(brand.designStyle || undefined) ? brand.designStyle! : /guitar/i.test(brand.name) ? variants[seed % variants.length] : brand.designStyle || undefined;
+    const designStyle = parsed.data.designStyle && parsed.data.designStyle !== "automatic" ? parsed.data.designStyle : isShowcaseStyle(brand.designStyle || undefined) ? brand.designStyle! : variants[seed % variants.length];
 
     // Browser-captured raster is the source of truth: save exactly what the user saw.
     if (parsed.data.browserRasterDataUrl) {
@@ -115,6 +116,7 @@ export async function POST(req: Request) {
       cta: parsed.data.cta,
       imageUrl: embeddedImageUrl,
       imageUrls: embeddedImages,
+      detailCrops: businessVisualMode({ industry: brand.industry, description: brand.description }) === "product",
       format: parsed.data.format,
       textPosition: parsed.data.textPosition || "left",
 

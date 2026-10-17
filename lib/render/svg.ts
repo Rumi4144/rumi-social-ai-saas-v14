@@ -42,6 +42,7 @@ export type SocialSvgInput = {
   format?: "square" | "portrait" | "story";
   imageUrl?: string;
   imageUrls?: string[];
+  detailCrops?: boolean;
   textPosition?: "left" | "right" | "top";
   logoUrl?: string;
   primaryColor?: string;

@@ -10,6 +10,7 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
   const [subheadline, setSubheadline] = useState("");
   const [cta, setCta] = useState("Learn more");
   const [format, setFormat] = useState<"square" | "portrait" | "story">("portrait");
+  const [detailCrops, setDetailCrops] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]), [photoError, setPhotoError] = useState("");
   const [treatment, setTreatment] = useState("brand");
   const svg = useMemo(() => renderSocialSvg({
@@ -18,10 +19,10 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
     headingFont: treatment === "editorial" ? "Georgia" : treatment === "brand" ? brand.headingFont : "Arial",
     primaryColor: treatment === "minimal" ? brand.secondaryColor : brand.primaryColor,
     secondaryColor: treatment === "minimal" ? brand.primaryColor : brand.secondaryColor,
-    imageUrl: photos[0], imageUrls: photos.slice(1),
-    designStyle: isShowcaseStyle(treatment) ? treatment : undefined,
+    imageUrl: photos[0], imageUrls: photos.slice(1), detailCrops,
+    designStyle: isShowcaseStyle(treatment) ? treatment : treatment === "brand" ? (isShowcaseStyle(brand.designStyle) ? brand.designStyle : "gallery-story") : undefined,
     textPosition: treatment === "bold" ? "top" : "left",
-  }), [brand, headline, subheadline, cta, format, treatment, photos]);
+  }), [brand, headline, subheadline, cta, format, treatment, photos, detailCrops]);
   const previewUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   return <>
     <div className="eyebrow">CREATIVE STUDIO</div>
@@ -45,6 +46,7 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
           <option value="brand">Workspace brand style</option><option value="editorial">Editorial</option><option value="minimal">Minimal</option><option value="bold">Bold promotion</option>
         </select>
         <label>Product or service photos · up to 3<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={async e => { const files = [...(e.target.files || [])].slice(0, 3); setPhotoError(""); if (files.some(file => !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5_000_000)) { setPhotoError("Choose JPEG, PNG or WebP photos under 5 MB each."); return; } try { const urls = await Promise.all(files.map(file => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(Error("Could not read photo.")); reader.readAsDataURL(file); }))); setPhotos(urls); } catch { setPhotoError("Could not read those photos. Please try again."); } }} /></label>
+        <label><input type="checkbox" checked={detailCrops} onChange={e => setDetailCrops(e.target.checked)} /> Include detail close-ups from a single photo</label>
         {photos.length > 0 && <button type="button" onClick={() => setPhotos([])}>Remove photos</button>}{photoError && <p role="alert">{photoError}</p>}
         <p>Your preview updates as you edit. Photos stay in this browser until you download the creative.</p>
         {headline.trim() ? <a className="button" href={previewUrl} download={`${brand.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-creative.svg`}>Download creative · SVG</a> : <p>Enter a headline to download your creative.</p>}
