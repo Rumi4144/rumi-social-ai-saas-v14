@@ -142,6 +142,21 @@ export default function Create() {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
 
+  async function findWebsitePhotos() {
+    if (!suggestionContext?.organizationId || importing || busy) return;
+    setImporting(true); setImportError("");
+    try {
+      const response = await fetch("/api/campaigns/website-photos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId: suggestionContext.organizationId, topics: chosenTopics.map(topic => topic.label) }), signal: AbortSignal.timeout(45000) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not find website photos.");
+      if (data.organizationId !== suggestionContext.organizationId) throw new Error("Your workspace changed. Reload this page first.");
+      const images: string[] = Array.isArray(data.images) ? data.images.filter((url: unknown): url is string => typeof url === "string").slice(0, 20) : [];
+      setWebsiteImages(images); setSelectedImages(images); setProductTitle(data.title || "Website photos");
+      setImportError(`${images.length} photos selected from your website. Review them below and deselect any you do not want.`);
+    } catch (error) { setImportError(error instanceof Error && error.name === "TimeoutError" ? "The website took too long. Try again or import one product page." : error instanceof Error ? error.message : "Could not find website photos."); }
+    finally { setImporting(false); }
+  }
+
   async function importWebsitePhotos() {
     if (!productUrl.trim()) return;
 
@@ -189,7 +204,7 @@ export default function Create() {
   }
 
   async function go() {
-    if (brief.trim().length < 10 || busy || !validQuantities || !campaignStartDate) return;
+    if (brief.trim().length < 10 || busy || importing || !validQuantities || !campaignStartDate || (photoSource === "website" && selectedImages.length === 0)) return;
 
     setBusy(true);
     setStatus("Preparing campaign...");
@@ -455,7 +470,10 @@ export default function Create() {
 
           {photoSource === "website" && (
             <>
-              <label>Product URL</label>
+              <button type="button" disabled={busy || importing || !suggestionContext?.website} onClick={findWebsitePhotos}>{importing ? "Finding photos…" : "Find photos from my website"}</button>
+              <p>Find a varied set from your business’s website and preselect it for this campaign. Review the photos below; you can deselect any. No image-generation credits are used to find photos.</p>
+              {!suggestionContext?.website && !suggestionsLoading && <p>Add your website in Brand Brain to use automatic photo discovery.</p>}
+              <label>Or import a specific product-page URL</label>
 
               <div
                 style={{
@@ -915,12 +933,13 @@ export default function Create() {
           <span>Extra special-day drafts</span>
         </div>
 
+        {photoSource === "website" && selectedImages.length === 0 && <p role="status">Choose “Find photos from my website,” import a product page and select photos, or switch to “Drafts only” to enable campaign creation.</p>}
         <button
           className="button createbig"
           onClick={go}
           disabled={
             brief.trim().length < 10 ||
-            busy || !validQuantities || !campaignStartDate ||
+            busy || importing || !validQuantities || !campaignStartDate ||
             (photoSource === "website" &&
               selectedImages.length === 0)
           }

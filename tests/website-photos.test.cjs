@@ -1,33 +1,14 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const ts = require('typescript');
-const root = path.resolve(__dirname, '..');
-function load(file, mocks = {}, cache = new Map()) {
-  file = path.resolve(root, file);
-  if (cache.has(file)) return cache.get(file).exports;
-  const module = { exports: {} }; cache.set(file, module);
-  const requireFile = name => {
-    if (name in mocks) return mocks[name];
-    if (name.startsWith('@/') || name.startsWith('.')) {
-      const base = name.startsWith('@/') ? path.join(root, name.slice(2)) : path.resolve(path.dirname(file), name);
-      return load(base.endsWith('.ts') ? base : `${base}.ts`, mocks, cache);
-    }
-    return require(name);
-  };
-  const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
-  vm.runInNewContext(js, { module, exports: module.exports, require: requireFile, process, Buffer, URL, console, fetch: mocks.__fetch || fetch, AbortSignal, FormData, Blob, Response, Uint8Array, Headers, ReadableStream, setTimeout, clearTimeout }, { filename: file });
-  return module.exports;
-}
-
-
-const json=(body,options={})=>({body,status:options.status||200});
-const {extractWebsitePhotos,websitePage}=load('lib/website/photos.ts');
-test('website photos include actual service images and exclude logos small icons and duplicates',()=>{
- const html='<img src="/logo.png" alt="Logo"><img src="/session.jpg" alt="Hypnosis consultation" width="800" height="600"><img src="/session.jpg" alt="Duplicate"><img src="/icon.png" width="20" height="20"><img data-src="/office.webp" alt="Quiet office">';
- const photos=extractWebsitePhotos(html,'https://mind.example/','Master Mind');assert.equal(photos.length,2);assert.equal(photos[0].name,'Hypnosis consultation');assert.equal(photos[0].imageUrl,'https://mind.example/session.jpg');assert.equal(photos[0].websitePhoto,true);assert.equal(photos[1].sourceUrl,'https://mind.example/');
-});
-test('photo discovery cannot use another business website or credentials in a URL',()=>{assert.throws(()=>websitePage('https://mind.example','https://guitars.example/'));assert.throws(()=>websitePage('https://mind.example','https://user:pass@mind.example/'));assert.equal(websitePage('https://mind.example','https://mind.example/services').origin,'https://mind.example');});
-test('selection uses rechecked website image and preserves the existing post title and caption',async()=>{let update;const api=load('app/api/website/photos/route.ts',{'next/server':{NextResponse:{json}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'mind',role:'owner'})},'@/lib/website/photos':{websitePhotos:async(website,name,page)=>{assert.equal(website,'https://mind.example');assert.equal(page,'https://mind.example/services');return [{id:'photo',name:'Service photo',imageUrl:'https://mind.example/office.jpg',sourceUrl:page}]}},'@/lib/prisma':{prisma:{contentItem:{findFirst:async()=>({id:'post',campaignId:'campaign',campaign:{brand:{websiteUrl:'https://mind.example',name:'Master Mind'}}})},$transaction:async fn=>fn({contentItem:{findFirst:async()=>({status:'draft'}),update:async q=>{update=q.data}},publishJob:{findFirst:async()=>null},mediaAsset:{updateMany:async()=>({}),create:async()=>({})}})}}});const r=await api.POST(new Request('https://app.test/api/website/photos',{method:'POST',body:JSON.stringify({campaignId:'campaign',contentItemId:'post',photoId:'photo',pageUrl:'https://mind.example/services'})}));assert.equal(r.status,200);assert.equal(update.mediaUrl,'https://mind.example/office.jpg');assert.equal(update.status,'draft');assert.equal('headline' in update,false);assert.equal('caption' in update,false);});
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
+const root=path.resolve(__dirname,'..');
+function load(file,mocks={},cache=new Map()){file=path.resolve(root,file);if(cache.has(file))return cache.get(file).exports;const module={exports:{}};cache.set(file,module);const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;vm.runInNewContext(js,{module,exports:module.exports,Buffer,URL,process,require:n=>n in mocks?mocks[n]:n.startsWith('@/')||n.startsWith('.')?load((n.startsWith('@/')?n.slice(2):path.relative(root,path.resolve(path.dirname(file),n)))+'.ts',mocks,cache):require(n)});return module.exports;}
+const photos=load('lib/campaign/website-photos.ts');
+const home='https://rumi.example/';
+test('discovery prioritizes selected topics and never follows unrelated origins or account links',()=>{const links=photos.websitePhotoLinks('<a href="/product/jazz/">Jazz guitar</a><a href="/product/flamenco/">Flamenco guitar</a><a href="https://other.example/product/flamenco/">Flamenco</a><a href="/checkout">Flamenco guitar</a><a href="/product/flamenco/?token=bad">Flamenco</a>',home,['Flamenco guitar']);assert.deepEqual(Array.from(links),[home+'product/flamenco/',home+'product/jazz/']);});
+test('home-page photos exclude logos, icons, thumbnails, duplicate sizes and footer graphics',()=>{const html='<header><img src="/header.jpg"></header><img src="/logo.png"><img src="/tiny.jpg" width="64" height="64"><img data-src="/guitar.jpg" width="600" height="800"><img src="/guitar-300x400.jpg" width="300" height="400"><img src="/portrait.webp" alt="Our teacher"><footer><img src="/footer.jpg"></footer>';assert.deepEqual(Array.from(photos.websitePhotoCandidates(html,home)),[home+'guitar.jpg',home+'portrait.webp']);});
+test('product galleries exclude related products',()=>{const html='<div class="woocommerce-product-gallery"><img data-large_image="/main.jpg"></div><div class="related"><img src="/unrelated.jpg"></div>';assert.deepEqual(Array.from(photos.websitePhotoCandidates(html,home)),[home+'main.jpg']);});
+test('auto discovery mixes product galleries, deduplicates and tolerates one unreadable page',async()=>{const pages={[home]:'<a href="/product/a/">Classical guitar</a><a href="/product/b/">Flamenco guitar</a><a href="/product/bad/">Guitar</a>',[home+'product/a/']:'<div class="woocommerce-product-gallery"><img src="/a1.jpg"><img src="/a2.jpg"></div>',[home+'product/b/']:'<div class="woocommerce-product-gallery"><img src="/b1.jpg"><img src="/a1-300x400.jpg"></div>'};const calls=[];const helper=load('lib/campaign/website-photos.ts',{'@/lib/reels/public-fetch':{fetchPublicBytes:async url=>{calls.push(url);if(!pages[url])throw Error('unavailable');return{bytes:Buffer.from(pages[url]),contentType:'text/html'};}}});const found=await helper.discoverWebsitePhotos(home,['guitar']);assert.deepEqual(Array.from(found),[home+'a1.jpg',home+'b1.jpg',home+'a2.jpg']);assert.ok(calls.length<=7);});
+const response={NextResponse:{json:(body,options={})=>({body,status:options.status||200})}};
+function route(){let reads=0,crawls=0;return{api:load('app/api/campaigns/website-photos/route.ts',{'next/server':response,'@/lib/auth/context':{tenantContext:async()=>({organizationId:'rumi'})},'@/lib/prisma':{prisma:{brand:{findFirst:async q=>{reads++;assert.equal(q.where.organizationId,'rumi');return{name:'Rumi',websiteUrl:home};}}}},'@/lib/campaign/website-photos':{discoverWebsitePhotos:async url=>{crawls++;assert.equal(url,home);return[home+'guitar.jpg'];}},'@/lib/http/errors':{apiError:e=>{throw e;}}}),reads:()=>reads,crawls:()=>crawls};}
+const req=body=>new Request('https://app.test/api/campaigns/website-photos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+test('stale workspace and invalid requests stop before any crawl or brand read',async()=>{const a=route();assert.equal((await a.api.POST(req({organizationId:'mind'}))).status,409);assert.equal((await a.api.POST(req({}))).status,400);assert.equal(a.reads(),0);assert.equal(a.crawls(),0);});
+test('API uses only the business saved website, ignores supplied crawl URLs and makes no writes',async()=>{const a=route();const r=await a.api.POST(req({organizationId:'rumi',topics:['Classical guitar'],website:'https://other.example'}));assert.equal(r.status,200);assert.equal(r.body.organizationId,'rumi');assert.equal(a.crawls(),1);assert.equal(a.reads(),1);});
