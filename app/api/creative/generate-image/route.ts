@@ -1,3 +1,4 @@
+import {saveGeneratedPhoto} from "@/lib/creative/image-history";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import OpenAI from "openai";
@@ -100,10 +101,7 @@ export async function POST(req: Request) {
     };
 
     // Keep every paid generation available for later reuse instead of overwriting it.
-    const asset = await prisma.$transaction(async tx => {
-      if(p.data.contentItemId)await tx.mediaAsset.updateMany({where:{organizationId:ctx.organizationId,contentItemId:p.data.contentItemId,kind:"ai_image",status:"ready"},data:{status:"superseded"}});
-      return tx.mediaAsset.create({data:assetData});
-    });
+    const asset = await saveGeneratedPhoto(assetData);
 
     await prisma.job.create({ data: {
       organizationId: ctx.organizationId, type: "GENERATE_IMAGE", status: "succeeded", progress: 100,

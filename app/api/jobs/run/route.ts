@@ -258,23 +258,12 @@ export async function POST(req: Request) {
         imageProvider = "openai";
       }
 
-      const existingImage = await prisma.mediaAsset.findFirst({
-        where: {
-          organizationId: job.organizationId,
-          contentItemId: p.contentItemId,
-          kind: "ai_image",
-          provider: "openai",
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
-
       const imageData = {
         organizationId: job.organizationId,
         campaignId: p.campaignId,
         contentItemId: p.contentItemId,
         kind: "ai_image",
+        provider: imageProvider,
         status: "ready",
         url: dataUrl,
         prompt: p.prompt,
@@ -287,14 +276,8 @@ export async function POST(req: Request) {
         },
       };
 
-      const asset = existingImage
-        ? await prisma.mediaAsset.update({
-            where: { id: existingImage.id },
-            data: imageData,
-          })
-        : await prisma.mediaAsset.create({
-            data: imageData,
-          });
+      const {saveGeneratedPhoto} = await import("@/lib/creative/image-history");
+      const asset = await saveGeneratedPhoto(imageData);
 
       // Automatically turn the clean AI source image into
       // a finished Brand Brain creative.
