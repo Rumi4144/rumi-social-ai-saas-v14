@@ -283,7 +283,7 @@ export default function SchedulePostButton({
             {completed ? (queuedNow ? "✓ Queued for posting" : "✓ Scheduled") : busy ? "Preparing your post…" : postNow ? "Approve and post now" : allowPostNow ? "Approve and schedule" : "Schedule Post"}
           </button>
 
-          {completed && <p role="status" aria-live="polite">{queuedNow ? "Queued for posting. Check Publishing for delivery status." : "Scheduled successfully."}</p>}
+          <p role="status" aria-live="polite" style={{minHeight:"3em",marginTop:10}}>{completed ? (queuedNow ? "Queued for posting. Check Publishing for delivery status." : "Scheduled successfully.") : ""}</p>
           {error && (
             <p
               style={{
