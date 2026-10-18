@@ -15,11 +15,13 @@ export default function PublishingActions({
   const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("public");
   const [certified,setCertified]=useState(false),[madeForKids,setMadeForKids]=useState(false),[synthetic,setSynthetic]=useState(true);
   const youtube = isYouTube ? { certified, privacy, madeForKids, containsSyntheticMedia: synthetic } : undefined;
+  const [completed, setCompleted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
 
   async function publishNow() {
+    if (busy || completed) return;
     if (isYouTube && !certified) { setMessage("Confirm YouTube upload settings first."); return; }
     if (
       !confirm(
@@ -53,7 +55,7 @@ export default function PublishingActions({
       }
 
       setMessage(data.pending ? data.message || "The platform is processing this post. Check publishing history." : "Published successfully.");
-      window.location.reload();
+      setCompleted(true);
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -66,6 +68,7 @@ export default function PublishingActions({
   }
 
   async function schedulePost() {
+    if (busy || completed) return;
     if (isYouTube && !certified) { setMessage("Confirm YouTube upload settings first."); return; }
     if (!scheduledFor) {
       setMessage("Choose a future date and time.");
@@ -106,7 +109,7 @@ export default function PublishingActions({
       }
 
       setMessage("Scheduled successfully.");
-      window.location.reload();
+      setCompleted(true);
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -120,10 +123,10 @@ export default function PublishingActions({
 
   return (
     <div style={{ marginTop: "16px" }}>
-      {isYouTube && <div><p>Uses this post’s selected video, headline and caption.</p><label>Visibility <select value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label><input type="checkbox" checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> Made for kids</label><label><input type="checkbox" checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Realistic altered or synthetic content</label><label><input type="checkbox" checked={certified} onChange={e=>setCertified(e.target.checked)} /> I authorize the upload with the selected visibility, have rights to this video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
+      {isYouTube && <div><p>Uses this post’s selected video, headline and caption.</p><label>Visibility <select disabled={busy || completed} value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label><input type="checkbox" disabled={busy || completed} checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> Made for kids</label><label><input type="checkbox" disabled={busy || completed} checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Realistic altered or synthetic content</label><label><input type="checkbox" disabled={busy || completed} checked={certified} onChange={e=>setCertified(e.target.checked)} /> I authorize the upload with the selected visibility, have rights to this video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
       <button
         type="button"
-        disabled={busy}
+        disabled={busy || completed}
         onClick={publishNow}
       >
         {busy ? "Working..." : `${isYouTube ? "Upload to" : "Publish to"} ${destination}`}
@@ -132,6 +135,7 @@ export default function PublishingActions({
       <div style={{ marginTop: "12px" }}>
         <input
           type="datetime-local"
+          disabled={busy || completed}
           value={scheduledFor}
           onChange={(e) =>
             setScheduledFor(e.target.value)
@@ -140,7 +144,7 @@ export default function PublishingActions({
 
         <button
           type="button"
-          disabled={busy || !scheduledFor}
+          disabled={busy || completed || !scheduledFor}
           onClick={schedulePost}
           style={{ marginLeft: "8px" }}
         >
@@ -148,9 +152,7 @@ export default function PublishingActions({
         </button>
       </div>
 
-      {message ? (
-        <p style={{ marginTop: "10px" }}>{message}</p>
-      ) : null}
+      <p role="status" aria-live="polite" style={{ marginTop: "10px", minHeight: "3em" }}>{message}</p>
     </div>
   );
 }

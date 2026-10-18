@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 
 type Connection = {
   id: string;
@@ -35,7 +34,7 @@ export default function SchedulePostButton({
   allowPostNow?: boolean;
   beforeSchedule?: () => Promise<void>;
 }) {
-  const router = useRouter();
+  const [completed,setCompleted] = useState(false);
 
   const [youtubeCertified, setYoutubeCertified] = useState(false);
   const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("public");
@@ -146,6 +145,7 @@ export default function SchedulePostButton({
   }
 
   async function schedule() {
+    if (busy || completed) return;
     if (!postNow && !scheduledFor) {
       setError("Choose a date and time.");
       return;
@@ -190,17 +190,7 @@ export default function SchedulePostButton({
       setStatus("scheduled");
       setQueuedNow(postNow);
       setSavedTime(isoTime);
-      setOpen(false);
-
-      const scrollY = window.scrollY;
-      router.refresh();
-
-      requestAnimationFrame(() => {
-        window.scrollTo({
-          top: scrollY,
-          behavior: "instant",
-        });
-      });
+      setCompleted(true);
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Could not schedule post.",
@@ -210,22 +200,22 @@ export default function SchedulePostButton({
     }
   }
 
-  if (status === "scheduled") {
+  if (status === "scheduled" && !completed) {
     return (
-      <span>
+      <div role="status" aria-live="polite">
         {queuedNow ? "✓ Queued for posting. Check Publishing for delivery status." : "✓ Scheduled"}
         {!queuedNow && savedTime ? ` · ${new Date(savedTime).toLocaleString()}` : ""}
-      </span>
+      </div>
     );
   }
 
-  if (status !== "approved") {
+  if (status !== "approved" && !completed) {
     return null;
   }
 
   return (
-    <>
-      <button type="button" onClick={() => setOpen(!open)}>
+    <div>
+      <button type="button" disabled={completed} onClick={() => setOpen(!open)}>
         {allowPostNow ? "Choose accounts and time" : "Schedule"}
       </button>
 
@@ -261,7 +251,7 @@ export default function SchedulePostButton({
               >
                 <input
                   type="checkbox"
-                  disabled={busy}
+                  disabled={busy || completed}
                   checked={selected.includes(connection.id)}
                   onChange={() => toggleConnection(connection.id)}
                 />{" "}
@@ -272,10 +262,10 @@ export default function SchedulePostButton({
           </div>
 
           {youtubeSelected && <div><p>The selected video, post headline and caption will be uploaded at the scheduled time.</p><label>Visibility <select value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label><input type="checkbox" checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> This video is made for kids</label><label><input type="checkbox" checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Contains realistic altered or synthetic content</label><label><input type="checkbox" checked={youtubeCertified} onChange={e=>setYoutubeCertified(e.target.checked)} /> I authorize this YouTube upload with the selected visibility, have rights to the video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
-          {allowPostNow && <label>When<select value={postNow ? "now" : "later"} disabled={busy} onChange={event => setPostNow(event.target.value === "now")}><option value="now">Post now</option><option value="later">Schedule for later</option></select></label>}
+          {allowPostNow && <label>When<select value={postNow ? "now" : "later"} disabled={busy || completed} onChange={event => setPostNow(event.target.value === "now")}><option value="now">Post now</option><option value="later">Schedule for later</option></select></label>}
           {!postNow && <input
             type="datetime-local"
-            disabled={busy}
+            disabled={busy || completed}
             value={scheduledFor}
             onChange={(e) => setScheduledFor(e.target.value)}
             style={{
@@ -288,11 +278,12 @@ export default function SchedulePostButton({
           <button
             type="button"
             onClick={schedule}
-            disabled={busy || connections.length === 0}
+            disabled={busy || completed || connections.length === 0}
           >
-            {busy ? "Preparing your post…" : postNow ? "Approve and post now" : allowPostNow ? "Approve and schedule" : "Schedule Post"}
+            {completed ? (queuedNow ? "✓ Queued for posting" : "✓ Scheduled") : busy ? "Preparing your post…" : postNow ? "Approve and post now" : allowPostNow ? "Approve and schedule" : "Schedule Post"}
           </button>
 
+          {completed && <p role="status" aria-live="polite">{queuedNow ? "Queued for posting. Check Publishing for delivery status." : "Scheduled successfully."}</p>}
           {error && (
             <p
               style={{
@@ -305,6 +296,6 @@ export default function SchedulePostButton({
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }
