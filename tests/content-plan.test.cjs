@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 function load(file,deps={}) {
  const module={exports:{}};
  const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
- vm.runInNewContext(js,{module,exports:module.exports,require:n=>n in deps?deps[n]:require(n),Date,Intl,Map,Set,process});
+ vm.runInNewContext(js,{module,exports:module.exports,require:n=>n in deps?deps[n]:n === "@/lib/campaign/setup-photos" ? load("lib/campaign/setup-photos.ts") : require(n),Date,Intl,Map,Set,process});
  return module.exports;
 }
 const plan=load('lib/campaign/content-plan.ts');
@@ -69,10 +69,10 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
   const rows=calendar(7);rows[1].platforms=[];
   const slots=plan.buildContentPlan(rows,7,[{date:rows[3].date,label:'Kindness event'}]);
   slots.push({...slots[1],planKey:'story-1',type:'story_post'});
-  let invalid=false,transactions=0,result;const items=[],media=[];
+  let invalid=false,transactions=0,result;const items=[],media=[],attached=[];
   const pack=()=>({title:'Master Mind campaign',posts:slots.map(s=>({planKey:s.planKey,day:s.day,type:'post',platforms:['youtube'],headline:s.planKey,caption:'Workspace content',visualDirection:'Scene and spoken plan'})),stories:[{frame:1,text:'Unrequested bonus',visualDirection:'Bonus'}],carousels:[],reel:{hook:'Hook',voiceover:'Outline'}});
   const job={id:'job',organizationId:'master-mind',type:'CREATE_EVERYTHING',status:'queued',payload:{campaignId:'campaign',brief:'Mindful change',goal:'education',days:7,dailyPlan:rows,contentPlan:slots,photoSource:'none'}};
-  const tx={contentItem:{deleteMany:async()=>{},create:async q=>{items.push(q.data);return {id:'item-'+items.length};}},job:{create:async q=>media.push(q),update:async q=>{result=q.data;}},campaign:{update:async()=>{}}};
+  const tx={mediaAsset:{findMany:async()=>[{id:'saved',kind:'ai_image',url:'saved-photo',provider:'openai'}],create:async q=>attached.push(q.data)},contentItem:{update:async q=>{assert.equal(q.data.mediaUrl,'saved-photo');},deleteMany:async()=>{},create:async q=>{items.push(q.data);return {id:'item-'+items.length};}},job:{create:async q=>media.push(q),update:async q=>{result=q.data;}},campaign:{findMany:async()=>[{id:"past"}],update:async()=>{}}};
   const api=load('app/api/jobs/run/route.ts',{
    'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},openai:class {},
    '@/lib/prisma':{prisma:{job:{findFirst:async()=>job,updateMany:async()=>({count:1}),update:async()=>{}},campaign:{findUnique:async q=>{assert.equal(q.where.brand.organizationId,'master-mind');return {id:'campaign',brandId:'brand',brand:{name:'Master Mind',description:'Hypnosis service'}};}},$transaction:async fn=>{transactions++;return fn(tx);}}},
@@ -87,6 +87,8 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
   invalid=false;job.payload.photoSource="ai";assert.equal((await api.POST(req)).status,200);assert.equal(media.length,9);assert.equal(media.filter(j=>j.data.payload.format==="story").length,1);
   const extraJob=media.find(j=>j.data.payload.occasion);assert.equal(extraJob.data.payload.occasion,'Kindness event');assert.match(extraJob.data.payload.visualConcept.direction,/Kindness event/);
   media.length=0;job.payload.photoSource="website";job.payload.imageUrls=['https://business.example/product.jpg'];assert.equal((await api.POST(req)).status,200);assert.equal(media.length,8);assert.ok(media.every(j=>!j.data.payload.occasion));
+  media.length=0;job.payload.photoSource="none";job.payload.campaignPhotoIds=['saved'];assert.equal((await api.POST(req)).status,200);assert.equal(media.length,0);assert.equal(attached.length,8);assert.ok(attached.every(a=>a.provider==='reuse'&&a.url==='saved-photo'));
+
  } finally {if(previous===undefined)delete process.env.WORKER_SECRET;else process.env.WORKER_SECRET=previous;}
 });
 for(const route of ['schedule','now']) test(`${route} refuses unfinished reel and presenter drafts before accessing publishing accounts`,async()=>{

@@ -1,5 +1,6 @@
 "use client";
 
+import CampaignSetupPhotos from "@/components/CampaignSetupPhotos";
 import { useEffect, useState } from "react";
 import { briefSuggestions, mixedTopicBrief, type BriefSuggestion } from "@/lib/campaign/brief-suggestions";
 import { CONTENT_TYPES, campaignDate, newYorkToday, buildQuantityContentPlan, applyCampaignTopics, contentTypeLabel, specialDayForDate, type ContentQuantities, type SpecialDay } from "@/lib/campaign/content-plan";
@@ -134,7 +135,8 @@ export default function Create() {
   const [busy, setBusy] = useState(false);
 
   const [photoSource, setPhotoSource] =
-    useState<"website" | "ai" | "none">("none");
+    useState<"website" | "ai" | "none" | "saved" | "upload">("none");
+  const [campaignPhotos,setCampaignPhotos] = useState<string[]>([]);
   const [productUrl, setProductUrl] = useState("");
   const [productTitle, setProductTitle] = useState("");
   const [websiteImages, setWebsiteImages] = useState<string[]>([]);
@@ -204,7 +206,7 @@ export default function Create() {
   }
 
   async function go() {
-    if (brief.trim().length < 10 || busy || importing || !validQuantities || !campaignStartDate || (photoSource === "website" && selectedImages.length === 0)) return;
+    if (brief.trim().length < 10 || busy || importing || !validQuantities || !campaignStartDate || (photoSource === "website" && selectedImages.length === 0) || (["saved","upload"].includes(photoSource) && !campaignPhotos.length)) return;
 
     setBusy(true);
     setStatus("Preparing campaign...");
@@ -230,6 +232,7 @@ export default function Create() {
           contentQuantities: quantities,
           extraSpecialDays: selectedSpecialDays,
           photoSource,
+          campaignPhotoIds: ["saved","upload"].includes(photoSource) ? campaignPhotos : [],
           imageUrl:
             photoSource === "website"
               ? selectedImages[0] || undefined
@@ -346,7 +349,7 @@ export default function Create() {
         }
 
         if (
-          photoSource === "none" || (primaryImageJobs.length >= totalQuantity + selectedSpecialDays.length &&
+          ["none","saved","upload"].includes(photoSource) || (primaryImageJobs.length >= totalQuantity + selectedSpecialDays.length &&
           completedPrimaryImages >= totalQuantity + selectedSpecialDays.length)
         ) {
           setStatus("Campaign ready — opening...");
@@ -443,6 +446,7 @@ export default function Create() {
           <div
             style={{
               display: "flex",
+              flexWrap: "wrap",
               gap: 10,
               marginTop: 8,
               marginBottom: 14,
@@ -466,8 +470,11 @@ export default function Create() {
               {photoSource === "ai" ? "✓ " : ""}
               Generate with AI
             </button>
+          <button type="button" disabled={busy} onClick={()=>setPhotoSource("saved")}>{photoSource === "saved" ? "✓ " : ""}Reuse saved photos</button>{" "}<button type="button" disabled={busy} onClick={()=>setPhotoSource("upload")}>{photoSource === "upload" ? "✓ " : ""}Upload photos</button>
           </div>
 
+
+          {["saved","upload"].includes(photoSource) && suggestionContext && <CampaignSetupPhotos organizationId={suggestionContext.organizationId} mode={photoSource as "saved"|"upload"} disabled={busy} onChange={setCampaignPhotos} onBusy={setImporting}/>}
           {photoSource === "website" && (
             <>
               <button type="button" disabled={busy || importing || !suggestionContext?.website} onClick={findWebsitePhotos}>{importing ? "Finding photos…" : "Find photos from my website"}</button>
@@ -940,7 +947,7 @@ export default function Create() {
           disabled={
             brief.trim().length < 10 ||
             busy || importing || !validQuantities || !campaignStartDate ||
-            (photoSource === "website" &&
+            (["saved","upload"].includes(photoSource) && !campaignPhotos.length) || (photoSource === "website" &&
               selectedImages.length === 0)
           }
         >

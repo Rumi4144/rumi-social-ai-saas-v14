@@ -10,8 +10,9 @@ export async function GET(req: Request) {
     const query = new URL(req.url).searchParams;
     if (query.get("organizationId") !== ctx.organizationId) return NextResponse.json({ error: "Your workspace changed. Refresh the reel editor." }, { status: 409 });
     const campaignId = query.get("campaignId");
-    if (!campaignId) return NextResponse.json({ error: "Choose a campaign first." }, { status: 400 });
-    const current = await prisma.campaign.findFirst({ where: { id: campaignId, brand: { organizationId: ctx.organizationId } }, select: { brandId: true, brand: { select: { name: true } } } });
+    if (!campaignId && query.get("setup") !== "1") return NextResponse.json({ error: "Choose a campaign first." }, { status: 400 });
+    const setupBrand = !campaignId ? await prisma.brand.findFirst({where:{organizationId:ctx.organizationId},orderBy:{createdAt:"desc"},select:{id:true,name:true}}) : null;
+    const current = setupBrand ? {brandId:setupBrand.id,brand:{name:setupBrand.name}} : await prisma.campaign.findFirst({ where: { id: campaignId!, brand: { organizationId: ctx.organizationId } }, select: { brandId: true, brand: { select: { name: true } } } });
     if (!current) return NextResponse.json({ error: "Campaign not found." }, { status: 404 });
     const page = Number(query.get("page") || 1);
     const search = (query.get("q") || "").trim();
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
       select: { id: true, campaignId: true, contentItemId: true, kind: true, metadata: true },
     });
     return NextResponse.json({ brandName: current.brand.name, page, hasMore: assets.length > 24, sources: assets.slice(0, 24).map(asset => {
-      const src = `/api/reels/media?assetId=${encodeURIComponent(asset.id)}&campaignId=${encodeURIComponent(campaignId)}`;
+      const src = `/api/reels/media?assetId=${encodeURIComponent(asset.id)}&campaignId=${encodeURIComponent(campaignId || "")}`;
       const label = typeof (asset.metadata as { label?: string })?.label === "string" ? (asset.metadata as { label: string }).label : posts.find(post => post.id === asset.contentItemId)?.headline || (asset.kind === "product_photo" ? "Product photo" : "Generated photo");
       return { id: asset.id, src, thumbnail: `${src}&thumbnail=1`, kind: "image", contentItemId: asset.contentItemId, libraryBrandId: current.brandId, label, campaignTitle: campaigns.find(campaign => campaign.id === asset.campaignId)?.title || "Past campaign" };
     }) }, { headers: { "Cache-Control": "private, no-store" } });

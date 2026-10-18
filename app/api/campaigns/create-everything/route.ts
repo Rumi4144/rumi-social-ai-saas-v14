@@ -5,6 +5,8 @@ import { tenantContext } from "@/lib/auth/context";
 import { z } from "zod";
 import { buildContentPlan, buildQuantityContentPlan, applyCampaignTopics } from "@/lib/campaign/content-plan";
 
+import {campaignSetupPhotos} from "@/lib/campaign/setup-photos";
+
 const S = z.object({
   organizationId: z.string().optional(),
   brandId: z.string().optional(),
@@ -12,7 +14,8 @@ const S = z.object({
   goal: z.string().default("launch"),
   campaignTopics: z.array(z.string().trim().min(1).max(100)).max(12).default([]),
   days: z.number().int().min(1).max(30).default(14),
-  photoSource: z.enum(["website", "ai", "none"]).default("ai"),
+  photoSource: z.enum(["website", "ai", "none", "saved", "upload"]).default("ai"),
+  campaignPhotoIds: z.array(z.string().min(1)).max(20).default([]),
   contentQuantities: z.object({post:z.number().int().min(0).max(30),reel_post:z.number().int().min(0).max(30),story_post:z.number().int().min(0).max(30),presenter_post:z.number().int().min(0).max(30)}).optional(),
   extraSpecialDays: z.array(z.object({date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),label:z.string().trim().min(1).max(100)})).max(30).default([]),
   imageUrl: z.string().url().optional(),
@@ -82,6 +85,12 @@ export async function POST(req: Request) {
       );
     }
 
+    if(ctx.role === "viewer") return NextResponse.json({error:"Your role cannot create campaigns."},{status:403});
+    const usingSaved = ["saved","upload"].includes(p.data.photoSource);
+    if(usingSaved){
+      if(!p.data.campaignPhotoIds.length)return NextResponse.json({error:"Select at least one photo for this campaign."},{status:400});
+      try{await campaignSetupPhotos(prisma,ctx.organizationId,brand.id,p.data.campaignPhotoIds);}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Choose photos again."},{status:400});}
+    }
     const onboarding = await prisma.onboardingState.findUnique({
       where: {
         organizationId: ctx.organizationId,
@@ -122,7 +131,8 @@ export async function POST(req: Request) {
           days: p.data.days,
           dailyPlan: p.data.dailyPlan ?? [],
           contentPlan,
-          photoSource: p.data.photoSource,
+          photoSource: usingSaved ? "none" : p.data.photoSource,
+          campaignPhotoIds: usingSaved ? p.data.campaignPhotoIds : [],
           imageUrl: p.data.imageUrl,
           imageUrls: p.data.imageUrls,
           brandContext: {

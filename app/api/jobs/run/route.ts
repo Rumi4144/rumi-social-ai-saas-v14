@@ -1,3 +1,4 @@
+import {campaignSetupPhotos,attachSetupPhoto} from "@/lib/campaign/setup-photos";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
@@ -402,6 +403,7 @@ export async function POST(req: Request) {
       platforms: string[];
     }>;
       photoSource?: "website" | "ai" | "none";
+      campaignPhotoIds?: string[];
       imageUrl?: string;
       imageUrls?: string[];
       brandContext?: {
@@ -469,6 +471,8 @@ export async function POST(req: Request) {
         where: { campaignId: campaign.id },
       });
 
+      const setupPhotos = p.campaignPhotoIds?.length ? await campaignSetupPhotos(tx,job.organizationId,campaign.brandId,p.campaignPhotoIds) : [];
+      let setupPhotoIndex = 0;
       let imageJobsCreated = 0;
       let websitePhotoIndex = 0;
       let creativeLayoutIndex = 0;
@@ -515,6 +519,7 @@ export async function POST(req: Request) {
           },
         });
 
+        if(setupPhotos.length && x.type !== "holiday_post") await attachSetupPhoto(tx,job.organizationId,campaign.id,item.id,setupPhotos[setupPhotoIndex++ % setupPhotos.length]);
         if (
           p.photoSource !== "none" && !(x.type === "holiday_post" && p.photoSource === "website") && (
         x.visualDirection?.trim() ||
@@ -620,6 +625,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
         },
       });
 
+      if(setupPhotos.length) await attachSetupPhoto(tx,job.organizationId,campaign.id,storyItem.id,setupPhotos[setupPhotoIndex++ % setupPhotos.length]);
       if (p.photoSource !== "none") await tx.job.create({
         data: {
           organizationId: job.organizationId,

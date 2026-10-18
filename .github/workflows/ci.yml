@@ -42,6 +42,7 @@ jobs:
       - run: npm install --no-save --package-lock=false esbuild@0.28.2 playwright@1.62.1
       - run: npx playwright install --with-deps chromium
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: node tests/campaign-setup-browser.cjs
       - run: node tests/campaign-photo-browser.cjs
       - run: node tests/reels-browser.cjs
       - run: node tests/presenter-browser.cjs
