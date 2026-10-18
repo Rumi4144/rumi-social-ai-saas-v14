@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), vm=require('n
 function load(file,deps={}) {
  const module={exports:{}};
  const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
- vm.runInNewContext(js,{module,exports:module.exports,require:n=>n in deps?deps[n]:require(n),URL,Blob,setTimeout});
+ vm.runInNewContext(js,{module,exports:module.exports,require:n=>n in deps?deps[n]:n.startsWith('@/')?load(require('node:path').resolve(n.slice(2)+'.ts'),deps):n.startsWith('.')?load(require('node:path').resolve(require('node:path').dirname(file),n+'.ts'),deps):require(n),URL,Blob,setTimeout});
  return module.exports;
 }
 test('Studio looks up only the selected organization and uses its brand',async()=>{

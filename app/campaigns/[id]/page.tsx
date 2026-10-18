@@ -1,3 +1,4 @@
+import CampaignPhotoChoices from "@/components/CampaignPhotoChoices";
 import CampaignProductPicker from "@/components/CampaignProductPicker";
 import CampaignReelWorkspace, { CampaignReelButton } from "@/components/CampaignReelWorkspace";
 import { contentTypeLabel, requiresVideo } from "@/lib/campaign/content-plan";
@@ -128,6 +129,7 @@ export default async function Campaign({
             );
 
           const originalImage =
+            itemAssets.find(asset => ["ai_image", "product_photo"].includes(asset.kind) && ["reuse", "upload"].includes(asset.provider)) ||
             itemAssets.find(asset => asset.kind === "product_photo" && asset.provider === "website") ||
             itemAssets.find(
               (asset) =>
@@ -183,6 +185,10 @@ export default async function Campaign({
 
         const creativeStatus = brandedCreative
           ? "Branded AI Creative"
+          : originalImage?.provider === "upload"
+            ? "Uploaded Photo"
+            : originalImage?.provider === "reuse"
+              ? "Reused Photo"
           : originalImage?.provider === "website"
             ? "Website Photo"
             : originalImage
@@ -263,7 +269,7 @@ export default async function Campaign({
           {item.scheduledFor && <p>Planned date: {item.scheduledFor.toISOString().slice(0, 10)}</p>}
 
               <p>{item.caption}</p>
-              <CampaignProductPicker campaignId={campaign.id} contentItemId={item.id}>                <RegenerateImageButton label="Generate AI image" showRegenerate
+              <CampaignProductPicker campaignId={campaign.id} contentItemId={item.id}><CampaignPhotoChoices organizationId={organizationId} campaignId={campaign.id} contentItemId={item.id} headline={item.headline || ""}/>                <RegenerateImageButton label="Generate AI image" showRegenerate
                   campaignId={campaign.id}
                   contentItemId={item.id}
                   headline={item.headline || "Campaign Creative"}

@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     const posts = await prisma.contentItem.findMany({ where: { campaignId: { in: ids }, ...(search ? { OR: [{ headline: { contains: search, mode: "insensitive" as const } }, { caption: { contains: search, mode: "insensitive" as const } }] } : {}) }, select: { id: true, headline: true } });
     const assets = await prisma.mediaAsset.findMany({
       where: {
-        organizationId: ctx.organizationId, campaignId: { in: ids }, status: "ready", url: { not: null },
+        organizationId: ctx.organizationId, campaignId: { in: ids }, status: query.get("includeArchived") === "1" ? { in: ["ready", "superseded"] } : "ready", provider: { not: "reuse" }, url: { not: null },
         kind: { in: ["ai_image", "product_photo", "reel_scene_image"] },
         ...(search ? { OR: [
           { prompt: { contains: search, mode: "insensitive" as const } },

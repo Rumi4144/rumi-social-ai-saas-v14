@@ -16,7 +16,7 @@ export async function GET(req: Request) {
         if (!current) return new NextResponse("Image not found", { status: 404 });
         campaignIds = (await prisma.campaign.findMany({ where: { brandId: current.brandId, brand: { organizationId: ctx.organizationId } }, select: { id: true } })).map(campaign => campaign.id);
       }
-      source = (await prisma.mediaAsset.findFirst({ where: { id: query.get("assetId")!, organizationId: ctx.organizationId, ...(campaignIds ? { campaignId: { in: campaignIds } } : {}), kind: { in: ["ai_image", "product_photo", "reel_scene_image", "social_creative"] }, status: "ready" } }))?.url || null;
+      source = (await prisma.mediaAsset.findFirst({ where: { id: query.get("assetId")!, organizationId: ctx.organizationId, ...(campaignIds ? { campaignId: { in: campaignIds } } : {}), kind: { in: ["ai_image", "product_photo", "reel_scene_image", "social_creative"] }, status: { in: ["ready", "superseded"] } } }))?.url || null;
     }
     else if (query.get("brandId")) source = (await prisma.brand.findFirst({ where: { id: query.get("brandId")!, organizationId: ctx.organizationId } }))?.logoUrl || null;
     if (!source) return new NextResponse("Image not found", { status: 404 });

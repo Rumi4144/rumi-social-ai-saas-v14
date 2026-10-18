@@ -81,20 +81,6 @@ export async function POST(req: Request) {
 
     const dataUrl = `data:image/png;base64,${base64}`;
 
-    const existingAsset = p.data.contentItemId
-      ? await prisma.mediaAsset.findFirst({
-          where: {
-            organizationId: ctx.organizationId,
-            contentItemId: p.data.contentItemId,
-            kind: "ai_image",
-            provider: "openai",
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-        })
-      : null;
-
     const assetData = {
       organizationId: ctx.organizationId,
       campaignId: p.data.campaignId,
@@ -113,14 +99,11 @@ export async function POST(req: Request) {
       },
     };
 
-    const asset = existingAsset
-      ? await prisma.mediaAsset.update({
-          where: { id: existingAsset.id },
-          data: assetData,
-        })
-      : await prisma.mediaAsset.create({
-          data: assetData,
-        });
+    // Keep every paid generation available for later reuse instead of overwriting it.
+    const asset = await prisma.$transaction(async tx => {
+      if(p.data.contentItemId)await tx.mediaAsset.updateMany({where:{organizationId:ctx.organizationId,contentItemId:p.data.contentItemId,kind:"ai_image",status:"ready"},data:{status:"superseded"}});
+      return tx.mediaAsset.create({data:assetData});
+    });
 
     await prisma.job.create({ data: {
       organizationId: ctx.organizationId, type: "GENERATE_IMAGE", status: "succeeded", progress: 100,
