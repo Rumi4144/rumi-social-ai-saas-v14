@@ -4,32 +4,34 @@ import type { ReelSource } from "@/lib/reels/post-context";
 import styles from "./ReelEditor.module.css";
 type LibraryPhoto = ReelSource & { thumbnail: string; campaignTitle: string };
 
-export default function PhotoLibraryPicker({ organizationId, campaignId, selectedSrc, disabled, onPhoto, purpose = "scene" }: { organizationId: string; campaignId: string; selectedSrc?: string; disabled: boolean; onPhoto: (source: ReelSource) => void; purpose?: "post" | "scene" | "campaign" }) {
+export default function PhotoLibraryPicker({ organizationId, campaignId, contentItemId, selectedSrc, disabled, onPhoto, purpose = "scene" }: { organizationId: string; campaignId: string; contentItemId?: string; selectedSrc?: string; disabled: boolean; onPhoto: (source: ReelSource) => void; purpose?: "post" | "scene" | "campaign" }) {
   const [open, setOpen] = useState(false), [search, setSearch] = useState(""), [query, setQuery] = useState(""), [page, setPage] = useState(1);
   const [photos, setPhotos] = useState<LibraryPhoto[]>([]), [hasMore, setHasMore] = useState(false), [loading, setLoading] = useState(false), [message, setMessage] = useState(""), [brand, setBrand] = useState("");
-  const [reload, setReload] = useState(0);
+  const [reload, setReload] = useState(0), [allBusinessPhotos,setAllBusinessPhotos]=useState(false), [productSubject,setProductSubject]=useState("");
+  useEffect(()=>{setAllBusinessPhotos(false);setPage(1);},[contentItemId]);
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 20000);
     let disposed = false;
     setLoading(true); setPhotos([]); setHasMore(false); setMessage("");
-    const params = new URLSearchParams({ organizationId, campaignId, q: query, page: String(page), ...(purpose !== "scene" ? {includeArchived:"1"} : {}), ...(purpose === "campaign" ? {setup:"1"} : {}) });
+    const params = new URLSearchParams({ organizationId, campaignId, ...(contentItemId?{contentItemId}:{}), ...(allBusinessPhotos?{scope:"all"}:{}), q: query, page: String(page), ...(purpose !== "scene" ? {includeArchived:"1"} : {}), ...(purpose === "campaign" ? {setup:"1"} : {}) });
     fetch(`/api/reels/library?${params}`, { cache: "no-store", signal: controller.signal }).then(async response => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load your photos.");
-      if (!disposed) { setPhotos(data.sources); setHasMore(data.hasMore); setBrand(data.brandName); }
+      if (!disposed) { setPhotos(data.sources); setHasMore(data.hasMore); setBrand(data.brandName);setProductSubject(data.productSubject||""); }
     }).catch(error => { if (!disposed) setMessage(controller.signal.aborted ? "Loading took too long. Try again." : error.message || "Could not load your photos."); })
       .finally(() => { clearTimeout(timer); if (!disposed) setLoading(false); });
     return () => { disposed = true; clearTimeout(timer); controller.abort(); };
-  }, [open, organizationId, campaignId, query, page, reload, purpose]);
+  }, [open, organizationId, campaignId, query, page, reload, purpose, contentItemId, allBusinessPhotos]);
   return <div>
     <button type="button" disabled={disabled} aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? "Close photo library" : "Choose from past campaign photos"}</button>
     {open && <section aria-label="Past campaign photos" className={styles.pastLibrary}>
       <p>Reuse photos from {brand || "this business"}’s campaigns. No generation credits needed.</p>
+      {productSubject&&<><p>{allBusinessPhotos?"Showing all business photos.":`Showing verified photos for ${productSubject}.`}</p><button type="button" disabled={disabled||loading} onClick={()=>{setAllBusinessPhotos(value=>!value);setPage(1);setQuery("");setSearch("");}}>{allBusinessPhotos?"Show matching product only":"Browse all business photos"}</button></>}
       <label>Search photos or campaign names<input value={search} maxLength={120} placeholder="For example: relaxation, confidence, ocean…" disabled={disabled} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); setQuery(search.trim()); setPage(1); setReload(value => value + 1); } }} /></label>
       <button type="button" disabled={disabled || loading} onClick={() => { setQuery(search.trim()); setPage(1); setReload(value => value + 1); }}>Search photos</button>
-      <p role="status">{loading ? "Loading your photos…" : message || (!photos.length ? "No saved photos found. Try another search or generate a new scene photo." : purpose === "campaign" ? "Choose photos for your new campaign." : purpose === "post" ? "Choose a saved photo to use for this post." : "Choose a photo to use for this scene.")}</p>
+      <p role="status">{loading ? "Loading your photos…" : message || (!photos.length ? productSubject&&!allBusinessPhotos?"No verified saved photos match this product. Load its website photos or upload the correct photo.":"No saved photos found. Try another search or generate a new scene photo." : purpose === "campaign" ? "Choose photos for your new campaign." : purpose === "post" ? "Choose a saved photo to use for this post." : "Choose a photo to use for this scene.")}</p>
       {message && <button type="button" disabled={disabled || loading} onClick={() => setReload(value => value + 1)}>Try again</button>}
       <div className={styles.library}>{photos.map(photo => <div className={styles.photo} key={photo.id}>
         <img src={photo.thumbnail} alt={photo.label || "Campaign photo"} loading="lazy" />
