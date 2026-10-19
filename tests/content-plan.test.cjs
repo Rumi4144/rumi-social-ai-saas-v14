@@ -24,7 +24,7 @@ test('topics rotate through regular drafts and never replace special occasions',
  const slots=plan.buildContentPlan(calendar(7),7,[{date:'2026-11-04',label:'Kindness event'}]);
  const result=plan.applyCampaignTopics(slots,['Relaxation','Confidence','Habits']);
  assert.equal(result[0].topics[0],'Relaxation');assert.equal(result[1].topics[0],'Confidence');assert.equal(result[3].topics[0],'Relaxation');assert.equal(result.at(-1).topics,undefined);
- const one=plan.applyCampaignTopics(slots.slice(0,1),['Relaxation','Confidence']);assert.equal(one[0].topics.length,2);
+ const one=plan.applyCampaignTopics(slots.slice(0,1),['Relaxation','Confidence']);assert.equal(one[0].topics.length,1);assert.equal(one[0].topics[0],'Relaxation');
  assert.throws(()=>plan.applyCampaignTopics(slots,['Confidence','confidence']));
 });
 test('AI instructions preserve exact requested slots without extra platform entries or bonus Stories',async()=>{

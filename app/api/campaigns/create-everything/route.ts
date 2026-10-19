@@ -13,15 +13,15 @@ const S = z.object({
   brandId: z.string().optional(),
   brief: z.string().min(10),
   goal: z.string().default("launch"),
-  campaignTopics: z.array(z.string().trim().min(1).max(100)).max(12).default([]),
+  campaignTopics: z.array(z.string().trim().min(1).max(160)).max(60).default([]),
   days: z.number().int().min(1).max(30).default(14),
   photoSource: z.enum(["website", "ai", "none", "saved", "upload"]).default("ai"),
   campaignPhotoIds: z.array(z.string().min(1)).max(20).default([]),
   contentQuantities: z.object({post:z.number().int().min(0).max(30),reel_post:z.number().int().min(0).max(30),story_post:z.number().int().min(0).max(30),presenter_post:z.number().int().min(0).max(30)}).optional(),
   extraSpecialDays: z.array(z.object({date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),label:z.string().trim().min(1).max(100)})).max(30).default([]),
-  photoReceipt: z.string().max(60000).optional(),
+  photoReceipt: z.string().max(160000).optional(),
   imageUrl: z.string().url().optional(),
-  imageUrls: z.array(z.string().url()).max(20).optional(),
+  imageUrls: z.array(z.string().url()).max(60).optional(),
   dailyPlan: z.array(
     z.object({
       day: z.number().int().min(1).max(30),

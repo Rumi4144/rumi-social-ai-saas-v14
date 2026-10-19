@@ -8,17 +8,17 @@ export function signPhotoEvidence(organizationId: string, website: string, photo
 }
 export function verifyPhotoEvidence(receipt: string, organizationId: string, website: string): PhotoEvidence[] {
   try {
-    if (receipt.length > 60000) throw Error();
+    if (receipt.length > 160000) throw Error();
     const [data, mac, extra] = receipt.split("."); if (!data || !mac || extra) throw Error();
     const actual = Buffer.from(mac, "base64url"), expected = createHmac("sha256", secret()).update(data).digest();
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw Error();
     const payload = JSON.parse(Buffer.from(data, "base64url").toString());
-    if (payload.organizationId !== organizationId || payload.website !== website || payload.expires < Date.now() || !Array.isArray(payload.photos) || payload.photos.length > 20) throw Error();
+    if (payload.organizationId !== organizationId || payload.website !== website || payload.expires < Date.now() || !Array.isArray(payload.photos) || payload.photos.length > 60) throw Error();
     return payload.photos;
   } catch { throw new Error("Website photo choices expired or changed. Find photos again before creating the campaign."); }
 }
 function normalize(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
-export function modelCodes(value: string) { return [...new Set((value.match(/\b[a-z]{1,8}[- ]?\d{1,5}[a-z]{0,4}\b/gi) || []).map(code => code.toLowerCase().replace(/[^a-z0-9]/g, "")))]; }
+export function modelCodes(value: string) { return [...new Set((value.match(/\b[a-z]{1,8}[- ]?\d{1,5}[a-z]{0,4}\b/gi) || []).filter(code => !/\s+(?:18|19|20)\d{2}$/.test(code)).map(code => code.toLowerCase().replace(/[^a-z0-9]/g, "")))]; }
 export function matchingWebsitePhoto(post: { headline?: string | null; caption?: string | null; topics?: string[] }, photos: PhotoEvidence[], selectedUrls: string[]) {
   const selected = new Set(selectedUrls.map(photoKey)), expected = modelCodes(`${post.headline || ""} ${post.topics?.join(" ") || ""}`);
   // Multiple named models in one slot cannot be represented by an arbitrary photo.

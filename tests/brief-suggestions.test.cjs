@@ -14,7 +14,7 @@ test('mixed briefs cover selected subjects across the whole campaign',()=>{
 test('website reader stays on the business website and ignores script instructions and unrelated links',async()=>{
  const calls=[];
  const html='<h1>Master Mind</h1><h2>Self-Hypnosis for Anxiety and Fear</h2><h2>Confidence</h2><script><h2>Secret topic</h2></script><a href="/habits/">Changing habits</a><a href="https://guitars.example/product/">Guitar lessons</a><a href="/cart/">Shopping cart</a>';
- const website=load('lib/campaign/website-topics.ts',{'@/lib/reels/public-fetch':{fetchPublicBytes:async url=>{calls.push(url);return {contentType:'text/html',bytes:{toString:()=>url.endsWith('/habits/')?'<h2>Understanding habitual patterns</h2>':html}};}}});
+ const website=load('lib/campaign/website-topics.ts',{'./website-catalog':{websiteCatalog:async()=>[]},'@/lib/reels/public-fetch':{fetchPublicBytes:async url=>{calls.push(url);return {contentType:'text/html',bytes:{toString:()=>url.endsWith('/habits/')?'<h2>Understanding habitual patterns</h2>':html}};}}});
  const ideas=await website.websiteBriefSuggestions('Master Mind','https://mind.example/');
  assert.ok(ideas.some(i=>i.label==='Self-Hypnosis for Anxiety and Fear'));assert.ok(ideas.some(i=>i.label==='Understanding habitual patterns'));
  assert.ok(ideas.every(i=>!/Guitar|Secret|Shopping cart/.test(i.label)));assert.deepEqual(calls,['https://mind.example/','https://mind.example/habits/']);assert.ok(ideas.every(i=>i.sourceUrl.startsWith('https://mind.example/')));

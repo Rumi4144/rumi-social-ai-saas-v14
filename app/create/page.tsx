@@ -153,7 +153,7 @@ export default function Create() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not find website photos.");
       if (data.organizationId !== suggestionContext.organizationId) throw new Error("Your workspace changed. Reload this page first.");
-      const images: string[] = Array.isArray(data.images) ? data.images.filter((url: unknown): url is string => typeof url === "string").slice(0, 20) : [];
+      const images: string[] = Array.isArray(data.images) ? data.images.filter((url: unknown): url is string => typeof url === "string").slice(0, 60) : [];
       setPhotoReceipt(data.photoReceipt || ""); setWebsiteImages(images); setSelectedImages(images); setProductTitle(data.title || "Website photos");
       setImportError(`${images.length} photos selected from your website. Review them below and deselect any you do not want.`);
     } catch (error) { setImportError(error instanceof Error && error.name === "TimeoutError" ? "The website took too long. Try again or import one product page." : error instanceof Error ? error.message : "Could not find website photos."); }
@@ -420,15 +420,16 @@ export default function Create() {
           <p>{suggestionContext ? `Ideas for ${suggestionContext.brandName}.` : suggestionsLoading ? "Loading ideas for your workspace…" : "Choose general ideas, then add your business details."} Use several topics for variety, or turn off the mix for a single-topic campaign.</p>
           {suggestionContext?.website && <button type="button" disabled={busy || readingWebsite} onClick={readWebsiteTopics}>{readingWebsite ? "Reading website…" : "Find topics from my website"}</button>}
           {suggestionContext && !suggestionContext.website && <p>Add your website in <a href="/brand">Brand Brain</a> to find website topics.</p>}
-          {suggestionContext?.source === "website" && <p>These topics come from this business’s website headings and linked pages. Review them before using.</p>}
+          {suggestionContext?.source === "website" && <p>These topics come from this business’s product catalog or website pages. Review them before using.</p>}
           {topicStatus && <p role="status">{topicStatus}</p>}
           {!suggestionsLoading && <>
             <label style={{display:"flex",alignItems:"center",gap:8,marginTop:16,marginBottom:12}}><input type="checkbox" style={{width:18,height:18,margin:0}} checked={mixTopics} disabled={busy} onChange={e=>setMixTopics(e.target.checked)}/> Mix topics across this campaign</label>
             {mixTopics ? <>
-              <p>Select or deselect topics. The campaign will alternate them and explore different angles over longer periods.</p>
+              <p>Select or deselect topics. The campaign will alternate them, using one topic or product per draft before repeating.</p>
               <div style={{display:"grid",gap:10}}>{topicIdeas.map(idea=><label key={idea.label} style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" style={{width:18,height:18,margin:0}} disabled={busy} checked={selectedTopics === null || selectedTopics.includes(idea.label)} onChange={()=>setSelectedTopics(current=>{const selected=current||topicIdeas.map(topic=>topic.label);return selected.includes(idea.label)?selected.filter(label=>label!==idea.label):[...selected,idea.label];})}/>{idea.label}{idea.sourceUrl && <a href={idea.sourceUrl} target="_blank" rel="noreferrer" style={{fontWeight:400}}>View source</a>}</label>)}</div>
               <button type="button" style={{marginTop:16}} disabled={busy || !chosenTopics.length} onClick={useMixedTopics}>Fill brief with {chosenTopics.length} selected topics</button>
             </> : <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>{topicIdeas.map(idea=><button type="button" key={idea.label} disabled={busy} onClick={()=>{setBrief(idea.brief);setAppliedTopics([]);setGoal(idea.goal);}}>{idea.label}</button>)}</div>}
+            {appliedTopics.length > totalQuantity && <p>Your {totalQuantity} regular drafts will feature the first {totalQuantity} selected topics. Increase the number of drafts to include all {appliedTopics.length}.</p>}
             <p>You can edit the brief below. Editing it switches to your custom instructions. Choosing topics does not generate content or spend credits.</p>
           </>}
         </section>
@@ -596,6 +597,8 @@ export default function Create() {
                       >
                         <img
                           src={src}
+                          loading="lazy"
+                          decoding="async"
                           alt=""
                           style={{
                             width: "100%",

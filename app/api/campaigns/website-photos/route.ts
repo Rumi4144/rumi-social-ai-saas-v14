@@ -9,7 +9,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   try {
     const ctx = await tenantContext();
-    const parsed = z.object({ organizationId: z.string().min(1), topics: z.array(z.string().trim().min(1).max(100)).max(12).default([]) }).safeParse(await req.json().catch(() => null));
+    const parsed = z.object({ organizationId: z.string().min(1), topics: z.array(z.string().trim().min(1).max(160)).max(60).default([]) }).safeParse(await req.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: "Choose your campaign topics first." }, { status: 400 });
     if (parsed.data.organizationId !== ctx.organizationId) return NextResponse.json({ error: "Your workspace changed. Reload this page first." }, { status: 409 });
     // Use the business's saved website, never a client-supplied crawl address.

@@ -1,3 +1,4 @@
+import { websiteCatalog } from "./website-catalog";
 import type { PhotoEvidence } from "./photo-matching";
 import { fetchPublicBytes } from "@/lib/reels/public-fetch";
 import { cleanPhotoUrl, extractProductPhotos, photoKey } from "@/lib/reels/product-photos";
@@ -19,7 +20,7 @@ export function websitePhotoLinks(html: string, website: string, topics: string[
       if (weight || /\/products?\//i.test(url.pathname)) links.set(url.href, Math.max(links.get(url.href) || 0, weight));
     } catch { /* Ignore malformed site links. */ }
   }
-  return [...links].sort((a, b) => b[1] - a[1]).map(([url]) => url).slice(0, 6);
+  return [...links].sort((a, b) => b[1] - a[1]).map(([url]) => url).slice(0, 20);
 }
 export function websitePhotoCandidates(html: string, page: string) {
   const clean = html.replace(/<(script|style|footer|header|nav)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
@@ -43,7 +44,21 @@ export async function discoverWebsitePhotos(website: string, topics: string[], e
   const home = new URL(/^https?:\/\//i.test(website) ? website : `https://${website}`);
   const root = await fetchPublicBytes(home.href, 1_000_000);
   if (!/text\/html|application\/xhtml/i.test(root.contentType)) throw new Error("This website does not provide a readable page.");
-  const html = root.bytes.toString("utf8"), links = websitePhotoLinks(html, home.href, topics);
+  const html = root.bytes.toString("utf8");
+  const catalog = await websiteCatalog(home.href, html);
+  const titleKey = (value: string) => plain(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const requested = topics.flatMap(topic => catalog.filter(item => titleKey(item.label) === titleKey(topic)));
+  const chosen = requested.length ? requested : catalog;
+  const catalogImages: string[] = [], catalogSeen = new Set<string>();
+  // Give every selected product its first verified photo before collecting extra views.
+  for (let view = 0; view < 3; view++) for (const item of chosen) {
+    const imageUrl = item.images[view];
+    if (!imageUrl || catalogSeen.has(photoKey(imageUrl)) || catalogImages.length >= 60) continue;
+    catalogSeen.add(photoKey(imageUrl)); catalogImages.push(imageUrl);
+    evidence.push({ imageUrl, sourceUrl: item.sourceUrl, title: item.label });
+  }
+  if (catalogImages.length) return catalogImages;
+  const links = websitePhotoLinks(html, home.href, topics);
   const pages = await Promise.allSettled(links.map(async url => {
     const result = await fetchPublicBytes(url, 1_000_000);
     const pageHtml = result.bytes.toString("utf8");
@@ -54,8 +69,8 @@ export async function discoverWebsitePhotos(website: string, topics: string[], e
   groups.push({ images: websitePhotoCandidates(html, home.href), sourceUrl: home.href, title: plain(html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || "") });
   const images: string[] = [], seen = new Set<string>();
   // Round-robin collection avoids filling every slot from the first product.
-  for (let index = 0; index < 20 && images.length < 20; index++) for (const group of groups) {
-    const url = group.images[index]; if (!url || seen.has(photoKey(url)) || images.length >= 20) continue;
+  for (let index = 0; index < 20 && images.length < 60; index++) for (const group of groups) {
+    const url = group.images[index]; if (!url || seen.has(photoKey(url)) || images.length >= 60) continue;
     seen.add(photoKey(url)); images.push(url); evidence.push({ imageUrl: url, sourceUrl: group.sourceUrl, title: group.title });
   }
   return images;
