@@ -11,10 +11,10 @@ export function automaticReelStyle(brand: AutoPlanBrand, holiday = false): ReelS
   if (/bold|energetic|playful|vibrant/i.test(preference)) return "bold";
   if (/minimal|clean/i.test(preference)) return "minimal";
   if (/luxury|editorial|elegant|premium/i.test(preference)) return "boutique";
-  const defaults = industryReelDefaults(brand.industry);
-  if (defaults) return defaults.style === "spotlight" ? "showcase" : defaults.style;
   const business = `${brand.industry || ""} ${brand.name}`;
   if (!holiday && /guitar|retail|e.?commerce|product|jewel|furniture/i.test(business)) return "showcase";
+  const defaults = industryReelDefaults(brand.industry);
+  if (defaults) return defaults.style === "spotlight" ? "showcase" : defaults.style;
   if (/fitness|sport|restaurant|food|entertainment|event/i.test(business)) return "bold";
   return "boutique";
 }

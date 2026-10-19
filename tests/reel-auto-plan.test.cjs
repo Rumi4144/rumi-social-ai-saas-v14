@@ -133,3 +133,5 @@ test('brand appearance overrides industry defaults and new businesses receive fi
 test('cinematic showcase preference works for any business without replacing explicit alternatives',()=>{
  for(const name of ['Rumi Guitars','Master Mind','Neighborhood Cafe'])assert.equal(automaticReelStyle({...brand,name,designStyle:'Cinematic Showcase'}),'showcase');
 });
+
+test('guitar businesses use showcase even when assigned the broad music industry',()=>{assert.equal(automaticReelStyle({...brand,name:'Rumi Guitars',industry:'Music & Arts'}),'showcase');});

@@ -114,7 +114,7 @@ test('editor cannot load another workspace campaign or its images', async () => 
 test('weekly plan stays on seven calendar dates across daylight savings and rotates real sources',()=>{
  const week=load('lib/reels/week.ts');
  const project={brand:'Rumi',website:'https://example.test',style:'gallery',closingSeconds:3,scenes:[{id:'a',src:'/real-a',kind:'image',seconds:4,headline:'Actual A',detail:''},{id:'b',src:'/real-b',kind:'video',seconds:5,headline:'Actual B',detail:''}]};
- const days=week.makeWeek(project,'2026-10-31');assert.equal(days.length,7);assert.equal(days[6].date,'2026-11-06');assert.equal(new Set(days.map(d=>d.headline)).size,7);assert.equal(new Set(days.map(d=>d.project.style)).size,6);assert.equal(days[1].project.scenes[0].src,'/real-b');assert.ok(days.every(d=>d.project.scenes.every(s=>['/real-a','/real-b'].includes(s.src))));assert.throws(()=>week.weekDates('2026-02-30'));assert.throws(()=>week.makeWeek({...project,scenes:[]},'2026-10-04'));
+ const days=week.makeWeek(project,'2026-10-31');assert.equal(days.length,7);assert.equal(days[0].project.style,'showcase');assert.equal(days[6].date,'2026-11-06');assert.equal(new Set(days.map(d=>d.headline)).size,7);assert.equal(new Set(days.map(d=>d.project.style)).size,6);assert.equal(days[1].project.scenes[0].src,'/real-b');assert.ok(days.every(d=>d.project.scenes.every(s=>['/real-a','/real-b'].includes(s.src))));assert.throws(()=>week.weekDates('2026-02-30'));assert.throws(()=>week.makeWeek({...project,scenes:[]},'2026-10-04'));
 });
 test('weekly creation claims once, makes seven draft posts, and refuses foreign campaigns',async()=>{
  let claimed,created=0,scheduled=0;
