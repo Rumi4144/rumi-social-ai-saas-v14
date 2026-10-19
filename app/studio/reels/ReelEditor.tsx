@@ -88,7 +88,9 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       let library: Source[] = data.sources.filter((source: Source) => source.contentItemId === context.post.id);
       const stored = await loadDraft(reelDraftKey(data.organizationId,campaignId,context.post.id)).catch(() => undefined);
       if(disposed)return;
-      const draft=matchingDraft(stored,context.post.id);
+      const oldDraft=matchingDraft(stored,context.post.id);
+      const draft=matchingDraft(stored,context.post.id,context.post.productSubject);
+      if(oldDraft && !draft)setMessage("The older draft has unverified product photos and was not restored. Create a new reel draft using this product’s matching photos.");
       localFiles.current.clear(); setMusicFile(undefined); setVoiceFile(undefined); setMusic(true); setMusicStyle(quick ? automaticMusic(data.brand.name, data.brand.industry) : "ambient"); setMusicVolume(DEFAULT_MUSIC_VOLUME); setOriginalAudio(false);
       if (draft) {
         const restored = new Map<string, string>();
@@ -168,7 +170,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       if (!response.ok) throw new Error(data.error || "Could not create this reel draft.");
       if (!autoPlanMatches(data, context)) throw new Error("This draft belongs to a different post. Select your post and try again.");
       const plan = data as AutoReelPlan;
-      setProject(plan.project); setSources(plan.sources);
+      setProject(previous=>({...plan.project,animation:previous.animation === "none" ? "none" : plan.project.animation})); setSources(plan.sources);
       setPlanned(plan.project.scenes.length > 0);
       setMessage([...plan.warnings, plan.project.scenes.length ? "Draft ready. Preview the photos and captions, then export your finished reel." : "Add a matching saved photo to this post in the campaign, then try again."].join(" "));
     } catch (error) {
@@ -233,7 +235,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       const existingData = existing.ok ? await existing.json() : {};
       if (!reelOperationIsCurrent(key, selection.current)) return;
       if (existingData.assetId) { setSavedAsset(existingData.assetId); setMessage("Reel saved. Choose your account and posting time below."); return; }
-      await upload(pathname, rendered, { access: "private", contentType: rendered.type, multipart: true, handleUploadUrl: "/api/reels/upload", clientPayload: JSON.stringify({ campaignId, contentItemId, title: project.scenes[0]?.headline || project.brand, duration: reelDuration(project) }) });
+      await upload(pathname, rendered, { access: "private", contentType: rendered.type, multipart: true, handleUploadUrl: "/api/reels/upload", clientPayload: JSON.stringify({ campaignId, contentItemId, title: project.scenes[0]?.headline || project.brand, productSubject:project.productSubject, duration: reelDuration(project) }) });
       if (!reelOperationIsCurrent(key, selection.current)) return;
       for (let attempt = 0; attempt < 12; attempt++) {
         const response = await fetch(`/api/reels/upload?pathname=${encodeURIComponent(pathname)}`), data = await response.json();

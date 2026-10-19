@@ -6,6 +6,6 @@ export async function campaignSetupPhotos(db:any,organizationId:string,brandId:s
 }
 export async function attachSetupPhoto(db:any,organizationId:string,campaignId:string,itemId:string,source:any){
  if(source.campaignId === null && source.provider === 'upload') await db.mediaAsset.updateMany({where:{id:source.id,organizationId,campaignId:null},data:{campaignId}});
- await db.mediaAsset.create({data:{organizationId,campaignId,contentItemId:itemId,kind:source.kind==='ai_image'?'ai_image':'product_photo',provider:'reuse',status:'ready',url:source.url,prompt:source.prompt,metadata:{sourceAssetId:source.id,sourceProvider:source.provider,stockSource:source.metadata?.stockSource||null,rightsConfirmed:source.metadata?.rightsConfirmed===true,userSelected:true,label:source.metadata?.label||'Saved campaign photo'}}});
+ await db.mediaAsset.create({data:{organizationId,campaignId,contentItemId:itemId,kind:source.kind==='ai_image'?'ai_image':'product_photo',provider:'reuse',status:'ready',url:source.url,prompt:source.prompt,metadata:{sourceEvidence:source.metadata?.sourceEvidence||null,sourceUrl:source.metadata?.sourceUrl||null,productName:source.metadata?.productName||null,sourceAssetId:source.id,sourceProvider:source.provider,stockSource:source.metadata?.stockSource||null,rightsConfirmed:source.metadata?.rightsConfirmed===true,userSelected:true,label:source.metadata?.label||'Saved campaign photo'}}});
  await db.contentItem.update({where:{id:itemId},data:{mediaUrl:source.url}});
 }

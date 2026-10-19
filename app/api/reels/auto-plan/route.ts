@@ -48,9 +48,11 @@ export async function POST(req: Request) {
     step = "reading the saved campaign plan";
     function enrich(item: { id: string; campaignId: string; type: string; headline: string | null; caption: string | null }): AutoPlanPost {
       const job = jobs.find(job => (job.payload as { campaignId?: string })?.campaignId === item.campaignId);
-      const planned = (job?.result as { posts?: Array<{ type?: string; headline?: string; caption?: string; visualDirection?: string }> })?.posts;
-      const direction = Array.isArray(planned) ? planned.find(saved => saved.type === item.type && saved.headline === item.headline && saved.caption === item.caption)?.visualDirection : undefined;
-      return { id: item.id, type: item.type, headline: item.headline, caption: item.caption, visualDirection: direction, occasion: savedPostOccasion(job?.payload, job?.result, item) };
+      const planned = (job?.result as { posts?: Array<{ type?: string; headline?: string; caption?: string; visualDirection?: string; planKey?: string }> })?.posts;
+      const saved = Array.isArray(planned) ? planned.find(saved => saved.type === item.type && saved.headline === item.headline && saved.caption === item.caption) : undefined;
+      const slots = (job?.payload as {contentPlan?: Array<{planKey?: string;topics?: string[]}>})?.contentPlan;
+      const topics = Array.isArray(slots) && saved?.planKey ? slots.find(slot=>slot.planKey===saved.planKey)?.topics : undefined;
+      return { id: item.id, type: item.type, headline: item.headline, caption: item.caption, visualDirection: saved?.visualDirection, topics, occasion: savedPostOccasion(job?.payload, job?.result, item) };
     }
     const sourcePosts = new Map(posts.map(item => [item.id, enrich(item)]));
     const brand = { id: brandRecord.id, name: brandRecord.name, industry: brandRecord.industry, designStyle: brandRecord.designStyle, color: brandRecord.primaryColor || "#132342", accent: brandRecord.accentColor || "#dec184", website: brandRecord.websiteUrl || "", ...(brandRecord.logoUrl ? { logo: `/api/reels/media?brandId=${encodeURIComponent(brandRecord.id)}` } : {}) };

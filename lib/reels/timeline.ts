@@ -18,7 +18,7 @@ export const REEL_ANIMATIONS = [
 ] as const;
 export type ReelAnimation = typeof REEL_ANIMATIONS[number]["value"];
 export type ReelScene = { id: string; src: string; kind: "image" | "video"; headline: string; detail: string; seconds: number; direction?: string };
-export type ReelProject = { brand: string; website: string; cta: string; color: string; accent: string; style: ReelStyle; animation?: ReelAnimation; showcaseDetails?: boolean; logo?: string; scenes: ReelScene[]; closingSeconds: number };
+export type ReelProject = { brand: string; website: string; cta: string; color: string; accent: string; style: ReelStyle; animation?: ReelAnimation; showcaseDetails?: boolean; productSubject?: string; logo?: string; scenes: ReelScene[]; closingSeconds: number };
 export const REEL_WIDTH = 1080, REEL_HEIGHT = 1920;
 export function distinctSceneIndexes(scenes: ReelScene[], current: number, limit = 3) {
   const seen = new Set<string>(), indexes: number[] = [];

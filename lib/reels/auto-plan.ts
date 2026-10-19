@@ -1,3 +1,4 @@
+import { reelProductSubject, reelPhotoMatchesProduct } from "./product-identity";
 import { parseReelScenePlan } from "./scene-plan";
 import type { ReelProject, ReelStyle } from "./timeline";
 import type { ReelSource } from "./post-context";
@@ -18,7 +19,7 @@ export function automaticReelStyle(brand: AutoPlanBrand, holiday = false): ReelS
   if (/fitness|sport|restaurant|food|entertainment|event/i.test(business)) return "bold";
   return "boutique";
 }
-export type AutoPlanPost = { id: string; headline: string | null; caption: string | null; type: string; visualDirection?: string | null; occasion?: string };
+export type AutoPlanPost = { id: string; headline: string | null; caption: string | null; type: string; visualDirection?: string | null; occasion?: string; topics?: string[] };
 export type AutoPlanAsset = { id: string; organizationId: string; brandId: string; campaignId: string; contentItemId?: string | null; kind: string; status: string; url: string | null; prompt?: string | null; metadata?: unknown; post?: AutoPlanPost };
 const ignored = new Set("a an and are as at be by can do for from has have how in is it its may more of on or our that the their them there these they this to with you your photo image scene text shot close wide calm moment business brand premium campaign create realistic vertical photograph background lighting caption product fidelity critical no not people person adult hypnosis hypnotherapy session support journey step discover learn today help helping feel feeling take taking change positive advanced mind master explore book appointment consultation gentle safe natural practice personal professional approach".split(" "));
 function tokens(value: string): Set<string> {
@@ -91,7 +92,9 @@ export function automaticReelPlan(input: { organizationId: string; campaignId: s
   for (const word of tokens(brand.name)) topic.delete(word);
   for (const word of tokens(brand.name)) headlineTopic.delete(word);
   if (holiday && !post.occasion) warnings.push("The saved holiday slot could not be identified. Choose an occasion photo before exporting.");
-  const eligible = input.assets.filter(asset => asset.organizationId === input.organizationId && asset.brandId === brand.id && asset.status === "ready" && ["ai_image", "product_photo", "reel_scene_image"].includes(asset.kind) && !!asset.url && subjectCompatible(asset, targetText) && (!holiday || (!!post.occasion && occasionMatches(asset, post.occasion))));
+  const productSubject = reelProductSubject(post, brand);
+  const eligible = input.assets.filter(asset => asset.organizationId === input.organizationId && asset.brandId === brand.id && asset.status === "ready" && ["ai_image", "product_photo", "reel_scene_image"].includes(asset.kind) && !!asset.url && reelPhotoMatchesProduct(productSubject, asset) && subjectCompatible(asset, targetText) && (!holiday || (!!post.occasion && occasionMatches(asset, post.occasion))));
+  if (productSubject && !eligible.length) warnings.push(`No verified photos match ${productSubject}. Load this product’s gallery; another product will not be substituted.`);
   const used = new Set<string>();
   const sources: ReelSource[] = [];
   const scenes: ReelProject["scenes"] = [];
@@ -106,7 +109,7 @@ export function automaticReelPlan(input: { organizationId: string; campaignId: s
       const owned = asset.contentItemId === post.id;
       // Source-post association is evidence for the primary image, but not for
       // unrelated scene photos. Past campaign images require shared subject terms.
-      const relevant = exactScene || overlap(headlineTopic, words) > 0 || semantic >= 2 || shot >= 2 || (owned && asset.kind !== "reel_scene_image");
+      const relevant = !!productSubject || exactScene || overlap(headlineTopic, words) > 0 || semantic >= 2 || shot >= 2 || (owned && asset.kind !== "reel_scene_image");
       return { asset, relevant, score: (exactScene ? 1000 : 0) + shot * 12 + overlap(captionTopic, words) * 10 + semantic * 5 + (owned ? 8 : 0) };
     }).filter(entry => entry.relevant).sort((a, b) => b.score - a.score || a.asset.id.localeCompare(b.asset.id));
     const chosen = ranked[0]?.asset;
@@ -127,6 +130,6 @@ export function automaticReelPlan(input: { organizationId: string; campaignId: s
     }
   }
   const style = automaticReelStyle(brand, holiday);
-  const project: ReelProject = { brand: brand.name, website: brand.website, logo: brand.logo, color: brand.color, accent: brand.accent, cta: concise(saved?.cta || "Explore more", 70) || "Explore more", style, animation: style === "bold" ? "lively" : "gentle", closingSeconds, scenes };
+  const project: ReelProject = { brand: brand.name, website: brand.website, logo: brand.logo, color: brand.color, accent: brand.accent, cta: concise(saved?.cta || "Explore more", 70) || "Explore more", style, ...(productSubject ? {productSubject} : {}), animation: style === "bold" ? "lively" : "gentle", closingSeconds, scenes };
   return { project, sources, warnings };
 }

@@ -1,3 +1,4 @@
+import { reelProductSubject, reelPhotoMatchesProduct } from "@/lib/reels/product-identity";
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -16,22 +17,35 @@ export async function POST(req: Request) {
     const post = await prisma.contentItem.findFirst({ where: { id: p.contentItemId, campaignId: p.campaignId, campaign: { brand: { organizationId: ctx.organizationId } } }, include: { campaign: { include: { brand: { include: { products: true } } } } } });
     if (!post) return NextResponse.json({ error: "Post not found in this workspace." }, { status: 404 });
     const brand = post.campaign.brand, website = brand.websiteUrl || "", products = brand.products;
-    const page = p.url || productPageForPost(post, website, products);
+    const productSubject=reelProductSubject(post,brand);
+    let verifiedPage: string | undefined;
+    if(!p.url && productSubject){
+      const saved=await prisma.mediaAsset.findMany({where:{organizationId:ctx.organizationId,campaignId:p.campaignId,contentItemId:post.id,status:"ready",kind:{in:["ai_image","product_photo"]}},select:{metadata:true},orderBy:{createdAt:"desc"},take:30});
+      for(const asset of saved){
+        const m=asset.metadata as {sourceUrl?:unknown;sourceEvidence?:{sourceUrl?:unknown}}|null;
+        const url=m?.sourceEvidence?.sourceUrl||m?.sourceUrl;
+        if(typeof url==="string" && pageBelongsToBrand(url,website,products) && reelPhotoMatchesProduct(productSubject,asset)){verifiedPage=url;break;}
+      }
+    }
+    const page = p.url || verifiedPage || productPageForPost(post, website, products);
     if (!page) return NextResponse.json({ error: "Enter this product’s page address, or upload its photos.", needsUrl: true }, { status: 400 });
     if (!pageBelongsToBrand(page, website, products)) return NextResponse.json({ error: "Use a product page from this brand’s website or saved products." }, { status: 400 });
-    let images: string[];
+    let images: string[]; let productName="";
     try {
       const result = await fetchPublicBytes(page, 3_000_000);
       if (!/text\/html|application\/xhtml\+xml/i.test(result.contentType)) throw new Error("Not an HTML product page.");
-      images = extractProductPhotos(result.bytes.toString("utf8"), page);
+      const html=result.bytes.toString("utf8");
+      productName=(html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1]||"").replace(/<[^>]*>/g," ").replace(/&amp;/gi,"&").replace(/\s+/g," ").trim();
+      images = extractProductPhotos(html, page);
     } catch { return NextResponse.json({ error: "Could not read this product page. Check the address or upload its photos." }, { status: 502 }); }
     if (!images.length) return NextResponse.json({ error: "No product photos were found on this page. Upload the photos you want to use." }, { status: 404 });
+    if(!reelPhotoMatchesProduct(productSubject,{metadata:{sourceEvidence:{imageUrl:images[0],sourceUrl:page,title:productName}}})) return NextResponse.json({error:"This page does not match the product named in the post. Choose its exact product page."},{status:400});
     const sources = [];
     for (let index = 0; index < images.length; index++) {
       const url = images[index], id = `reel-photo-${createHash("sha256").update(JSON.stringify([ctx.organizationId, post.id, photoKey(url)])).digest("hex").slice(0, 40)}`;
-      const metadata = { sourceUrl: page, label: `Product photo ${index + 1}` };
+      const metadata = { sourceEvidence:{imageUrl:url,sourceUrl:page,title:productName}, productName, sourceUrl: page, label: `Product photo ${index + 1}` };
       await prisma.mediaAsset.upsert({ where: { id }, create: { id, organizationId: ctx.organizationId, campaignId: p.campaignId, contentItemId: post.id, kind: "product_photo", provider: "product-website", status: "ready", url, metadata }, update: { url, metadata } });
-      sources.push({ id, kind: "image", src: `/api/reels/media?assetId=${id}`, contentItemId: post.id, label: metadata.label });
+      sources.push({ id, productVerified:true, kind: "image", src: `/api/reels/media?assetId=${id}`, contentItemId: post.id, label: metadata.label });
     }
     return NextResponse.json({ sources, sourceUrl: page }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiError(error, "Could not load product photos. Try again or upload them."); }
