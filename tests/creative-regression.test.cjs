@@ -97,10 +97,10 @@ test('video selection enforces ownership and resets approval; scheduled posts ca
 test('Facebook videos keep their tenant boundary and reuse a confirmed upload', async () => {
   let state, calls = 0;
   const prisma = { mediaAsset: { findFirst: async q => { assert.equal(q.where.organizationId, 'own'); assert.equal(q.where.contentItemId, 'post'); return { id: 'clip', url: 'data:video/mp4;base64,abc' }; } }, job: { findFirst: async () => state, create: async q => { state = q.data; }, update: async q => { state = { ...state, ...q.data }; } } };
-  const mod = load('lib/publishing/facebook-video.ts', { '@/lib/prisma': { prisma }, '@/lib/video/media': { videoBytes: async () => ({ bytes: Buffer.from('clip'), contentType: 'video/mp4' }) }, __fetch: async (url, init) => { calls++; assert.match(url, /graph-video.facebook.com/); assert.equal(init.body.get('description'), 'Caption'); assert.equal(init.body.get('source').type, 'video/mp4'); return new Response(JSON.stringify({ id: 'video-123' }), { status: 200 }); } });
+  const mod = load('lib/publishing/facebook-video.ts', { '@/lib/prisma': { prisma }, '@/lib/video/media': { videoBytes: async () => ({ bytes: Buffer.from('clip'), contentType: 'video/mp4' }) }, __fetch: async (url, init) => { if(String(url).includes('graph.facebook.com'))return new Response(JSON.stringify({status:{video_status:'ready'}})); calls++; assert.match(url, /graph-video.facebook.com/); assert.equal(init.body.get('description'), 'Caption'); assert.equal(init.body.get('source').type, 'video/mp4'); return new Response(JSON.stringify({ id: '123' }), { status: 200 }); } });
   const args = { pageId: 'page', pageAccessToken: 'test', caption: 'Caption', assetId: 'clip', organizationId: 'own', contentItemId: 'post', publishJobId: 'publish' };
-  assert.equal((await mod.publishFacebookVideo(args)).externalId, 'video-123');
-  assert.equal((await mod.publishFacebookVideo(args)).externalId, 'video-123'); assert.equal(calls, 1);
+  assert.equal((await mod.publishFacebookVideo(args)).externalId, '123');
+  assert.equal((await mod.publishFacebookVideo(args)).externalId, '123'); assert.equal(calls, 1);
   prisma.mediaAsset.findFirst = async () => null;
   assert.equal((await mod.publishFacebookVideo(args)).ok, false); assert.equal(calls, 1);
 });
@@ -145,4 +145,39 @@ test('posting status returns confirmed per-account delivery and rejects foreign 
   assert.equal(result.body.jobs[0].status,'published');assert.equal(result.body.jobs[1].status,'failed');assert.equal(result.body.jobs[0].socialConnection.accountName,'Rumi Guitars');assert.equal(result.headers['Cache-Control'],'private, no-store');
   accessible=false;assert.equal((await api.GET(new Request('https://app.test/api/publishing/status?contentItemId=foreign'))).status,404);assert.equal(reads,1);
   assert.equal((await api.GET(new Request('https://app.test/api/publishing/status'))).status,400);
+});
+
+
+test('Facebook processing and encoding failure never count as a playable video or upload twice',async()=>{
+ let state, uploads=0, remote='processing';
+ const prisma={mediaAsset:{findFirst:async()=>({id:'clip',url:'/video'})},job:{findFirst:async()=>state,create:async q=>{state=q.data;},update:async q=>{state={...state,...q.data};}}};
+ const mod=load('lib/publishing/facebook-video.ts',{'@/lib/prisma':{prisma},'@/lib/video/media':{videoBytes:async()=>({bytes:Buffer.from('clip'),contentType:'video/mp4'})},__fetch:async(url,init)=>{
+   if(String(url).includes('graph-video.facebook.com')){uploads++;return new Response(JSON.stringify({id:'123'}));}
+   assert.equal(init.headers.Authorization,'Bearer test');assert.equal(new URL(url).searchParams.get('fields'),'status');
+   if(remote==='network')throw new Error('offline');
+   return new Response(JSON.stringify({status:{video_status:remote}}));
+ }});
+ const args={pageId:'page',pageAccessToken:'test',caption:'Caption',assetId:'clip',organizationId:'own',contentItemId:'post',publishJobId:'publish'};
+ let result=await mod.publishFacebookVideo(args);assert.equal(result.ok,false);assert.equal(result.pending,true);assert.equal(result.externalId,'123');
+ remote='network';result=await mod.publishFacebookVideo(args);assert.equal(result.ok,false);assert.equal(result.pending,true);
+ remote='error';result=await mod.publishFacebookVideo(args);assert.equal(result.ok,false);assert.equal(result.retryable,false);assert.match(result.error,/could not process/);
+ remote='ready';assert.equal((await mod.publishFacebookVideo(args)).ok,true);assert.equal(uploads,1);
+ state.createdAt=new Date(Date.now()-25*60*60*1000);remote='processing';assert.equal((await mod.publishFacebookVideo(args)).retryable,false);assert.equal(uploads,1);
+});
+
+test('worker defers a Facebook processing check without spending upload attempts',async()=>{
+ let saved;
+ const prisma={publishJob:{findFirst:async()=>({id:'job',organizationId:'own',socialConnectionId:'connection',contentItemId:'post',platform:'facebook',status:'retry',attempts:1}),updateMany:async()=>({count:1}),update:async q=>{saved=q.data;}},socialConnection:{findUnique:async()=>({organizationId:'own'})},contentItem:{findUnique:async()=>({id:'post',status:'scheduled',mediaUrl:'/api/video/media/clip'})},publishAttempt:{create:async()=>({})}};
+ const mod=load('lib/publishing/process-due-job.ts',{'@/lib/prisma':{prisma},'@/lib/publishing/providers':{publishToProvider:async()=>({ok:false,pending:true,externalId:'123',error:'Processing'})}});
+ assert.equal((await mod.processDuePublishJob()).status,'processing');assert.equal(saved.attempts,1);assert.equal(saved.externalPostId,'123');assert.equal(saved.status,'retry');assert.ok(saved.scheduledFor.getTime()>Date.now()+240000);
+});
+
+
+test('existing Facebook upload is rechecked read-only instead of blindly reported posted',async()=>{
+ let remote={ok:false,pending:false,error:'Facebook could not process this video.'}, checks=0;
+ const api=load('app/api/publishing/status/route.ts',{'next/server':{NextResponse:{json:(body,options={})=>({body,status:options.status||200})}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'own'})},'@/lib/http/errors':{apiError:e=>{throw e;}},'@/lib/security/crypto':{decryptSecret:()=>JSON.stringify({pageAccessToken:'secret'})},'@/lib/publishing/facebook-video':{campaignVideoId:()=> 'clip'},'@/lib/publishing/facebook-video-status':{facebookVideoStatus:async(id,token)=>{checks++;assert.equal(id,'123');assert.equal(token,'secret');return remote;}},'@/lib/prisma':{prisma:{contentItem:{findFirst:async()=>({id:'post',mediaUrl:'/api/video/media/clip'})},publishJob:{findMany:async()=>[{id:'job',platform:'facebook',externalPostId:'123',socialConnectionId:'connection',status:'published'}]},socialConnection:{findMany:async()=>[{id:'connection',accountName:'Master Mind',encryptedToken:'encrypted'}]}}}});
+ const req=new Request('https://app.test/api/publishing/status?contentItemId=post');
+ let result=await api.GET(req);assert.equal(result.body.jobs[0].status,'failed');assert.equal(JSON.stringify(result.body).includes('secret'),false);
+ remote={ok:false,pending:true};result=await api.GET(req);assert.equal(result.body.jobs[0].status,'processing');
+ remote={ok:true};result=await api.GET(req);assert.equal(result.body.jobs[0].status,'published');assert.equal(checks,3);
 });

@@ -95,6 +95,12 @@ export async function processDuePublishJob() {
     },
   });
 
+  if (result.pending) {
+    // Status checks do not consume upload attempts or submit another video.
+    await prisma.publishJob.update({where:{id:job.id},data:{status:"retry",attempts:job.attempts,scheduledFor:new Date(Date.now()+5*60*1000),externalPostId:result.externalId,lastError:result.error}});
+    return {status:"processing" as const,jobId:job.id,attempt,error:result.error};
+  }
+
   if (result.ok) {
     await prisma.publishJob.update({
       where: { id: job.id },

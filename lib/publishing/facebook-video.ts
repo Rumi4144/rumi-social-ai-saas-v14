@@ -1,3 +1,4 @@
+import { facebookVideoStatus } from "./facebook-video-status";
 import { prisma } from "@/lib/prisma";
 import { videoBytes } from "@/lib/video/media";
 import type { PublishResult } from "./providers";
@@ -16,7 +17,11 @@ export async function publishFacebookVideo(input: { pageId: string; pageAccessTo
   const stateId = `facebook_video_${input.publishJobId}`;
   const existing = await prisma.job.findFirst({ where: { id: stateId, organizationId: input.organizationId, type: "FACEBOOK_VIDEO_PUBLISH" } });
   const prior = existing?.result as { videoId?: string } | null;
-  if (existing?.status === "succeeded" && prior?.videoId) return { ok: true, externalId: prior.videoId };
+  if (existing?.status === "succeeded" && prior?.videoId) {
+    const result=await facebookVideoStatus(prior.videoId,input.pageAccessToken);
+    if(result.pending && existing.createdAt && Date.now()-new Date(existing.createdAt).getTime()>24*60*60*1000) return {ok:false,retryable:false,externalId:prior.videoId,error:"Facebook playback is still unconfirmed after 24 hours. Review the existing post before uploading a replacement."};
+    return result;
+  }
   if (existing) return { ok: false, retryable: false, error: "Video upload needs review before retrying. Check the Facebook Page to avoid posting twice." };
   const clip = await videoBytes(asset);
   if (clip.contentType !== "video/mp4") return { ok: false, retryable: false, error: "Facebook publishing requires an MP4 clip." };
@@ -36,9 +41,9 @@ export async function publishFacebookVideo(input: { pageId: string; pageAccessTo
       return { ok: false, retryable: false, code: response.status, error: data.error?.message || "FACEBOOK_VIDEO_UPLOAD_FAILED" };
     }
     const videoId = String(data.id);
-    // An accepted upload is successful even if saving its local receipt fails.
+    // Save acceptance before checking encoding; retries must check this same video, never upload twice.
     await prisma.job.update({ where: { id: stateId }, data: { status: "succeeded", progress: 100, result: { videoId } } }).catch(() => null);
-    return { ok: true, externalId: videoId, code: response.status };
+    return facebookVideoStatus(videoId,input.pageAccessToken);
   } catch {
     return { ok: false, retryable: false, error: "Facebook upload was interrupted. Check your Page before retrying to avoid posting twice." };
   }
