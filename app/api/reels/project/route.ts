@@ -8,7 +8,7 @@ export async function GET(req: Request) {
     const ctx = await tenantContext();
     const id = new URL(req.url).searchParams.get("campaignId");
     if (!id) return NextResponse.json({ campaigns: await prisma.campaign.findMany({ where: { brand: { organizationId: ctx.organizationId } }, select: { id: true, title: true }, orderBy: { createdAt: "desc" }, take: 100 }) });
-    const campaign = await prisma.campaign.findFirst({ where: { id, brand: { organizationId: ctx.organizationId } }, include: { brand: true, items: { select: { id: true, headline: true, caption: true, type: true } } } });
+    const campaign = await prisma.campaign.findFirst({ where: { id, brand: { organizationId: ctx.organizationId } }, include: { brand: true, items: { select: { id: true, headline: true, caption: true, type: true, status: true } } } });
     if (!campaign) return NextResponse.json({ error: "Campaign not found." }, { status: 404 });
     const postId = new URL(req.url).searchParams.get("contentItemId");
     if (postId && !campaign.items.some(item => item.id === postId)) return NextResponse.json({ error: "Post not found in this campaign." }, { status: 404 });

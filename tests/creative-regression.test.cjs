@@ -119,16 +119,30 @@ test('video URL routing cannot treat an external host as our private campaign cl
 });
 
 test('scheduled video uses the selected clip and is claimed once before publishing', async () => {
-  let calls = 0, claimed = true, updated;
+  let calls = 0, claimed = true, updated, itemStatus = "scheduled";
   const job = { id: 'publish', organizationId: 'own', contentItemId: 'post', socialConnectionId: 'connection', platform: 'facebook', status: 'scheduled', attempts: 0 };
   const prisma = {
     publishJob: { findFirst: async () => job, updateMany: async () => ({ count: claimed ? 1 : 0 }), update: async q => { updated = q.data; } },
     socialConnection: { findUnique: async () => ({ organizationId: 'own', encryptedToken: 'test', externalId: 'page' }) },
-    contentItem: { findUnique: async () => ({ id: 'post', status: 'scheduled', caption: 'Caption', mediaUrl: '/api/video/media/clip' }), update: async () => ({}) },
+    contentItem: { findUnique: async () => ({ id: 'post', status: itemStatus, caption: 'Caption', mediaUrl: '/api/video/media/clip' }), update: async () => ({}) },
     publishAttempt: { create: async () => ({}) },
   };
   const mod = load('lib/publishing/process-due-job.ts', { '@/lib/prisma': { prisma }, '@/lib/publishing/providers': { publishToProvider: async args => { calls++; assert.equal(args.mediaUrl, '/api/video/media/clip'); assert.equal(args.organizationId, 'own'); assert.equal(args.publishJobId, 'publish'); return { ok: true, externalId: 'fb-video' }; } } });
   assert.equal((await mod.processDuePublishJob()).status, 'published'); assert.equal(updated.externalPostId, 'fb-video');
+  itemStatus = 'published'; // The first destination succeeded; the second must still publish.
+  assert.equal((await mod.processDuePublishJob()).status, 'published'); assert.equal(calls, 2);
+  itemStatus = 'draft';
+  assert.equal((await mod.processDuePublishJob()).status, 'failed'); assert.equal(calls, 2);
   claimed = false;
-  assert.equal((await mod.processDuePublishJob()).status, 'idle'); assert.equal(calls, 1);
+  assert.equal((await mod.processDuePublishJob()).status, 'idle'); assert.equal(calls, 2);
+});
+
+test('posting status returns confirmed per-account delivery and rejects foreign posts', async () => {
+  let accessible=true, reads=0;
+  const prisma={contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'own');return accessible?{id:'post'}:null;}},publishJob:{findMany:async q=>{reads++;assert.equal(q.where.organizationId,'own');assert.equal(q.where.contentItemId,'post');return [{id:'fb',socialConnectionId:'connection',platform:'facebook',status:'published',publishedAt:'2026-10-19T13:00:00Z'},{id:'ig',socialConnectionId:'connection',platform:'instagram',status:'failed',lastError:'Upload rejected'}];}},socialConnection:{findMany:async q=>{assert.equal(q.where.organizationId,'own');return [{id:'connection',accountName:'Rumi Guitars'}];}}};
+  const api=load('app/api/publishing/status/route.ts',{'@/lib/prisma':{prisma},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'own'})},'@/lib/http/errors':{apiError:e=>{throw e;}},'next/server':{NextResponse:{json:(body,options={})=>({body,status:options.status||200,headers:options.headers})}}});
+  const result=await api.GET(new Request('https://app.test/api/publishing/status?contentItemId=post'));
+  assert.equal(result.body.jobs[0].status,'published');assert.equal(result.body.jobs[1].status,'failed');assert.equal(result.body.jobs[0].socialConnection.accountName,'Rumi Guitars');assert.equal(result.headers['Cache-Control'],'private, no-store');
+  accessible=false;assert.equal((await api.GET(new Request('https://app.test/api/publishing/status?contentItemId=foreign'))).status,404);assert.equal(reads,1);
+  assert.equal((await api.GET(new Request('https://app.test/api/publishing/status'))).status,400);
 });

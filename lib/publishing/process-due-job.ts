@@ -34,7 +34,7 @@ export async function processDuePublishJob() {
     where: { id: job.contentItemId },
   });
 
-  if (!connection || !item || connection.organizationId !== job.organizationId || (item.mediaUrl?.includes("/api/video/media/") && !["approved", "scheduled"].includes(item.status))) {
+  if (!connection || !item || connection.organizationId !== job.organizationId || (item.mediaUrl?.includes("/api/video/media/") && !["approved", "scheduled", "published"].includes(item.status))) {
     await prisma.publishJob.update({
       where: { id: job.id },
       data: {

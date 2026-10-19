@@ -1,3 +1,4 @@
+import PostDeliveryStatus from "@/components/PostDeliveryStatus";
 import CampaignPhotoChoices from "@/components/CampaignPhotoChoices";
 import { matchingWebsitePhoto, modelCodes, type PhotoEvidence } from "@/lib/campaign/photo-matching";
 import CampaignProductPicker from "@/components/CampaignProductPicker";
@@ -207,6 +208,7 @@ export default async function Campaign({
             <article className="card" key={item.id}>
               <div style={{marginBottom:20,padding:16,borderRadius:12,border:item.type === "story_post" ? "2px solid #9a5b12" : "1px solid #315943",background:item.type === "story_post" ? "#fff4dd" : "#edf5ef",color:"#172b24"}}>
                 <strong style={{fontSize:20}}>{contentTypeLabel(item.type)}</strong>
+                <PostDeliveryStatus contentItemId={item.id} />
                 {item.type === "story_post" ? <><p style={{margin:"8px 0"}}><strong>Stories cannot be scheduled here.</strong> Download this Story and upload it in Facebook or Instagram.</p>{displayAsset?.url && <a href={`/api/reels/media?assetId=${encodeURIComponent(displayAsset.id)}&download=1`} download="story-creative.png">Download Story creative</a>}</> : <p style={{margin:"8px 0"}}>{needsVideo ? "Finish and select the video to enable scheduling." : ["scheduled","published"].includes(item.status) ? `This post is ${item.status}.` : item.status === "approved" ? "Ready to schedule below." : "Review and approve this post to enable scheduling below."}</p>}
               </div>
               {videoAsset && <div style={{ marginBottom: 20 }}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import PostDeliveryStatus from "./PostDeliveryStatus";
 
 type Connection = {
   id: string;
@@ -202,12 +203,14 @@ export default function SchedulePostButton({
 
   if (status === "scheduled" && !completed) {
     return (
-      <div role="status" aria-live="polite">
+      <div role="status" aria-live="polite"><PostDeliveryStatus contentItemId={contentItemId} />
         {queuedNow ? "✓ Queued for posting. Check Publishing for delivery status." : "✓ Scheduled"}
         {!queuedNow && savedTime ? ` · ${new Date(savedTime).toLocaleString()}` : ""}
       </div>
     );
   }
+
+  if (status === "published" && !completed) return <PostDeliveryStatus contentItemId={contentItemId} />;
 
   if (status !== "approved" && !completed) {
     return null;
@@ -231,6 +234,7 @@ export default function SchedulePostButton({
           }}
         >
           <strong>{allowPostNow ? "Post your reel" : "Schedule Post"}</strong>
+          <PostDeliveryStatus contentItemId={contentItemId} refreshKey={completed ? 1 : 0} />
           <p>Select a destination for this post. TikTok publishing setup is not complete yet.</p>
           {isVideo && <p>Google Business Profile is available for text and photo posts. Choose a photo for a Google post.</p>}
 
@@ -280,10 +284,10 @@ export default function SchedulePostButton({
             onClick={schedule}
             disabled={busy || completed || connections.length === 0}
           >
-            {completed ? (queuedNow ? "✓ Queued for posting" : "✓ Scheduled") : busy ? "Preparing your post…" : postNow ? "Approve and post now" : allowPostNow ? "Approve and schedule" : "Schedule Post"}
+            {completed ? "✓ Submitted" : busy ? "Preparing your post…" : postNow ? "Approve and post now" : allowPostNow ? "Approve and schedule" : "Schedule Post"}
           </button>
 
-          <p role="status" aria-live="polite" style={{minHeight:"3em",marginTop:10}}>{completed ? (queuedNow ? "Queued for posting. Check Publishing for delivery status." : "Scheduled successfully.") : ""}</p>
+          <p role="status" aria-live="polite" style={{minHeight:"3em",marginTop:10}}>{completed ? "Submitted. Delivery status updates above." : ""}</p>
           {error && (
             <p
               style={{

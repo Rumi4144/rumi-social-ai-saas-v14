@@ -1,7 +1,7 @@
 import type {ReelProject} from './timeline';
 import {parseReelScenePlan} from './scene-plan';
 export type ReelSource={id:string;src:string;kind:'image'|'video';contentItemId?:string;sceneId?:string;seconds?:number;label?:string;libraryBrandId?:string;productVerified?:boolean};
-export type ReelPost={id:string;headline:string|null;caption:string|null;visualDirection?:string|null;productSubject?:string};
+export type ReelPost={id:string;headline:string|null;caption:string|null;visualDirection?:string|null;productSubject?:string;status?:string};
 export function reelDraftKey(organizationId:string,campaignId:string,postId:string){return `${organizationId}:${campaignId}:${postId}`;}
 export function selectedPostProject(data:{posts:ReelPost[];sources:ReelSource[];brand:{name:string;color:string;accent:string;website:string;logo?:string}},requestedPostId:string):{post:ReelPost;project:ReelProject}{
  const post=requestedPostId?data.posts.find(p=>p.id===requestedPostId):data.posts[0];
