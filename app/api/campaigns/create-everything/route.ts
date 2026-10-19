@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { spendCredits } from "@/lib/services/credits";
 import { tenantContext } from "@/lib/auth/context";
 import { z } from "zod";
+import { verifyPhotoEvidence } from "@/lib/campaign/photo-matching";
 import { buildContentPlan, buildQuantityContentPlan, applyCampaignTopics } from "@/lib/campaign/content-plan";
 
 import {campaignSetupPhotos} from "@/lib/campaign/setup-photos";
@@ -18,6 +19,7 @@ const S = z.object({
   campaignPhotoIds: z.array(z.string().min(1)).max(20).default([]),
   contentQuantities: z.object({post:z.number().int().min(0).max(30),reel_post:z.number().int().min(0).max(30),story_post:z.number().int().min(0).max(30),presenter_post:z.number().int().min(0).max(30)}).optional(),
   extraSpecialDays: z.array(z.object({date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),label:z.string().trim().min(1).max(100)})).max(30).default([]),
+  photoReceipt: z.string().max(60000).optional(),
   imageUrl: z.string().url().optional(),
   imageUrls: z.array(z.string().url()).max(20).optional(),
   dailyPlan: z.array(
@@ -91,6 +93,10 @@ export async function POST(req: Request) {
       if(!p.data.campaignPhotoIds.length)return NextResponse.json({error:"Select at least one photo for this campaign."},{status:400});
       try{await campaignSetupPhotos(prisma,ctx.organizationId,brand.id,p.data.campaignPhotoIds);}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Choose photos again."},{status:400});}
     }
+    let websitePhotoEvidence;
+    try { websitePhotoEvidence = p.data.photoReceipt && brand.websiteUrl ? verifyPhotoEvidence(p.data.photoReceipt, ctx.organizationId, brand.websiteUrl) : []; }
+    catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Find website photos again." }, { status: 400 }); }
+
     const onboarding = await prisma.onboardingState.findUnique({
       where: {
         organizationId: ctx.organizationId,
@@ -135,6 +141,7 @@ export async function POST(req: Request) {
           campaignPhotoIds: usingSaved ? p.data.campaignPhotoIds : [],
           imageUrl: p.data.imageUrl,
           imageUrls: p.data.imageUrls,
+          websitePhotoEvidence,
           brandContext: {
             name: brand.name,
             voice: brand.voice,

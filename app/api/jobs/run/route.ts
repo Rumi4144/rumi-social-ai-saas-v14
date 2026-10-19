@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { recentBrandConcepts } from "@/lib/ai/visual-history";
 import { generateCampaign } from "@/lib/ai/campaign";
 import { applyContentPlan, type ContentSlot } from "@/lib/campaign/content-plan";
+import { matchingWebsitePhoto, modelCodes, type PhotoEvidence } from "@/lib/campaign/photo-matching";
 import { renderSocialSvg } from "@/lib/render/svg";
 import { occasionVisualConcept, savedPostOccasion } from "@/lib/ai/occasion";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
@@ -141,16 +142,13 @@ export async function POST(req: Request) {
 
   try {
     if (job.type === "GENERATE_IMAGE") {
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OPENAI_API_KEY_MISSING");
-      }
-
       const p = job.payload as {
         campaignId: string;
         contentItemId: string;
         prompt: string;
         format?: "square" | "portrait" | "story";
         sourceImageUrl?: string;
+        sourceEvidence?: PhotoEvidence;
         photoSource?: "website" | "ai";
         textPosition?: "left" | "right" | "top";
         visualConcept?: VisualConcept;
@@ -174,6 +172,11 @@ export async function POST(req: Request) {
 
     if (!visualContentItem) {
       throw new Error("CONTENT_ITEM_NOT_FOUND");
+    }
+
+    if (p.photoSource === "website") {
+      const evidence = p.sourceEvidence || (p.sourceImageUrl ? { imageUrl: p.sourceImageUrl, sourceUrl: "", title: "" } : null);
+      if (!p.sourceImageUrl || !evidence || (modelCodes(visualContentItem.headline || "").length && !matchingWebsitePhoto(visualContentItem, [evidence], [p.sourceImageUrl]))) throw new Error("This website photo is not verified for the product in this post. Choose its matching photo before creating the image.");
     }
 
     const visualCampaign = visualContentItem.campaign;
@@ -274,6 +277,7 @@ export async function POST(req: Request) {
           size,
           subjectCategory: p.visualConcept?.subjectCategory || "unrecorded",
           occasion: occasion || null,
+          sourceEvidence: p.sourceEvidence || null,
         },
       };
 
@@ -406,6 +410,7 @@ export async function POST(req: Request) {
       campaignPhotoIds?: string[];
       imageUrl?: string;
       imageUrls?: string[];
+      websitePhotoEvidence?: PhotoEvidence[];
       brandContext?: {
         name: string;
         voice?: string | null;
@@ -474,7 +479,7 @@ export async function POST(req: Request) {
       const setupPhotos = p.campaignPhotoIds?.length ? await campaignSetupPhotos(tx,job.organizationId,campaign.brandId,p.campaignPhotoIds) : [];
       let setupPhotoIndex = 0;
       let imageJobsCreated = 0;
-      let websitePhotoIndex = 0;
+      const photoWarnings: string[] = [];
       let creativeLayoutIndex = 0;
       const plannedConcepts = [...recentConcepts];
 
@@ -491,7 +496,11 @@ export async function POST(req: Request) {
           ? [p.imageUrl]
           : [];
 
+      const photoChoices: PhotoEvidence[] = p.websitePhotoEvidence?.length ? p.websitePhotoEvidence : websitePhotos.map(imageUrl => ({ imageUrl, sourceUrl: "", title: "" }));
       for (const x of pack.posts) {
+      const slotTopics = p.contentPlan?.find(slot => slot.planKey === x.planKey)?.topics;
+      const matchedPhoto = p.photoSource === "website" ? matchingWebsitePhoto({ headline: x.headline, caption: x.caption, topics: slotTopics }, photoChoices, websitePhotos) : null;
+      if (p.photoSource === "website" && !matchedPhoto && x.type !== "holiday_post") photoWarnings.push(`${x.headline}: choose a matching website photo; no unrelated image was assigned.`);
       const occasion = p.contentPlan?.find(slot=>slot.planKey===x.planKey && slot.extra)?.occasion;
       const concept = occasion ? occasionVisualConcept(occasion) : buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });
       const priorConcepts = plannedConcepts.slice(-6);
@@ -521,7 +530,7 @@ export async function POST(req: Request) {
 
         if(setupPhotos.length && x.type !== "holiday_post") await attachSetupPhoto(tx,job.organizationId,campaign.id,item.id,setupPhotos[setupPhotoIndex++ % setupPhotos.length]);
         if (
-          p.photoSource !== "none" && !(x.type === "holiday_post" && p.photoSource === "website") && (
+          p.photoSource !== "none" && (p.photoSource !== "website" || matchedPhoto) && !(x.type === "holiday_post" && p.photoSource === "website") && (
         x.visualDirection?.trim() ||
         x.headline?.trim() ||
         x.caption?.trim() ||
@@ -541,9 +550,8 @@ export async function POST(req: Request) {
                 originalDirection: x.visualDirection,
                 occasion: occasion || undefined,
                 sourceImageUrl:
-                  p.photoSource === "website" && websitePhotos.length > 0
-                    ? websitePhotos[websitePhotoIndex % websitePhotos.length]
-                    : undefined,
+                  p.photoSource === "website" ? matchedPhoto?.imageUrl : undefined,
+                sourceEvidence: matchedPhoto || undefined,
                 photoSource: p.photoSource || "ai",
                 textPosition:
                   creativeLayouts[creativeLayoutIndex % creativeLayouts.length],
@@ -603,9 +611,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
           imageJobsCreated++;
           creativeLayoutIndex++;
 
-          if (p.photoSource === "website" && websitePhotos.length > 0) {
-            websitePhotoIndex++;
-          }
+
         }
       }
 
@@ -626,7 +632,8 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
       });
 
       if(setupPhotos.length) await attachSetupPhoto(tx,job.organizationId,campaign.id,storyItem.id,setupPhotos[setupPhotoIndex++ % setupPhotos.length]);
-      if (p.photoSource !== "none") await tx.job.create({
+      const storyPhoto = p.photoSource === "website" ? matchingWebsitePhoto({ headline: x.text }, photoChoices, websitePhotos) : null;
+      if (p.photoSource !== "none" && (p.photoSource !== "website" || storyPhoto)) await tx.job.create({
         data: {
           organizationId: job.organizationId,
           type: "GENERATE_IMAGE",
@@ -639,11 +646,8 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
             originalDirection: x.visualDirection,
             photoSource: p.photoSource || "ai",
             sourceImageUrl:
-              p.photoSource === "website" && websitePhotos.length > 0
-                ? websitePhotos[
-                    websitePhotoIndex % websitePhotos.length
-                  ]
-                : undefined,
+              p.photoSource === "website" ? storyPhoto?.imageUrl : undefined,
+            sourceEvidence: storyPhoto || undefined,
             format: "story",
             textPosition:
               creativeLayouts[
@@ -675,12 +679,7 @@ Leave intentional negative space for Rumi Social AI typography.`,
         },
       });
 
-      if (
-        p.photoSource === "website" &&
-        websitePhotos.length > 0
-      ) {
-        websitePhotoIndex++;
-      }
+
       creativeLayoutIndex++;
     }
 
@@ -709,7 +708,7 @@ Leave intentional negative space for Rumi Social AI typography.`,
         data: {
           status: "succeeded",
           progress: 100,
-          result: pack as any,
+          result: { ...pack, photoWarnings } as any,
         },
       });
     });

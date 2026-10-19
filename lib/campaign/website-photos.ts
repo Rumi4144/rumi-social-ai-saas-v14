@@ -1,3 +1,4 @@
+import type { PhotoEvidence } from "./photo-matching";
 import { fetchPublicBytes } from "@/lib/reels/public-fetch";
 import { cleanPhotoUrl, extractProductPhotos, photoKey } from "@/lib/reels/product-photos";
 
@@ -24,7 +25,7 @@ export function websitePhotoCandidates(html: string, page: string) {
   const clean = html.replace(/<(script|style|footer|header|nav)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
   const candidates = extractProductPhotos(html, page);
   // On collection and service pages include content photos, excluding UI artwork.
-  if (!/woocommerce-product-gallery/i.test(html)) for (const match of clean.matchAll(/<img\b[^>]*>/gi)) {
+  if (!/woocommerce-product-gallery/i.test(html) && !/\/products?\//i.test(new URL(page).pathname)) for (const match of clean.matchAll(/<img\b[^>]*>/gi)) {
     const tag = match[0], src = attr(tag, "data-large_image") || attr(tag, "data-src") || attr(tag, "src");
     const width = Number(attr(tag, "width")), height = Number(attr(tag, "height"));
     if ((width && width < 240) || (height && height < 180) || excluded.test(`${src} ${attr(tag, "alt")} ${attr(tag, "class")}`)) continue;
@@ -38,22 +39,24 @@ export function websitePhotoCandidates(html: string, page: string) {
   }
   return [...unique.values()].slice(0, 20);
 }
-export async function discoverWebsitePhotos(website: string, topics: string[]) {
+export async function discoverWebsitePhotos(website: string, topics: string[], evidence: PhotoEvidence[] = []) {
   const home = new URL(/^https?:\/\//i.test(website) ? website : `https://${website}`);
   const root = await fetchPublicBytes(home.href, 1_000_000);
   if (!/text\/html|application\/xhtml/i.test(root.contentType)) throw new Error("This website does not provide a readable page.");
   const html = root.bytes.toString("utf8"), links = websitePhotoLinks(html, home.href, topics);
   const pages = await Promise.allSettled(links.map(async url => {
     const result = await fetchPublicBytes(url, 1_000_000);
-    return /text\/html|application\/xhtml/i.test(result.contentType) ? websitePhotoCandidates(result.bytes.toString("utf8"), url) : [];
+    const pageHtml = result.bytes.toString("utf8");
+    const title = plain(pageHtml.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || pageHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "").slice(0, 400);
+    return /text\/html|application\/xhtml/i.test(result.contentType) ? { images: websitePhotoCandidates(pageHtml, url), sourceUrl: url, title } : { images: [], sourceUrl: url, title };
   }));
-  const groups = pages.flatMap(result => result.status === "fulfilled" && result.value.length ? [result.value] : []);
-  groups.push(websitePhotoCandidates(html, home.href));
+  const groups = pages.flatMap(result => result.status === "fulfilled" && result.value.images.length ? [result.value] : []);
+  groups.push({ images: websitePhotoCandidates(html, home.href), sourceUrl: home.href, title: plain(html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || "") });
   const images: string[] = [], seen = new Set<string>();
   // Round-robin collection avoids filling every slot from the first product.
   for (let index = 0; index < 20 && images.length < 20; index++) for (const group of groups) {
-    const url = group[index]; if (!url || seen.has(photoKey(url)) || images.length >= 20) continue;
-    seen.add(photoKey(url)); images.push(url);
+    const url = group.images[index]; if (!url || seen.has(photoKey(url)) || images.length >= 20) continue;
+    seen.add(photoKey(url)); images.push(url); evidence.push({ imageUrl: url, sourceUrl: group.sourceUrl, title: group.title });
   }
   return images;
 }

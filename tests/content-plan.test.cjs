@@ -78,7 +78,7 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
    '@/lib/prisma':{prisma:{job:{findFirst:async()=>job,updateMany:async()=>({count:1}),update:async()=>{}},campaign:{findUnique:async q=>{assert.equal(q.where.brand.organizationId,'master-mind');return {id:'campaign',brandId:'brand',brand:{name:'Master Mind',description:'Hypnosis service'}};}},$transaction:async fn=>{transactions++;return fn(tx);}}},
    '@/lib/ai/occasion':load('lib/ai/occasion.ts'),'@/lib/campaign/content-plan':plan,'@/lib/ai/visual-history':{recentBrandConcepts:async()=>[]},
    '@/lib/ai/campaign':{generateCampaign:async()=>{const p=pack();if(invalid)p.posts[1].planKey=p.posts[0].planKey;return p;}},
-   '@/lib/render/svg':{},'@/lib/render/raster':{},'@/lib/ai/visual-director':{},
+   '@/lib/campaign/photo-matching':{matchingWebsitePhoto:()=>null,modelCodes:()=>[]},'@/lib/render/svg':{},'@/lib/render/raster':{},'@/lib/ai/visual-director':{},
    '@/lib/ai/visual-plan':{buildVisualConcept:()=>({subjectCategory:'human',direction:'Service scene'})},
   });
   const req={headers:{get:()=> 'planner-test'},json:async()=>({organizationId:'master-mind'})};
@@ -86,7 +86,8 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
   invalid=true;assert.equal((await api.POST(req)).status,500);assert.equal(transactions,1);
   invalid=false;job.payload.photoSource="ai";assert.equal((await api.POST(req)).status,200);assert.equal(media.length,9);assert.equal(media.filter(j=>j.data.payload.format==="story").length,1);
   const extraJob=media.find(j=>j.data.payload.occasion);assert.equal(extraJob.data.payload.occasion,'Kindness event');assert.match(extraJob.data.payload.visualConcept.direction,/Kindness event/);
-  media.length=0;job.payload.photoSource="website";job.payload.imageUrls=['https://business.example/product.jpg'];assert.equal((await api.POST(req)).status,200);assert.equal(media.length,8);assert.ok(media.every(j=>!j.data.payload.occasion));
+  media.length=0;job.payload.photoSource="website";job.payload.imageUrls=['https://business.example/product.jpg'];assert.equal((await api.POST(req)).status,200);assert.equal(media.length,0);assert.ok(result.result.photoWarnings.length>0);
+
   media.length=0;job.payload.photoSource="none";job.payload.campaignPhotoIds=['saved'];assert.equal((await api.POST(req)).status,200);assert.equal(media.length,0);assert.equal(attached.length,8);assert.ok(attached.every(a=>a.provider==='reuse'&&a.url==='saved-photo'));
 
  } finally {if(previous===undefined)delete process.env.WORKER_SECRET;else process.env.WORKER_SECRET=previous;}
@@ -97,7 +98,8 @@ for(const route of ['schedule','now']) test(`${route} refuses unfinished reel an
   'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},
   '@/lib/prisma':{prisma:{contentItem:{findFirst:async()=>({id:'draft',status:'approved',type,mediaUrl:null})},socialConnection:{findFirst:async()=>{throw Error('must not query provider');}}}},
   '@/lib/auth/context':{tenantContext:async()=>({organizationId:'master-mind'})},
-  '@/lib/campaign/content-plan':plan,'@/lib/publishing/google-business':{},'@/lib/publishing/idempotency':{},'@/lib/publishing/providers':{},
+  '@/lib/campaign/content-plan':plan,
+  '@/lib/campaign/photo-matching':{verifyPhotoEvidence:()=>[]},'@/lib/publishing/google-business':{},'@/lib/publishing/idempotency':{},'@/lib/publishing/providers':{},
   '@/lib/publishing/facebook-video':{campaignVideoId:()=>null},
  });
  const req={json:async()=>({contentItemId:'draft',socialConnectionId:'account',socialConnectionIds:['account'],scheduledFor:'2027-01-01T12:00:00Z'})};
@@ -133,6 +135,7 @@ test('creation derives the plan in the current workspace without generating paid
  const api=load('app/api/campaigns/create-everything/route.ts',{
   'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},
   '@/lib/campaign/content-plan':plan,
+  '@/lib/campaign/photo-matching':{verifyPhotoEvidence:()=>[]},
   '@/lib/auth/context':{tenantContext:async()=>({organizationId:'master-mind'})},
   '@/lib/services/credits':{spendCredits:async(...args)=>credits.push(args)},
   '@/lib/prisma':{prisma:{brand:{findFirst:async q=>{assert.equal(q.where.organizationId,'master-mind');return {id:'master-brand',name:'Master Mind'};}},onboardingState:{findUnique:async()=>null},campaign:{create:async q=>{writes.push(q);return {id:'campaign'};}},job:{create:async q=>{writes.push(q);return {id:'job'};}}}},

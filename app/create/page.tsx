@@ -140,6 +140,7 @@ export default function Create() {
   const [productUrl, setProductUrl] = useState("");
   const [productTitle, setProductTitle] = useState("");
   const [websiteImages, setWebsiteImages] = useState<string[]>([]);
+  const [photoReceipt, setPhotoReceipt] = useState("");
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
@@ -153,7 +154,7 @@ export default function Create() {
       if (!response.ok) throw new Error(data.error || "Could not find website photos.");
       if (data.organizationId !== suggestionContext.organizationId) throw new Error("Your workspace changed. Reload this page first.");
       const images: string[] = Array.isArray(data.images) ? data.images.filter((url: unknown): url is string => typeof url === "string").slice(0, 20) : [];
-      setWebsiteImages(images); setSelectedImages(images); setProductTitle(data.title || "Website photos");
+      setPhotoReceipt(data.photoReceipt || ""); setWebsiteImages(images); setSelectedImages(images); setProductTitle(data.title || "Website photos");
       setImportError(`${images.length} photos selected from your website. Review them below and deselect any you do not want.`);
     } catch (error) { setImportError(error instanceof Error && error.name === "TimeoutError" ? "The website took too long. Try again or import one product page." : error instanceof Error ? error.message : "Could not find website photos."); }
     finally { setImporting(false); }
@@ -164,7 +165,7 @@ export default function Create() {
 
     setImporting(true);
     setImportError("");
-    setWebsiteImages([]);
+    setPhotoReceipt(""); setWebsiteImages([]);
     setSelectedImages([]);
 
     try {
@@ -233,6 +234,7 @@ export default function Create() {
           extraSpecialDays: selectedSpecialDays,
           photoSource,
           campaignPhotoIds: ["saved","upload"].includes(photoSource) ? campaignPhotos : [],
+          photoReceipt: photoSource === "website" ? photoReceipt || undefined : undefined,
           imageUrl:
             photoSource === "website"
               ? selectedImages[0] || undefined

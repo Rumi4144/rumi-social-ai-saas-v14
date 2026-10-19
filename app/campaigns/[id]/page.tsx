@@ -1,4 +1,5 @@
 import CampaignPhotoChoices from "@/components/CampaignPhotoChoices";
+import { matchingWebsitePhoto, modelCodes, type PhotoEvidence } from "@/lib/campaign/photo-matching";
 import CampaignProductPicker from "@/components/CampaignProductPicker";
 import CampaignReelWorkspace, { CampaignReelButton } from "@/components/CampaignReelWorkspace";
 import { contentTypeLabel, requiresVideo } from "@/lib/campaign/content-plan";
@@ -199,6 +200,8 @@ export default async function Campaign({
           const plannedSlot = contentSlots.find(slot=>slot.planKey===plannedPost?.planKey);
           const occasion = plannedSlot?.occasion;
           const calendarDay = plannedPost?.day || (item.scheduledFor ? calendarDates.indexOf(item.scheduledFor.toISOString().slice(0,10))+1 : (page-1)*pageSize+index+1);
+          const photoMeta = originalImage?.metadata as { sourceEvidence?: PhotoEvidence; userSelected?: boolean } | null;
+          const photoNeedsReview = Boolean(originalImage?.url?.startsWith("https://") && modelCodes(`${item.headline || ""} ${plannedSlot?.topics?.join(" ") || ""}`).length && !photoMeta?.userSelected && (!photoMeta?.sourceEvidence || !matchingWebsitePhoto({ headline: item.headline, topics: plannedSlot?.topics }, [photoMeta.sourceEvidence], [originalImage.url!])));
           const needsVideo = requiresVideo(item.type) && !item.mediaUrl?.startsWith("/api/video/media/");
           return (
             <article className="card" key={item.id}>
@@ -212,6 +215,8 @@ export default async function Campaign({
                 <a href={`/api/video/media/${videoAsset.id}`} target="_blank" rel="noopener noreferrer">Open / download video draft</a>
                 <p>Review this clip, then select it for Facebook publishing or YouTube upload. Download it for other platforms.</p>
               </div>}
+              {photoNeedsReview && <p role="status">Check this photo before publishing: its source has not been verified against the named product. Use “Choose photo from website” below to select the exact item.</p>}
+              {!originalImage && <p>Choose a matching website photo below or generate an image. A different product photo will not be substituted automatically.</p>}
               {displayAsset?.url && (
                 <img
                   src={displayAsset.url}
