@@ -7,13 +7,14 @@ import { industryReelDefaults } from "@/lib/industries";
 export type AutoPlanBrand = { id: string; name: string; color: string; accent: string; website: string; logo?: string; industry?: string | null; designStyle?: string | null };
 export function automaticReelStyle(brand: AutoPlanBrand, holiday = false): ReelStyle {
   const preference = brand.designStyle || "";
+  if (/cinematic|showcase|heritage/i.test(preference)) return "showcase";
   if (/bold|energetic|playful|vibrant/i.test(preference)) return "bold";
   if (/minimal|clean/i.test(preference)) return "minimal";
   if (/luxury|editorial|elegant|premium/i.test(preference)) return "boutique";
   const defaults = industryReelDefaults(brand.industry);
-  if (defaults) return defaults.style;
+  if (defaults) return defaults.style === "spotlight" ? "showcase" : defaults.style;
   const business = `${brand.industry || ""} ${brand.name}`;
-  if (!holiday && /guitar|retail|e.?commerce|product|jewel|furniture/i.test(business)) return "spotlight";
+  if (!holiday && /guitar|retail|e.?commerce|product|jewel|furniture/i.test(business)) return "showcase";
   if (/fitness|sport|restaurant|food|entertainment|event/i.test(business)) return "bold";
   return "boutique";
 }

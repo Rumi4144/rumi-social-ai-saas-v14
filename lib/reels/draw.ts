@@ -1,3 +1,4 @@
+import { drawShowcase } from "./showcase";
 import { ease, photoMotion, entrance, transitionDuration } from "./animation";
 import { distinctSceneIndexes, frameAt, safeColor, wrappedLines, REEL_WIDTH as W, REEL_HEIGHT as H, type ReelProject, type ReelAnimation } from "./timeline";
 export type ReelMedia = HTMLImageElement | HTMLVideoElement;
@@ -35,6 +36,10 @@ function drawFrame(ctx: CanvasRenderingContext2D, project: ReelProject, media: R
   const accentInk = accentLight ? "#17212c" : "#ffffff";
   const scene = project.scenes[frame.index];
   ctx.clearRect(0, 0, W, H); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  if (project.style === "showcase") {
+    drawShowcase(ctx, project, scene, frame.closing ? logo || media[frame.index] : media[frame.index], frame, bg, accent, picture, text);
+    return;
+  }
   if (frame.closing) {
     if (project.style === "boutique" || project.style === "bold") {
       const editorial = project.style === "boutique", paper = editorial ? "#f5f1e8" : bg, ink = editorial ? bg : "#ffffff";

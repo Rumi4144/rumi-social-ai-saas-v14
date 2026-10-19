@@ -77,7 +77,7 @@ test('API gathers only same-brand ready photos and leaves original posts untouch
 test('Rumi product drafts keep whole guitar photos visible and do not reuse hypnosis images',()=>{
  const guitarBrand={...brand,id:'guitar-brand',name:'Rumi Guitars'};const guitarPost={...post,id:'guitar-post',headline:'Explore our classical guitars',caption:'Discover the wood grain and craftsmanship.'};
  const result=plan([asset('mind','Classical guitars'),asset('guitar','Classical guitar wood grain',{brandId:guitarBrand.id})],{brand:guitarBrand,post:guitarPost});
- assert.equal(result.project.style,'spotlight');assert.equal(result.sources[0].id,'guitar');assert.ok(result.sources.every(s=>s.libraryBrandId===guitarBrand.id));
+ assert.equal(result.project.style,'showcase');assert.equal(result.sources[0].id,'guitar');assert.ok(result.sources.every(s=>s.libraryBrandId===guitarBrand.id));
 });
 
 test('draft failures identify the failed step without exposing database details',async()=>{
@@ -122,10 +122,14 @@ test('smoking and weight-loss reels can still use their own relevant photos',()=
 });
 
 test('brand appearance overrides industry defaults and new businesses receive fitting layouts',()=>{
- assert.equal(automaticReelStyle({...brand,name:'A new retailer',industry:'Retail'}),'spotlight');
+ assert.equal(automaticReelStyle({...brand,name:'A new retailer',industry:'Retail'}),'showcase');
  assert.equal(automaticReelStyle({...brand,name:'Neighborhood Bakery',industry:'Restaurant'}),'bold');
  assert.equal(automaticReelStyle({...brand,name:'Wellness Studio',industry:'Wellness'}),'boutique');
  assert.equal(automaticReelStyle({...brand,name:'A new retailer',industry:'Retail',designStyle:'Luxury Editorial'}),'boutique');
  assert.equal(automaticReelStyle({...brand,designStyle:'Bold and vibrant'}),'bold');
  assert.equal(automaticReelStyle({...brand,designStyle:'Clean minimal'}),'minimal');
+});
+
+test('cinematic showcase preference works for any business without replacing explicit alternatives',()=>{
+ for(const name of ['Rumi Guitars','Master Mind','Neighborhood Cafe'])assert.equal(automaticReelStyle({...brand,name,designStyle:'Cinematic Showcase'}),'showcase');
 });

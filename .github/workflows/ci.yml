@@ -41,6 +41,9 @@ jobs:
       - run: node --test tests/*.test.cjs
       - run: npm install --no-save --package-lock=false esbuild@0.28.2 playwright@1.62.1
       - run: npx playwright install --with-deps chromium
+      - run: node tests/reel-showcase-browser.cjs
+        env:
+          SHOWCASE_OUTPUT_DIR: qa-showcase
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: node tests/publishing-position-browser.cjs
       - run: node tests/campaign-setup-browser.cjs
@@ -51,4 +54,6 @@ jobs:
         if: always()
         with:
           name: photo-options-evidence
-          path: qa-photo-choices/
+          path: |
+            qa-photo-choices/
+            qa-showcase/

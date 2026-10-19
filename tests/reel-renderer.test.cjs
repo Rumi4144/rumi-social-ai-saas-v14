@@ -14,6 +14,7 @@ function load(file, cache = new Map()) {
   return module.exports;
 }
 const { photoMotion } = load('lib/reels/animation.ts');
+const { showcaseMotion } = load('lib/reels/showcase.ts');
 const { REEL_STYLES } = load('lib/reels/timeline.ts');
 test('whole product stays inside its panel throughout every motion preset', () => {
   for (const animation of ['none', 'gentle', 'pan', 'lively']) for (let p = 0; p <= 1; p += .05) {
@@ -88,4 +89,11 @@ visual('actual frames preserve short captions, whole products, transitions and o
       fs.writeFileSync(path.join(output,'real-presenter-treatments.png'),treatments.toBuffer('image/png'));
     }
     fs.writeFileSync(path.join(output,'README.txt'),'Actual drawReel frames: rows pair scene/end card per supported style. Synthetic bordered product fixture is QA only; no generated asset is included in the product. Native canvas rendering, not a browser capture.\n');}
+});
+
+test('showcase layers stagger their entrance and honor the no-animation setting',()=>{
+ const first=showcaseMotion('gentle',.3,.1,0),last=showcaseMotion('gentle',.3,.1,2);
+ assert.ok(first.opacity>last.opacity);
+ assert.notEqual(showcaseMotion('gentle',1,.2,1).y,showcaseMotion('gentle',2,.7,1).y);
+ assert.deepEqual({...showcaseMotion('none',.1,.1,1)},{...showcaseMotion('none',3,.9,1)});
 });

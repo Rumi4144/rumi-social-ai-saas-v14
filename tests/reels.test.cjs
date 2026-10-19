@@ -129,7 +129,7 @@ test('collage and split layouts never repeat a source to fill panels', () => {
  assert.deepEqual([...timeline.distinctSceneIndexes([{src:'/one'}],0)],[0]);
  assert.deepEqual([...timeline.distinctSceneIndexes(scenes,0)],[0,2,3]);
  assert.deepEqual([...timeline.distinctSceneIndexes(scenes,2,2)],[2,3]);
- assert.equal(timeline.REEL_STYLES.length,8);
+ assert.equal(timeline.REEL_STYLES.length,9);
 });
 test('gallery extraction ignores related products and deduplicates resized photos', () => {
  const photos=load('lib/reels/product-photos.ts');
