@@ -30,7 +30,7 @@ export function drawShowcase(ctx: CanvasRenderingContext2D, project: ReelProject
     ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; ctx.strokeStyle = accent + (index ? "a0" : "60"); ctx.lineWidth = 1.5; ctx.stroke();
     ctx.beginPath(); ctx.roundRect(0, 0, width, height, index ? 54 : 18); ctx.clip();
     // An optional detail focuses another region of the same photo; no invented reverse view.
-    if (index === 2) { ctx.translate(0, -height * .35); picture(ctx, source, 0, 0, width, height * 1.35, 1 - frame.progress, false); }
+    if (index) picture(ctx, source, -width * .35, -height * (index === 2 ? .72 : .08), width * 1.7, height * 1.8, index === 2 ? 1 - frame.progress : frame.progress, false);
     else picture(ctx, source, 0, 0, width, height, frame.progress, contain);
     ctx.restore();
   };
