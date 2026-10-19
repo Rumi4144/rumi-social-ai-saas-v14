@@ -1,5 +1,5 @@
 import { drawReel, type ReelMedia } from "./draw";
-import { recorderMime, reelDuration, REEL_WIDTH, REEL_HEIGHT, type ReelProject } from "./timeline";
+import { assertReelHasMedia, recorderMime, reelDuration, REEL_WIDTH, REEL_HEIGHT, type ReelProject } from "./timeline";
 import { prepareMusic, type MusicSettings } from "./music";
 
 export async function loadReelMedia(project: ReelProject): Promise<{ media: ReelMedia[]; logo?: HTMLImageElement }> {
@@ -12,6 +12,7 @@ export async function loadReelMedia(project: ReelProject): Promise<{ media: Reel
 }
 
 export async function exportReel(input: MusicSettings & { project: ReelProject; canvas: HTMLCanvasElement; audioContext: AudioContext; audioFile?: File; voiceFile?: File; originalAudio: boolean; signal: AbortSignal; progress: (percent: number) => void }): Promise<Blob> {
+  assertReelHasMedia(input.project);
   if (typeof MediaRecorder === "undefined" || !input.canvas.captureStream) throw new Error("This browser cannot export reels. Use a recent Chrome or Safari browser.");
   const mime = recorderMime(type => MediaRecorder.isTypeSupported(type));
   if (!mime) throw new Error("This browser does not support reel recording. Use Chrome or Safari.");

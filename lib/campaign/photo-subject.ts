@@ -1,7 +1,7 @@
 import { photoKey } from "@/lib/reels/product-photos";
 export type PhotoEvidence = { imageUrl: string; sourceUrl: string; title: string };
 function normalize(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
-export function modelCodes(value: string) { return [...new Set((value.match(/\b[a-z]{1,8}[- ]?\d{1,5}[a-z]{0,4}\b/gi) || []).filter(code => !/\s+(?:18|19|20)\d{2}$/.test(code)).map(code => code.toLowerCase().replace(/[^a-z0-9]/g, "")))]; }
+export function modelCodes(value: string) { return [...new Set((value.match(/\b[a-z]{1,8}[- ]?\d{1,5}[a-z]{0,4}\b/gi) || []).filter(code => !/\s+(?:18|19|20)\d{2}$/.test(code) && !/^(?:a|an|the|in|for|after|before|about|over|under|to|within)\s+\d/i.test(code)).map(code => code.toLowerCase().replace(/[^a-z0-9]/g, "")))]; }
 export function matchingWebsitePhoto(post: { headline?: string | null; caption?: string | null; topics?: string[] }, photos: PhotoEvidence[], selectedUrls: string[]) {
   const selected = new Set(selectedUrls.map(photoKey)), expected = modelCodes(`${post.headline || ""} ${post.topics?.join(" ") || ""}`);
   // Multiple named models in one slot cannot be represented by an arbitrary photo.

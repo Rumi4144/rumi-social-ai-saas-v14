@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { drawReel, type ReelMedia } from "@/lib/reels/draw";
 import { exportReel, loadReelMedia } from "@/lib/reels/export";
-import { REEL_STYLES, REEL_ANIMATIONS, frameAt, reelDuration, type ReelProject, type ReelScene, type ReelStyle, type ReelAnimation } from "@/lib/reels/timeline";
+import { assertReelHasMedia, REEL_STYLES, REEL_ANIMATIONS, frameAt, reelDuration, type ReelProject, type ReelScene, type ReelStyle, type ReelAnimation } from "@/lib/reels/timeline";
 import { loadDraft, saveDraft } from "@/lib/reels/drafts";
 import WeeklyReels from "./WeeklyReels";
 import MusicControls from "./MusicControls";
@@ -216,6 +216,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     }, 1000 / 30);
   }
   async function render() {
+    try { assertReelHasMedia(project); } catch(error) { setMessage((error as Error).message); return; }
     const key = selection.current;
     finishPreview(); setBusy(true); setRendering(true); setMessage("Exporting your reel. Keep this tab visible until it finishes."); setProgress(0);
     let audio: AudioContext | undefined; controller.current = new AbortController();
@@ -225,6 +226,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     finally { document.removeEventListener("visibilitychange", visibility); await audio?.close(); controller.current = undefined; setRendering(false); setBusy(false); }
   }
   async function save() {
+    try { assertReelHasMedia(project); } catch(error) { setMessage((error as Error).message); return; }
     if (!rendered || !contentItemId || busy || loadingProject || renderedContext.current !== selection.current) return; const key = selection.current; setBusy(true);
     try {
       const ext = rendered.type === "video/mp4" ? "mp4" : "webm";
@@ -235,7 +237,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       const existingData = existing.ok ? await existing.json() : {};
       if (!reelOperationIsCurrent(key, selection.current)) return;
       if (existingData.assetId) { setSavedAsset(existingData.assetId); setMessage("Reel saved. Choose your account and posting time below."); return; }
-      await upload(pathname, rendered, { access: "private", contentType: rendered.type, multipart: true, handleUploadUrl: "/api/reels/upload", clientPayload: JSON.stringify({ campaignId, contentItemId, title: project.scenes[0]?.headline || project.brand, productSubject:project.productSubject, duration: reelDuration(project) }) });
+      await upload(pathname, rendered, { access: "private", contentType: rendered.type, multipart: true, handleUploadUrl: "/api/reels/upload", clientPayload: JSON.stringify({ campaignId, contentItemId, title: project.scenes[0]?.headline || project.brand, productSubject:project.productSubject, sceneCount:project.scenes.length, duration: reelDuration(project) }) });
       if (!reelOperationIsCurrent(key, selection.current)) return;
       for (let attempt = 0; attempt < 12; attempt++) {
         const response = await fetch(`/api/reels/upload?pathname=${encodeURIComponent(pathname)}`), data = await response.json();
@@ -247,7 +249,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     } catch (error) { if (reelOperationIsCurrent(key, selection.current)) setMessage(error instanceof Error ? error.message : "Could not save reel. Download your copy."); }
     finally { setBusy(false); }
   }
-  const readyAsset = savedAsset && rendered?.type === "video/mp4" ? savedAsset : !rendered && !rendering && !planning ? savedReels.find(asset => asset.contentItemId === contentItemId)?.id : undefined;
+  const readyAsset = !project.scenes.length ? undefined : savedAsset && rendered?.type === "video/mp4" ? savedAsset : !rendered && !rendering && !planning ? savedReels.find(asset => asset.contentItemId === contentItemId)?.id : undefined;
   return <div className={styles.editor}><div className="eyebrow">{quick ? "AUTOMATIC REEL" : "REEL EDITOR"}</div>{embedded ? <h3>Create and post your reel</h3> : <h1>Make a finished reel.</h1>}{quick ? <p>Choose a campaign post. We arrange its saved photos, captions, music and branding into a reel. Review it, export it, then choose your accounts and posting time here. No subscription or AI credits needed.</p> : <><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p><p><a href="/studio/reels/quick">Create reel automatically</a></p></>}
     {!embedded && <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingPhotos || loadingCampaigns} onChange={event => {setRequestedPostId("");setCampaignId(event.target.value);}}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>}
     {!organizationId && <p role="status">{loadingCampaigns ? "Loading your campaigns…" : loadingProject ? "Opening campaign…" : message}</p>}

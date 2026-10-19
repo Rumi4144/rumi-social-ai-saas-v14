@@ -68,3 +68,8 @@ export function wrappedLines(text: string, maxWidth: number, measure: (text: str
 export function recorderMime(supported: (mime: string) => boolean): string | null {
   return ["video/mp4;codecs=avc1.420028,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find(supported) || null;
 }
+
+/** A closing card is not a finished reel: at least one complete media scene is required. */
+export function assertReelHasMedia(project: ReelProject) {
+  if (!project.scenes.length || project.scenes.some(scene=>!scene.src?.trim() || !["image","video"].includes(scene.kind) || !Number.isFinite(scene.seconds) || scene.seconds<=0)) throw new Error("Add a photo or clip to every scene before exporting or saving this reel.");
+}

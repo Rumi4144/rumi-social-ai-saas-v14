@@ -93,12 +93,14 @@ test('reel upload signs ownership and completion stays in that campaign', async 
  });
  await api.POST({json:async()=>({})});
  const pathname='reels/org-a/post-a/12345678-1234-1234-1234-123456789abc.mp4';
- const payload=JSON.stringify({campaignId:'campaign-a',contentItemId:'post-a',title:'Demo',duration:9});
+ const payload=JSON.stringify({campaignId:'campaign-a',contentItemId:'post-a',title:'Demo',duration:9,sceneCount:1});
  await assert.rejects(hooks.onBeforeGenerateToken(pathname.replace('org-a','org-b'),payload));
+ const empty=JSON.stringify({...JSON.parse(payload),sceneCount:0});
+ await assert.rejects(hooks.onBeforeGenerateToken(pathname,empty));
  const token=await hooks.onBeforeGenerateToken(pathname,payload);
  await assert.rejects(hooks.onUploadCompleted({blob:{pathname:pathname.replace('org-a','org-b')},tokenPayload:token.tokenPayload}));
  await hooks.onUploadCompleted({blob:{pathname},tokenPayload:token.tokenPayload});
- assert.equal(saved.create.organizationId,'org-a');assert.equal(saved.create.contentItemId,'post-a');assert.equal(saved.create.metadata.publishMode,'review');
+ assert.equal(saved.create.organizationId,'org-a');assert.equal(saved.create.contentItemId,'post-a');assert.equal(saved.create.metadata.publishMode,'review');assert.equal(saved.create.metadata.sceneCount,1);
 });
 test('editor cannot load another workspace campaign or its images', async () => {
  let where;
@@ -295,4 +297,12 @@ test('custom music loops, requires a file, and cancelled decoding cannot start l
  const stop=await music.startMusic(context,{}, {music:true,musicStyle:'custom',musicFile:file},3);assert.equal(nodes[0].loop,true);stop();
  const controller=new AbortController();context.decodeAudioData=async()=>{controller.abort();return{};};
  await music.startMusic(context,{}, {music:true,musicStyle:'custom',musicFile:file},3,controller.signal);assert.equal(nodes.length,1);
+});
+
+
+test('closing-only or missing-media reels cannot be exported or saved as finished',()=>{
+ const {assertReelHasMedia}=load('lib/reels/timeline.ts');
+ assert.throws(()=>assertReelHasMedia({scenes:[],closingSeconds:3}),/Add a photo or clip/);
+ for(const scene of [{src:'',kind:'image',seconds:4},{src:'/photo',kind:'image',seconds:0},{src:'/photo',kind:'image',seconds:NaN}])assert.throws(()=>assertReelHasMedia({scenes:[scene]}),/Add a photo or clip/);
+ assert.doesNotThrow(()=>assertReelHasMedia({scenes:[{src:'/photo',kind:'image',seconds:4}]}));
 });

@@ -38,3 +38,15 @@ test('older cached product drafts cannot restore unverified sources',()=>{
  assert.equal(matchingDraft(old,post.id,post.headline),undefined);
  const current={contentItemId:post.id,project:{productSubject:post.headline}};assert.equal(matchingDraft(current,post.id,post.headline),current);assert.equal(matchingDraft(current,post.id,'Martinez MF-17'),undefined);
 });
+
+
+test('timed wellness advice is not a named product and can use its saved post photo',()=>{
+ const service={...brand,id:'wellness',name:'Master Mind Advanced Hypnosis',industry:'Hypnotherapy'};
+ const reset={id:'reset',headline:'A 30-second reset between tasks',caption:'Take a short transition between tasks.',type:'reel_post',topics:['Mindful transitions']};
+ assert.equal(helpers.reelProductSubject(reset,service),undefined);
+ for(const headline of ['A 5-minute pause','In 30 seconds, notice your surroundings','For 10 minutes, take a break'])assert.equal(helpers.reelProductSubject({headline},service),undefined);
+ const photo={id:'saved',organizationId:'org',brandId:'wellness',campaignId:'camp',contentItemId:'reset',kind:'ai_image',status:'ready',url:'saved:reset',prompt:'A calm desk between tasks',post:reset};
+ const result=planner.automaticReelPlan({organizationId:'org',campaignId:'camp',brand:service,post:reset,assets:[photo]});
+ assert.equal(result.project.productSubject,undefined);assert.ok(result.project.scenes.length>0);assert.equal(result.sources[0].id,'saved');assert.ok(!result.warnings.join(' ').includes('No verified photos match'));
+ assert.equal(helpers.reelProductSubject({headline:'Ramirez A1'},brand),'Ramirez A1');assert.equal(helpers.reelProductSubject({headline:'Martinez MS-14R'},brand),'Martinez MS-14R');
+});
