@@ -29,11 +29,11 @@ export async function svgToPublishJpeg(svg: string): Promise<Buffer> {
   const resvg = new Resvg(svg, {
     fitTo: { mode: "original" },
     font: {
-      fontFiles: [fontPath],
+      fontFiles: [fontPath, join(process.cwd(), "public", "fonts", "CormorantGaramond.ttf")],
       loadSystemFonts: false,
       defaultFontFamily: "Arial",
       sansSerifFamily: "Arial",
-      serifFamily: "Arial",
+      serifFamily: "Cormorant Garamond",
     },
   });
   const png = Buffer.from(resvg.render().asPng());

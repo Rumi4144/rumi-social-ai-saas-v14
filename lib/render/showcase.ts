@@ -1,5 +1,7 @@
 import type { SocialSvgInput } from "./svg";
+import { renderCinematic } from "./cinematic";
 export const SHOWCASE_STYLES = [
+  { value: "cinematic", label: "Cinematic Showcase", description: "Layered photographs, dramatic light, elegant type and ornamental details." },
   { value: "heritage", label: "Heritage Showcase", description: "Rich color, fine borders, a hero photo and detail studies." },
   { value: "gallery-story", label: "Gallery Story", description: "An editorial arrangement of a whole product and supporting views." },
   { value: "bold-spotlight", label: "Bold Spotlight", description: "Oversized headlines, confident color and a framed product photo." },
@@ -17,6 +19,7 @@ function lines(value: string, limit: number, count: number) {
   return result.slice(0, count).map((s, i) => s.length > limit ? s.slice(0, limit - 1) + "…" : i === count - 1 && result.length > count ? s.slice(0, limit - 1) + "…" : s);
 }
 export function renderShowcase(input: SocialSvgInput, style: ShowcaseStyle) {
+  if (style === "cinematic") return renderCinematic(input);
   const h = input.format === "story" ? 1920 : input.format === "square" ? 1080 : 1350;
   const primary = color(input.primaryColor, "#18221e"), accent = color(input.accentColor, "#d9bd7a"), paper = "#f5f0e5";
   const urls = [...new Set([input.imageUrl, ...(input.imageUrls || [])].filter((s): s is string => Boolean(s)))].slice(0, 3);

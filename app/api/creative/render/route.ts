@@ -14,7 +14,7 @@ const S = z.object({
   subheadline: z.string().optional(),
   cta: z.string().optional(),
   imageUrl: z.string().optional(),
-  designStyle: z.enum(["automatic", "classic", "heritage", "gallery-story", "bold-spotlight"]).optional(),
+  designStyle: z.enum(["automatic", "classic", "cinematic", "heritage", "gallery-story", "bold-spotlight"]).optional(),
   textPosition: z.enum(["left", "right", "top"]).optional(),
   format: z
     .enum(["square", "portrait", "story"])
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const variants = ["heritage", "gallery-story", "bold-spotlight"];
+    const variants = ["cinematic", "heritage", "gallery-story", "bold-spotlight"];
     const seed = [...(post?.id || parsed.data.headline)].reduce((n, c) => n + c.charCodeAt(0), 0);
     const designStyle = parsed.data.designStyle && parsed.data.designStyle !== "automatic" ? parsed.data.designStyle : isShowcaseStyle(brand.designStyle || undefined) ? brand.designStyle! : variants[seed % variants.length];
 
