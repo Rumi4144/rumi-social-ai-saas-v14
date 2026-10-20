@@ -5,7 +5,7 @@ import { businessVisualMode } from "@/lib/ai/visual-plan";
 import { isShowcaseStyle, automaticShowcaseStyle } from "@/lib/render/showcase";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
-import { imageToJpegDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
+import { imageToJpegDataUrl, logoToPngDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
 
 const S = z.object({
   campaignId: z.string().optional(),
@@ -108,6 +108,7 @@ export async function POST(req: Request) {
       for (const result of results) if (result.status === "fulfilled") embeddedImages.push(result.value);
     }
 
+    const logoUrl = await logoToPngDataUrl(brand.logoUrl);
     const svg = renderSocialSvg({
       headline: parsed.data.headline,
       subheadline: parsed.data.subheadline,
@@ -119,7 +120,7 @@ export async function POST(req: Request) {
       textPosition: parsed.data.textPosition || "left",
 
       brand: brand.name,
-      logoUrl: brand.logoUrl || undefined,
+      logoUrl,
       primaryColor: brand.primaryColor || undefined,
       secondaryColor: brand.secondaryColor || undefined,
       accentColor: brand.accentColor || undefined,

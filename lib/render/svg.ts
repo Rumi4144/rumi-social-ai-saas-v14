@@ -64,9 +64,11 @@ export function renderSocialSvg(input: SocialSvgInput) {
 
   const [w, h] = size;
 
-  const primary = input.primaryColor || "#171C24";
-  const secondary = input.secondaryColor || "#F4F1EA";
-  const accent = input.accentColor || "#D9BD7A";
+  // These palettes also render inline in template previews; never interpolate markup.
+  const palette=(value:string|undefined,fallback:string)=>/^#[a-f0-9]{6}$/i.test(value||'')?value!:fallback;
+  const primary = palette(input.primaryColor,"#171C24");
+  const secondary = palette(input.secondaryColor,"#F4F1EA");
+  const accent = palette(input.accentColor,"#D9BD7A");
   const headingFont = input.headingFont || "Georgia";
   const bodyFont = input.bodyFont || "Arial";
 

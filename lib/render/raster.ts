@@ -2,7 +2,7 @@ import { Resvg } from "@resvg/resvg-js";
 import sharp from "sharp";
 import { join } from "path";
 
-export async function imageToJpegDataUrl(url: string): Promise<string> {
+async function imageBytes(url: string): Promise<Buffer> {
   let bytes: Buffer;
   if (url.startsWith("data:")) {
     const match = url.match(/^data:([^;,]+)(?:;charset=[^;,]+)?;base64,(.+)$/s);
@@ -17,7 +17,27 @@ export async function imageToJpegDataUrl(url: string): Promise<string> {
     bytes = Buffer.from(await response.arrayBuffer());
   }
 
-  const jpeg = await sharp(bytes)
+  return bytes;
+}
+
+/** Embed logos so both browser previews and the offline SVG renderer see them. */
+export async function logoToPngDataUrl(url?: string | null): Promise<string | undefined> {
+  if (!url) return undefined;
+  try {
+    const png = await sharp(await imageBytes(url))
+      .rotate()
+      .resize({ width: 800, height: 400, fit: "inside", withoutEnlargement: true })
+      .png()
+      .toBuffer();
+    return `data:image/png;base64,${png.toString("base64")}`;
+  } catch {
+    // A missing logo must not prevent publishing the business name and creative.
+    return undefined;
+  }
+}
+
+export async function imageToJpegDataUrl(url: string): Promise<string> {
+  const jpeg = await sharp(await imageBytes(url))
     .rotate()
     .jpeg({ quality: 92, mozjpeg: true })
     .toBuffer();

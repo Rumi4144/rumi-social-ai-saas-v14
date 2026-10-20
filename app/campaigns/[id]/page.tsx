@@ -241,6 +241,16 @@ export default async function Campaign({
                   headline={item.headline || "Campaign Creative"}
                   caption={item.caption}
                   imageUrl={originalImage.url}
+                  brand={{
+                    name:campaign.brand.name,
+                    primaryColor:campaign.brand.primaryColor||'#173d36',
+                    secondaryColor:campaign.brand.secondaryColor||'#ffffff',
+                    accentColor:campaign.brand.accentColor||'#d9bd7a',
+                    headingFont:campaign.brand.headingFont||'Arial',
+                    bodyFont:campaign.brand.bodyFont||'Arial',
+                    logoUrl:campaign.brand.logoUrl||undefined,
+                    designStyle:campaign.brand.designStyle||undefined,
+                  }}
                   textPosition={textPosition}
                   format={item.type === "story_post" ? "story" : "portrait"}
                   existingCreative={!!brandedCreative}

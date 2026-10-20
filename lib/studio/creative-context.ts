@@ -7,13 +7,14 @@ export type StudioBrand = {
   accentColor: string;
   headingFont: string;
   bodyFont: string;
+  logoUrl?: string;
   designStyle?: string;
 };
 
 export async function studioBrand(organizationId: string, organizationName: string): Promise<StudioBrand> {
   const brand = await prisma.brand.findFirst({
     where: { organizationId }, orderBy: { createdAt: "desc" },
-    select: { name: true, primaryColor: true, secondaryColor: true, accentColor: true, headingFont: true, bodyFont: true, designStyle: true },
+    select: { name: true, primaryColor: true, secondaryColor: true, accentColor: true, headingFont: true, bodyFont: true, logoUrl: true, designStyle: true },
   });
   return {
     name: brand?.name || organizationName,
@@ -22,6 +23,7 @@ export async function studioBrand(organizationId: string, organizationName: stri
     accentColor: brand?.accentColor || "#d9bd7a",
     headingFont: brand?.headingFont || "Arial",
     bodyFont: brand?.bodyFont || "Arial",
+    logoUrl: brand?.logoUrl || undefined,
     designStyle: brand?.designStyle || undefined,
   };
 }

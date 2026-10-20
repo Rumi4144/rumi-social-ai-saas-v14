@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { SHOWCASE_STYLES } from "@/lib/render/showcase";
+import { useMemo, useState } from "react";
+import { SHOWCASE_STYLES, automaticShowcaseStyle } from "@/lib/render/showcase";
+import CreativeTemplatePicker from "@/components/CreativeTemplatePicker";
+import type { StudioBrand } from "@/lib/studio/creative-context";
 
 export default function RenderCreativeButton({
   campaignId,
@@ -9,6 +11,8 @@ export default function RenderCreativeButton({
   headline,
   caption,
   imageUrl,
+  brand,
+  imageUrls,
   textPosition = "left",
   existingCreative = false,
   format = "portrait",
@@ -18,12 +22,23 @@ export default function RenderCreativeButton({
   headline: string;
   caption?: string | null;
   imageUrl: string;
+  brand?: StudioBrand;
+  imageUrls?: string[];
   textPosition?: "left" | "right" | "top";
   existingCreative?: boolean;
   format?: "portrait" | "story";
 }) {
   const [designStyle, setDesignStyle] = useState("automatic");
   const [status, setStatus] = useState("");
+
+  const choices = useMemo(() => [
+    { value: "automatic", label: "Automatic variety", description: "Choose a layout for this post using your workspace style.", previewStyle: automaticShowcaseStyle(contentItemId, brand?.designStyle) },
+    ...SHOWCASE_STYLES,
+    { value: "classic", label: "Classic photo overlay", description: "A simple photograph with your headline and call to action." },
+  ], [contentItemId, brand?.designStyle]);
+  const preview = useMemo(() => ({ ...brand, brand: brand?.name || "Your business", headline,
+    cta: "Discover More", imageUrl, imageUrls, textPosition, format,
+  }), [brand, headline, imageUrl, imageUrls, textPosition, format]);
 
   async function render() {
     setStatus("Creating...");
@@ -88,8 +103,7 @@ export default function RenderCreativeButton({
 
   return (
     <div>
-      <label>Post design<select value={designStyle} disabled={status === "Creating..."} onChange={e => setDesignStyle(e.target.value)}><option value="automatic">Automatic variety</option>{SHOWCASE_STYLES.map(style => <option key={style.value} value={style.value}>{style.label}</option>)}<option value="classic">Classic photo overlay</option></select></label>
-      {SHOWCASE_STYLES.find(style=>style.value===designStyle)&&<p style={{fontSize:14}}>{SHOWCASE_STYLES.find(style=>style.value===designStyle)?.description}</p>}
+      <CreativeTemplatePicker label="Post design" value={designStyle} onChange={setDesignStyle} options={choices} preview={preview} disabled={status === "Creating..."} />
       {designStyle === "cinematic" && <p style={{ fontSize: 14 }}>Layered photos and elegant type. Extra views come from photos attached to this post.</p>}
       <button
         type="button"
@@ -102,7 +116,7 @@ export default function RenderCreativeButton({
       </button>
 
       {status && (
-        <span style={{ marginLeft: 10 }}>
+        <span role="status" style={{ marginLeft: 10 }}>
           {status}
         </span>
       )}

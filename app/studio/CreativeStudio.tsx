@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { renderSocialSvg } from "@/lib/render/svg";
 import { SHOWCASE_STYLES, isShowcaseStyle } from "@/lib/render/showcase";
 import type { StudioBrand } from "@/lib/studio/creative-context";
+import CreativeTemplatePicker, { CreativeSvgPreview } from "@/components/CreativeTemplatePicker";
 import RunwayVideo from "./RunwayVideo";
 
 export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
@@ -13,7 +14,7 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
   const [detailCrops, setDetailCrops] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]), [photoError, setPhotoError] = useState("");
   const [treatment, setTreatment] = useState("brand");
-  const svg = useMemo(() => renderSocialSvg({
+  const previewInput = useMemo(() => ({
     ...brand, brand: brand.name, headline: headline.trim() || "Your headline",
     subheadline: subheadline.trim() || "Your message goes here.", cta: cta.trim(), format,
     headingFont: treatment === "editorial" ? "Georgia" : treatment === "brand" ? brand.headingFont : "Arial",
@@ -21,8 +22,19 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
     secondaryColor: treatment === "minimal" ? brand.primaryColor : brand.secondaryColor,
     imageUrl: photos[0], imageUrls: photos.slice(1), detailCrops,
     designStyle: isShowcaseStyle(treatment) ? treatment : treatment === "brand" ? (isShowcaseStyle(brand.designStyle) ? brand.designStyle : "modern-gradient") : undefined,
-    textPosition: treatment === "bold" ? "top" : "left",
+    textPosition: treatment === "bold" ? "top" as const : "left" as const,
   }), [brand, headline, subheadline, cta, format, treatment, photos, detailCrops]);
+  const svg = useMemo(() => renderSocialSvg(previewInput), [previewInput]);
+  const pickerInput = useMemo(() => ({ ...previewInput, primaryColor: brand.primaryColor, secondaryColor: brand.secondaryColor,
+    headingFont: "Arial", textPosition: "left" as const, designStyle: undefined,
+  }), [previewInput, brand]);
+  const templateChoices = useMemo(() => [
+    ...SHOWCASE_STYLES,
+    { value: "brand", label: "Workspace brand style", description: "The preferred layout and fonts saved for your business.", previewStyle: isShowcaseStyle(brand.designStyle) ? brand.designStyle : "modern-gradient", previewOverrides: { headingFont: brand.headingFont } },
+    { value: "editorial", label: "Editorial", description: "Classic photograph with elegant serif lettering.", previewOverrides: { headingFont: "Georgia" } },
+    { value: "minimal", label: "Minimal", description: "A simple photo layout with your secondary brand color.", previewOverrides: { primaryColor: brand.secondaryColor, secondaryColor: brand.primaryColor } },
+    { value: "bold", label: "Bold promotion", description: "A photograph with the message placed above it.", previewOverrides: { textPosition: "top" as const } },
+  ], [brand]);
   const previewUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   return <>
     <div className="eyebrow">CREATIVE STUDIO</div>
@@ -40,11 +52,7 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
         <select id="studio-format" value={format} onChange={e => setFormat(e.target.value as typeof format)}>
           <option value="square">Square 1:1</option><option value="portrait">Portrait 4:5</option><option value="story">Story / Reel 9:16</option>
         </select>
-        <label htmlFor="studio-treatment">Creative treatment</label>
-        <select id="studio-treatment" value={treatment} onChange={e => setTreatment(e.target.value)}>
-          {SHOWCASE_STYLES.map(style => <option key={style.value} value={style.value}>{style.label}</option>)}
-          <option value="brand">Workspace brand style</option><option value="editorial">Editorial</option><option value="minimal">Minimal</option><option value="bold">Bold promotion</option>
-        </select>
+        <CreativeTemplatePicker label="Creative treatment" value={treatment} onChange={setTreatment} options={templateChoices} preview={pickerInput} />
         {treatment === "cinematic" && <p>For a layered design, add up to three matching product views or service photos. With one photo, turn on detail close-ups only if cropping suits the subject.</p>}
         <label>Product or service photos · up to 3<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={async e => { const files = [...(e.target.files || [])].slice(0, 3); setPhotoError(""); if (files.some(file => !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5_000_000)) { setPhotoError("Choose JPEG, PNG or WebP photos under 5 MB each."); return; } try { const urls = await Promise.all(files.map(file => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(Error("Could not read photo.")); reader.readAsDataURL(file); }))); setPhotos(urls); } catch { setPhotoError("Could not read those photos. Please try again."); } }} /></label>
         <label><input type="checkbox" checked={detailCrops} onChange={e => setDetailCrops(e.target.checked)} /> Include detail close-ups from a single photo</label>
@@ -52,8 +60,8 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
         <p>Your preview updates as you edit. Photos stay in this browser until you download the creative.</p>
         {headline.trim() ? <a className="button" href={previewUrl} download={`${brand.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-creative.svg`}>Download creative · SVG</a> : <p>Enter a headline to download your creative.</p>}
       </section>
-      <section aria-label={`${brand.name} creative preview`}>
-        <img src={previewUrl} alt={`${brand.name} creative: ${headline.trim() || "Your headline"}`} style={{ display: "block", width: "100%", maxWidth: format === "story" ? 460 : 600, borderRadius: 20 }} />
+      <section role="img" aria-label={`${brand.name} creative: ${headline.trim() || "Your headline"}`} style={{ width: "100%", maxWidth: format === "story" ? 460 : 600, alignSelf: "start", borderRadius: 20, overflow: "hidden" }}>
+        <CreativeSvgPreview svg={svg} />
       </section>
     </div>
     <section className="card" style={{ marginTop: 28 }}><h2>Finished reels</h2><p>Combine campaign photos or presenter clips with captions, music or nature sounds, and your workspace’s branded ending.</p><a className="button" href="/studio/reels">Open reel editor</a></section>

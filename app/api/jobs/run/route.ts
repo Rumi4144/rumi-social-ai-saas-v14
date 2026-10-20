@@ -11,7 +11,7 @@ import { automaticShowcaseStyle } from "@/lib/render/showcase";
 import { occasionVisualConcept, savedPostOccasion } from "@/lib/ai/occasion";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
 import { buildVisualConcept, isSubjectCategory, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "@/lib/ai/visual-plan";
-import { imageToJpegDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
+import { imageToJpegDataUrl, logoToPngDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
 
 
 function calendarDraftPlan(plan: Array<{day:number;date:string}>|undefined,days:number): Map<number,Date> {
@@ -305,6 +305,8 @@ export async function POST(req: Request) {
           renderImageUrl = await imageToJpegDataUrl(renderImageUrl);
         }
 
+        const designStyle = automaticShowcaseStyle(contentItem.id, brand.designStyle);
+        const logoUrl = await logoToPngDataUrl(brand.logoUrl);
         const svg = renderSocialSvg({
           headline: contentItem.headline || "Campaign Creative",
           cta: "Discover More",
@@ -312,13 +314,13 @@ export async function POST(req: Request) {
           format,
           imageUrl: renderImageUrl,
           textPosition: p.textPosition || "left",
-          logoUrl: brand.logoUrl || undefined,
+          logoUrl,
           primaryColor: brand.primaryColor || undefined,
           secondaryColor: brand.secondaryColor || undefined,
           accentColor: brand.accentColor || undefined,
           headingFont: brand.headingFont || undefined,
           bodyFont: brand.bodyFont || undefined,
-          designStyle: automaticShowcaseStyle(contentItem.id,brand.designStyle),
+          designStyle,
         });
 
         const creativeJpeg = await svgToPublishJpeg(svg);
@@ -350,7 +352,7 @@ export async function POST(req: Request) {
             height:
               format === "story" ? 1920 : format === "portrait" ? 1350 : 1080,
             brandId: brand.id,
-            designStyle: brand.designStyle,
+            designStyle,
           },
         };
 
