@@ -100,3 +100,10 @@ test('TikTok connect requests publishing scope, binds the OAuth cookie and rejec
  let cookie;const response=await api.GET();const url=new URL(response.url);assert.equal(url.searchParams.get('scope'),'user.info.basic,video.publish');assert.equal(cookie[0],'tiktok_oauth');assert.equal(cookie[1],'signed-state');assert.equal(cookie[2].httpOnly,true);role='viewer';assert.equal((await api.GET()).status,403);
  }finally{if(previous===undefined)delete process.env.TIKTOK_CLIENT_KEY;else process.env.TIKTOK_CLIENT_KEY=previous;if(app===undefined)delete process.env.NEXT_PUBLIC_APP_URL;else process.env.NEXT_PUBLIC_APP_URL=app;}
 });
+
+test('TikTok OAuth callback stays bound to the signed-in user and workspace before exchanging tokens',async()=>{
+ let exchanges=0;const cookie='signed-state';
+ const api=load('app/api/social/tiktok/callback/route.ts',{'next/server':{NextResponse:{redirect:url=>({url})}},'next/headers':{cookies:async()=>({get:()=>({value:cookie})})},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'other',userId:'other',role:'owner'})},'@/lib/social/oauth-state':{verifyTikTokOAuthState:()=>({organizationId:'own',userId:'user'})},'@/lib/security/crypto':{},'@/lib/prisma':{prisma:{}},__fetch:async()=>{exchanges++;throw Error('must not exchange');}});
+ const key=process.env.TIKTOK_CLIENT_KEY,secret=process.env.TIKTOK_CLIENT_SECRET;process.env.TIKTOK_CLIENT_KEY='key';process.env.TIKTOK_CLIENT_SECRET='secret';
+ try{const result=await api.GET(new Request('https://app.test/api/social/tiktok/callback/?code=code&state=signed-state'));assert.match(result.url,/reason=workspace/);assert.equal(exchanges,0);}finally{if(key===undefined)delete process.env.TIKTOK_CLIENT_KEY;else process.env.TIKTOK_CLIENT_KEY=key;if(secret===undefined)delete process.env.TIKTOK_CLIENT_SECRET;else process.env.TIKTOK_CLIENT_SECRET=secret;}
+});
