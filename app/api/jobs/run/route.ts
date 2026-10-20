@@ -7,6 +7,7 @@ import { generateCampaign } from "@/lib/ai/campaign";
 import { applyContentPlan, type ContentSlot } from "@/lib/campaign/content-plan";
 import { matchingWebsitePhoto, modelCodes, type PhotoEvidence } from "@/lib/campaign/photo-matching";
 import { renderSocialSvg } from "@/lib/render/svg";
+import { automaticShowcaseStyle } from "@/lib/render/showcase";
 import { occasionVisualConcept, savedPostOccasion } from "@/lib/ai/occasion";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
 import { buildVisualConcept, isSubjectCategory, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "@/lib/ai/visual-plan";
@@ -317,7 +318,7 @@ export async function POST(req: Request) {
           accentColor: brand.accentColor || undefined,
           headingFont: brand.headingFont || undefined,
           bodyFont: brand.bodyFont || undefined,
-          designStyle: brand.designStyle || undefined,
+          designStyle: automaticShowcaseStyle(contentItem.id,brand.designStyle),
         });
 
         const creativeJpeg = await svgToPublishJpeg(svg);

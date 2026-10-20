@@ -1,6 +1,8 @@
 import type { SocialSvgInput } from "./svg";
 import { renderCinematic } from "./cinematic";
+import {BRAND_TEMPLATES,isBrandTemplate,renderBrandTemplate} from './brand-templates';
 export const SHOWCASE_STYLES = [
+  ...BRAND_TEMPLATES,
   { value: "cinematic", label: "Cinematic Showcase", description: "Layered photographs, dramatic light, elegant type and ornamental details." },
   { value: "heritage", label: "Heritage Showcase", description: "Rich color, fine borders, a hero photo and detail studies." },
   { value: "gallery-story", label: "Gallery Story", description: "An editorial arrangement of a whole product and supporting views." },
@@ -8,6 +10,11 @@ export const SHOWCASE_STYLES = [
 ] as const;
 export type ShowcaseStyle = typeof SHOWCASE_STYLES[number]["value"];
 export function isShowcaseStyle(value?: string): value is ShowcaseStyle { return SHOWCASE_STYLES.some(style => style.value === value); }
+export function automaticShowcaseStyle(seed:string,preferred?:string|null):ShowcaseStyle|'classic'{
+  if(preferred==='classic'||isShowcaseStyle(preferred||undefined))return preferred as ShowcaseStyle|'classic';
+  const index=[...seed].reduce((n,c)=>n+c.charCodeAt(0),0)%SHOWCASE_STYLES.length;
+  return SHOWCASE_STYLES[index].value;
+}
 function esc(s: string) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!); }
 function color(value: string | undefined, fallback: string) { return /^#[a-f0-9]{6}$/i.test(value || "") ? value! : fallback; }
 function lines(value: string, limit: number, count: number) {
@@ -19,6 +26,7 @@ function lines(value: string, limit: number, count: number) {
   return result.slice(0, count).map((s, i) => s.length > limit ? s.slice(0, limit - 1) + "…" : i === count - 1 && result.length > count ? s.slice(0, limit - 1) + "…" : s);
 }
 export function renderShowcase(input: SocialSvgInput, style: ShowcaseStyle) {
+  if(isBrandTemplate(style))return renderBrandTemplate(input,style);
   if (style === "cinematic") return renderCinematic(input);
   const h = input.format === "story" ? 1920 : input.format === "square" ? 1080 : 1350;
   const primary = color(input.primaryColor, "#18221e"), accent = color(input.accentColor, "#d9bd7a"), paper = "#f5f0e5";

@@ -78,7 +78,7 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
    '@/lib/prisma':{prisma:{job:{findFirst:async()=>job,updateMany:async()=>({count:1}),update:async()=>{}},campaign:{findUnique:async q=>{assert.equal(q.where.brand.organizationId,'master-mind');return {id:'campaign',brandId:'brand',brand:{name:'Master Mind',description:'Hypnosis service'}};}},$transaction:async fn=>{transactions++;return fn(tx);}}},
    '@/lib/ai/occasion':load('lib/ai/occasion.ts'),'@/lib/campaign/content-plan':plan,'@/lib/ai/visual-history':{recentBrandConcepts:async()=>[]},
    '@/lib/ai/campaign':{generateCampaign:async()=>{const p=pack();if(invalid)p.posts[1].planKey=p.posts[0].planKey;return p;}},
-   '@/lib/campaign/photo-matching':{matchingWebsitePhoto:()=>null,modelCodes:()=>[]},'@/lib/render/svg':{},'@/lib/render/raster':{},'@/lib/ai/visual-director':{},
+   '@/lib/campaign/photo-matching':{matchingWebsitePhoto:()=>null,modelCodes:()=>[]},'@/lib/render/svg':{},'@/lib/render/showcase':{automaticShowcaseStyle:()=> 'modern-gradient'},'@/lib/render/raster':{},'@/lib/ai/visual-director':{},
    '@/lib/ai/visual-plan':{buildVisualConcept:()=>({subjectCategory:'human',direction:'Service scene'})},
   });
   const req={headers:{get:()=> 'planner-test'},json:async()=>({organizationId:'master-mind'})};

@@ -20,7 +20,7 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
     primaryColor: treatment === "minimal" ? brand.secondaryColor : brand.primaryColor,
     secondaryColor: treatment === "minimal" ? brand.primaryColor : brand.secondaryColor,
     imageUrl: photos[0], imageUrls: photos.slice(1), detailCrops,
-    designStyle: isShowcaseStyle(treatment) ? treatment : treatment === "brand" ? (isShowcaseStyle(brand.designStyle) ? brand.designStyle : "gallery-story") : undefined,
+    designStyle: isShowcaseStyle(treatment) ? treatment : treatment === "brand" ? (isShowcaseStyle(brand.designStyle) ? brand.designStyle : "modern-gradient") : undefined,
     textPosition: treatment === "bold" ? "top" : "left",
   }), [brand, headline, subheadline, cta, format, treatment, photos, detailCrops]);
   const previewUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;

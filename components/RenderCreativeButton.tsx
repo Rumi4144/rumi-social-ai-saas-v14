@@ -89,6 +89,7 @@ export default function RenderCreativeButton({
   return (
     <div>
       <label>Post design<select value={designStyle} disabled={status === "Creating..."} onChange={e => setDesignStyle(e.target.value)}><option value="automatic">Automatic variety</option>{SHOWCASE_STYLES.map(style => <option key={style.value} value={style.value}>{style.label}</option>)}<option value="classic">Classic photo overlay</option></select></label>
+      {SHOWCASE_STYLES.find(style=>style.value===designStyle)&&<p style={{fontSize:14}}>{SHOWCASE_STYLES.find(style=>style.value===designStyle)?.description}</p>}
       {designStyle === "cinematic" && <p style={{ fontSize: 14 }}>Layered photos and elegant type. Extra views come from photos attached to this post.</p>}
       <button
         type="button"

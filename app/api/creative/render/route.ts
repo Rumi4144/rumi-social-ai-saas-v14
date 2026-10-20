@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { renderSocialSvg } from "@/lib/render/svg";
 import { businessVisualMode } from "@/lib/ai/visual-plan";
-import { isShowcaseStyle } from "@/lib/render/showcase";
+import { isShowcaseStyle, automaticShowcaseStyle } from "@/lib/render/showcase";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 import { imageToJpegDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
@@ -14,7 +14,7 @@ const S = z.object({
   subheadline: z.string().optional(),
   cta: z.string().optional(),
   imageUrl: z.string().optional(),
-  designStyle: z.enum(["automatic", "classic", "cinematic", "heritage", "gallery-story", "bold-spotlight"]).optional(),
+  designStyle: z.string().refine(value=>value==='automatic'||value==='classic'||isShowcaseStyle(value), 'Choose a supported post design.').optional(),
   textPosition: z.enum(["left", "right", "top"]).optional(),
   format: z
     .enum(["square", "portrait", "story"])
@@ -49,9 +49,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const variants = ["cinematic", "heritage", "gallery-story", "bold-spotlight"];
-    const seed = [...(post?.id || parsed.data.headline)].reduce((n, c) => n + c.charCodeAt(0), 0);
-    const designStyle = parsed.data.designStyle && parsed.data.designStyle !== "automatic" ? parsed.data.designStyle : isShowcaseStyle(brand.designStyle || undefined) ? brand.designStyle! : variants[seed % variants.length];
+    const designStyle = parsed.data.designStyle && parsed.data.designStyle !== "automatic" ? parsed.data.designStyle : automaticShowcaseStyle(post?.id||parsed.data.headline,brand.designStyle);
 
     // Browser-captured raster is the source of truth: save exactly what the user saw.
     if (parsed.data.browserRasterDataUrl) {

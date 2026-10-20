@@ -2,7 +2,26 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 function load(file,mocks={},cache=new Map()){file=path.resolve(root,file);if(cache.has(file))return cache.get(file).exports;const module={exports:{}};cache.set(file,module);vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,{module,exports:module.exports,Buffer,process,require:n=>n in mocks?mocks[n]:n.startsWith('@/')||n.startsWith('.')?load((n.startsWith('@/')?n.slice(2):path.relative(root,path.resolve(path.dirname(file),n)))+'.ts',mocks,cache):require(n)});return module.exports;}
 const {renderSocialSvg}=load('lib/render/svg.ts');const {SHOWCASE_STYLES}=load('lib/render/showcase.ts');
 const input={detailCrops:true,brand:'Rumi Guitars',headline:'Martinez MF-17',subheadline:'Explore the collection',imageUrl:'data:image/png;base64,AA=='};
-test('four distinct layouts preserve source images, safe dimensions and escaped text for every format',()=>{const seen=new Set();for(const style of SHOWCASE_STYLES)for(const [format,height] of [['square',1080],['portrait',1350],['story',1920]]){const svg=renderSocialSvg({...input,brand:'Rumi & <Guitars>',format,designStyle:style.value});assert.match(svg,new RegExp('height="'+height+'"'));assert.match(svg,/RUMI &amp; &lt;GUITARS&gt;/);assert.match(svg,/preserveAspectRatio="xMidYMid meet"/);assert.ok(svg.includes(input.imageUrl));assert.ok(!svg.includes('Grand Guitar Salon'));assert.ok(!/Hauser|historic legacy/.test(svg));if(format==='portrait')seen.add(svg);}assert.equal(seen.size,4);});
+test('new ad templates fit long copy, respect saved styles and never manufacture promotional claims',async()=>{
+ const {automaticShowcaseStyle}=load('lib/render/showcase.ts');
+ for(const style of ['modern-gradient','framed-editorial','geometric-focus']){
+  assert.equal(automaticShowcaseStyle('post',style),style);
+  const a=route({brandName:'A local business'}),response=await a.api.POST(request({designStyle:style}));assert.equal(response.status,200);
+  for(const format of ['square','portrait','story']){
+   const h=format==='square'?1080:format==='story'?1920:1350;
+   const svg=renderSocialSvg({...input,format,designStyle:style,headline:'W'.repeat(200),subheadline:'A very detailed description '.repeat(20),cta:'Learn more',accentColor:'#fff1b8',primaryColor:'red" onload="bad'});
+   assert.ok(!/onload=|NaN|undefined|35\+|clinical practice|guaranteed/.test(svg));
+   assert.match(svg,/fill="#111827"/);assert.match(svg,/…/);
+   const textNodes=[...svg.matchAll(/<text\b[^>]*\by="([\d.]+)"/g)].map(m=>Number(m[1]));
+   assert.ok(textNodes.every(y=>y>=34&&y<h-45),'text stays on the canvas');
+   // Only the call to action may occupy the bottom button area.
+   assert.equal(textNodes.filter(y=>y>h-140).length,1);
+  }
+ }
+ assert.equal(automaticShowcaseStyle('post','classic'),'classic');
+ assert.equal(automaticShowcaseStyle('same-post'),automaticShowcaseStyle('same-post'));
+});
+test('seven distinct layouts preserve source images, safe dimensions and escaped text for every format',()=>{const seen=new Set();for(const style of SHOWCASE_STYLES)for(const [format,height] of [['square',1080],['portrait',1350],['story',1920]]){const svg=renderSocialSvg({...input,brand:'Rumi & <Guitars>',format,designStyle:style.value});assert.match(svg,new RegExp('height="'+height+'"'));assert.match(svg,/RUMI &amp; &lt;GUITARS&gt;/);assert.match(svg,/preserveAspectRatio="xMidYMid meet"/);assert.ok(svg.includes(input.imageUrl));assert.ok(!svg.includes('Grand Guitar Salon'));assert.ok(!/Hauser|historic legacy/.test(svg));if(format==='portrait')seen.add(svg);}assert.equal(seen.size,7);});
 test('additional views are supplied photos; a single photo uses two different labeled detail crops',()=>{const multiple=renderSocialSvg({...input,designStyle:'heritage',imageUrls:['https://own.example/back.jpg','https://own.example/detail.jpg']});assert.ok(multiple.includes('https://own.example/back.jpg'));assert.ok(multiple.includes('https://own.example/detail.jpg'));assert.match(multiple,/MORE VIEWS/);const single=renderSocialSvg({...input,designStyle:'heritage'});assert.match(single,/DETAIL STUDIES/);assert.ok(!single.includes('MORE VIEWS'));assert.match(single,/x="-118.4"/);});
 test('long words and unsafe palette values cannot break poster markup',()=>{const svg=renderSocialSvg({...input,headline:'W'.repeat(150)+' <script>alert(1)</script>',designStyle:'gallery-story',primaryColor:'red" onload="bad',accentColor:'url(https://foreign.example)'});assert.ok(!svg.includes('onload='));assert.ok(!svg.includes('<script>'));assert.match(svg,/…/);});
 const json=(body,options={})=>({body,status:options.status||200});
