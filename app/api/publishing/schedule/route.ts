@@ -1,3 +1,5 @@
+import { TikTokOptions } from "@/lib/tiktok/options";
+import { prepareTikTokSettings } from "@/lib/tiktok/prepare";
 import { googleBusinessPost } from "@/lib/publishing/google-business";
 import { campaignVideoId } from "@/lib/publishing/facebook-video";
 import { NextResponse } from "next/server";
@@ -8,6 +10,7 @@ import { tenantContext } from "@/lib/auth/context";
 import { requiresVideo } from "@/lib/campaign/content-plan";
 
 const S = z.object({
+  tiktok:TikTokOptions.optional(),
   organizationId: z.string().optional(),
   contentItemId: z.string(),
   socialConnectionIds: z.array(z.string()).min(1),
@@ -25,6 +28,7 @@ export async function POST(req: Request) {
 
     const ctx = await tenantContext(p.data.organizationId);
 
+    if(ctx.role==="viewer")return NextResponse.json({error:"Your role cannot schedule posts."},{status:403});
     const item = await prisma.contentItem.findFirst({
       where: {
         id: p.data.contentItemId,
@@ -64,6 +68,11 @@ export async function POST(req: Request) {
     if (youtubeSelected && (!p.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
     const googleSelected = await prisma.socialConnection.findFirst({ where: { id: { in: p.data.socialConnectionIds }, organizationId: ctx.organizationId, provider: "google_business", status: "connected" } });
     if (googleSelected) { try { googleBusinessPost(item.caption || item.headline || "", item.mediaUrl); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "This post is not supported by Google Business Profile." }, { status: 400 }); } }
+    const tiktokSelected=await prisma.socialConnection.findFirst({where:{id:{in:p.data.socialConnectionIds},organizationId:ctx.organizationId,provider:"tiktok",status:"connected"}});
+    let tiktokSettings;
+    if(tiktokSelected?.provider==="tiktok"){
+      try{tiktokSettings=await prepareTikTokSettings(ctx.organizationId,item,tiktokSelected,p.data.tiktok);}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Review TikTok settings."},{status:400});}
+    }
     const jobs = [];
 
     for (const cid of p.data.socialConnectionIds) {
@@ -76,9 +85,10 @@ export async function POST(req: Request) {
       });
 
       if (!connection) continue;
-      if (!["facebook", "instagram", "youtube", "google_business"].includes(connection.provider.toLowerCase())) continue;
-      if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube"].includes(connection.provider.toLowerCase())) continue;
+      if (!["facebook", "instagram", "youtube", "google_business", "tiktok"].includes(connection.provider.toLowerCase())) continue;
+      if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube", "tiktok"].includes(connection.provider.toLowerCase())) continue;
 
+      if(connection.provider==="tiktok"&&!tiktokSettings)continue;
       const key = publishKey(item.id, connection.id, p.data.scheduledFor);
 
       const job = await prisma.$transaction(async tx => {
@@ -97,6 +107,7 @@ export async function POST(req: Request) {
         },
       });
       if (connection.provider === "youtube") await tx.job.upsert({ where: { id: `youtube_settings_${job.id}` }, update: {}, create: { id: `youtube_settings_${job.id}`, organizationId: ctx.organizationId, type: "YOUTUBE_CAMPAIGN_SETTINGS", status: "ready", payload: { ...p.data.youtube!, connectionId: connection.id } } });
+      if(connection.provider==="tiktok")await tx.job.upsert({where:{id:`tiktok_settings_${job.id}`},update:{},create:{id:`tiktok_settings_${job.id}`,organizationId:ctx.organizationId,type:"TIKTOK_POST_SETTINGS",status:"ready",payload:tiktokSettings!}});
       return job;
       });
 
@@ -105,7 +116,7 @@ export async function POST(req: Request) {
 
     if (jobs.length === 0) {
       return NextResponse.json(
-        { error: "No supported connected accounts were selected. Video posts can be scheduled on Facebook or uploaded to YouTube." },
+        { error: "No supported connected accounts were selected. Choose a connected account supported by this post format." },
         { status: 400 },
       );
     }

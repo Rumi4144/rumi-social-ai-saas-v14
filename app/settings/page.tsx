@@ -1,10 +1,11 @@
+import TikTokConnectionStatus from "./TikTokConnectionStatus";
 import YouTubeDisconnect from "./YouTubeDisconnect";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ youtube?: string; googleBusiness?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ youtube?: string; googleBusiness?: string; tiktok?:string }> }) {
   const query = await searchParams;
   const ctx = await tenantContext();
 
@@ -51,6 +52,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
       {query.googleBusiness === "connected" && <p role="status">Google Business Profile connected. Text and photo posts can now be scheduled for your selected location.</p>}
       {query.googleBusiness === "disconnected" && <p role="status">Google Business Profile disconnected and stored connection credentials removed. You can also remove app access in <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer">Google account settings</a>.</p>}
+      {query.tiktok === "error" && <p role="alert">TikTok could not finish connecting. Confirm Content Posting API and video.publish are enabled in the TikTok developer app, then reconnect.</p>}
       <div className="settingsgrid">
         {[
           "Instagram Business",
@@ -126,10 +128,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <>
                 <p>
                   {tiktokConnection
-                    ? `Connected as ${tiktokConnection.accountName || "TikTok"}`
+                    ? `Account linked as ${tiktokConnection.accountName || "TikTok"}`
                     : "Not connected"}
                 </p>
 
+                {tiktokConnection&&<TikTokConnectionStatus connectionId={tiktokConnection.id}/>}
                 {tiktokConnection ? (
                   <form
                     action="/api/social/tiktok/disconnect"

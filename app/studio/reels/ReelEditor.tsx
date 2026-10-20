@@ -308,7 +308,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         </div>}
           {readyAsset && <section key={`${contentItemId}:${readyAsset}`} aria-label="Post this reel" style={{ marginTop: 20 }}>
             <h3>Saved reel · posting status</h3>{!downloadUrl && <video controls playsInline src={`/api/video/media/${readyAsset}`} style={{ width: "100%", maxWidth: 350 }} />}<p>{project.brand}</p><p><strong>Caption</strong></p><p style={{ whiteSpace: "pre-wrap" }}>{posts.find(post => post.id === contentItemId)?.caption || posts.find(post => post.id === contentItemId)?.headline}</p>
-            <SchedulePostButton contentItemId={contentItemId} initialStatus={posts.find(post=>post.id===contentItemId)?.status === "published" ? "published" : posts.find(post=>post.id===contentItemId)?.status === "scheduled" ? "scheduled" : "approved"} isVideo openByDefault allowPostNow beforeSchedule={async () => {
+            <SchedulePostButton contentItemId={contentItemId} initialStatus={posts.find(post=>post.id===contentItemId)?.status === "published" ? "published" : posts.find(post=>post.id===contentItemId)?.status === "scheduled" ? "scheduled" : "approved"} isVideo videoAssetId={readyAsset} openByDefault allowPostNow beforeSchedule={async () => {
               const post = posts.find(post => post.id === contentItemId);
               if (!post?.headline) throw new Error("Reopen this reel to review its post title.");
               const response = await fetch("/api/reels/prepare-publishing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, contentItemId, assetId: readyAsset, headline: post.headline, caption: post.caption }) });

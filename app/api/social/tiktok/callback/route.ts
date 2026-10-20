@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { tenantContext } from "@/lib/auth/context";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/security/crypto";
@@ -37,6 +39,8 @@ export async function GET(req: Request) {
     }
 
     const state = verifyTikTokOAuthState(stateValue);
+    const ctx=await tenantContext();
+    if(ctx.role==="viewer"||ctx.userId!==state.userId||ctx.organizationId!==state.organizationId||(await cookies()).get("tiktok_oauth")?.value!==stateValue)throw new Error("TIKTOK_WORKSPACE_FORBIDDEN");
 
     const [membership, oauthUser] = await Promise.all([
       prisma.membership.findFirst({
@@ -51,7 +55,7 @@ export async function GET(req: Request) {
       }),
     ]);
 
-    if (!membership && !oauthUser?.isSuperAdmin) {
+    if ((!membership || membership.role === "viewer") && !oauthUser?.isSuperAdmin) {
       throw new Error("TIKTOK_WORKSPACE_FORBIDDEN");
     }
 
@@ -84,7 +88,7 @@ export async function GET(req: Request) {
         `TIKTOK_TOKEN_EXCHANGE_FAILED: ${
           tokenResult.error_description ||
           tokenResult.error ||
-          JSON.stringify(tokenResult)
+          "TikTok token request failed"
         }`
       );
     }
@@ -112,10 +116,11 @@ export async function GET(req: Request) {
 
     if (!userRes.ok || !tikTokUser?.open_id) {
       throw new Error(
-        `TIKTOK_USER_INFO_FAILED: ${JSON.stringify(userResult)}`
+        "TIKTOK_USER_INFO_FAILED"
       );
     }
 
+    if(String(tikTokUser.open_id)!==openId)throw new Error("TIKTOK_OPEN_ID_MISMATCH");
     const tokenBundle = JSON.stringify({
       accessToken,
       refreshToken: tokenResult.refresh_token || null,
@@ -164,9 +169,9 @@ export async function GET(req: Request) {
       });
     }
 
-    return NextResponse.redirect(
-      `${appUrl}/settings?tiktok=connected`
-    );
+    const response=NextResponse.redirect(`${appUrl}/settings?tiktok=connected`);
+    response.cookies.set("tiktok_oauth","",{path:"/api/social/tiktok",maxAge:0});
+    return response;
   } catch (error) {
     console.error("TikTok OAuth callback failed", error);
 

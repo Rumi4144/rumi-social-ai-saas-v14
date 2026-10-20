@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import TikTokPostOptions from "./TikTokPostOptions";
+import type {TikTokPostOptions as TikTokOptions} from "@/lib/tiktok/options";
 import PostDeliveryStatus from "./PostDeliveryStatus";
 
 type Connection = {
@@ -26,6 +28,7 @@ export default function SchedulePostButton({
   openByDefault = false,
   allowPostNow = false,
   beforeSchedule,
+  videoAssetId,
 }: {
   contentItemId: string;
   initialStatus: string;
@@ -34,7 +37,9 @@ export default function SchedulePostButton({
   openByDefault?: boolean;
   allowPostNow?: boolean;
   beforeSchedule?: () => Promise<void>;
+  videoAssetId?:string;
 }) {
+  const [tikTokOptions,setTikTokOptions]=useState<TikTokOptions|null>(null);
   const [completed,setCompleted] = useState(false);
 
   const [youtubeCertified, setYoutubeCertified] = useState(false);
@@ -114,7 +119,7 @@ export default function SchedulePostButton({
           );
         }
 
-        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "instagram", "youtube"] : ["facebook", "instagram", "google_business"]).includes(connection.provider.toLowerCase()));
+        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "instagram", "youtube", "tiktok"] : ["facebook", "instagram", "google_business"]).includes(connection.provider.toLowerCase()));
 
         setConnections(list);
 
@@ -135,6 +140,7 @@ export default function SchedulePostButton({
     loadConnections();
   }, [open, connections.length]);
 
+  const tikTokSelected=connections.find(connection=>connection.provider==="tiktok"&&selected.includes(connection.id));
   const youtubeSelected = connections.some(c => c.provider === "youtube" && selected.includes(c.id));
 
   function toggleConnection(id: string) {
@@ -157,6 +163,7 @@ export default function SchedulePostButton({
       return;
     }
 
+    if(tikTokSelected&&!tikTokOptions){setError("Review TikTok visibility, disclosures and music permissions below.");return;}
     if (youtubeSelected && !youtubeCertified) { setError("Confirm the YouTube upload settings."); return; }
     setBusy(true);
     setError("");
@@ -174,6 +181,7 @@ export default function SchedulePostButton({
           contentItemId,
           socialConnectionIds: selected,
           scheduledFor: isoTime,
+          ...(tikTokSelected?{tiktok:tikTokOptions}:{}),
           ...(youtubeSelected ? { youtube: { certified: youtubeCertified, privacy, madeForKids, containsSyntheticMedia: synthetic } } : {}),
         }),
       });
@@ -235,7 +243,7 @@ export default function SchedulePostButton({
         >
           <strong>{allowPostNow ? "Post your reel" : "Schedule Post"}</strong>
           <PostDeliveryStatus contentItemId={contentItemId} refreshKey={completed ? 1 : 0} />
-          <p>Select a destination for this post. TikTok publishing setup is not complete yet.</p>
+          <p>Select a destination for this post.</p>
           {isVideo && <p>Google Business Profile is available for text and photo posts. Choose a photo for a Google post.</p>}
 
           <div style={{ marginTop: 12 }}>
@@ -265,6 +273,7 @@ export default function SchedulePostButton({
             ))}
           </div>
 
+          {tikTokSelected&&<TikTokPostOptions connectionId={tikTokSelected.id} contentItemId={contentItemId} assetId={videoAssetId} disabled={busy||completed} onChange={setTikTokOptions}/>}
           {youtubeSelected && <div><p>The selected video, post headline and caption will be uploaded at the scheduled time.</p><label>Visibility <select disabled={busy || completed} value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label><input type="checkbox" disabled={busy || completed} checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> This video is made for kids</label><label><input type="checkbox" disabled={busy || completed} checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Contains realistic altered or synthetic content</label><label><input type="checkbox" disabled={busy || completed} checked={youtubeCertified} onChange={e=>setYoutubeCertified(e.target.checked)} /> I authorize this YouTube upload with the selected visibility, have rights to the video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
           {allowPostNow && <label>When<select value={postNow ? "now" : "later"} disabled={busy || completed} onChange={event => setPostNow(event.target.value === "now")}><option value="now">Post now</option><option value="later">Schedule for later</option></select></label>}
           {!postNow && <input
@@ -282,7 +291,7 @@ export default function SchedulePostButton({
           <button
             type="button"
             onClick={schedule}
-            disabled={busy || completed || connections.length === 0}
+            disabled={busy || completed || connections.length === 0 || (!!tikTokSelected && !tikTokOptions)}
           >
             {completed ? "✓ Submitted" : busy ? "Preparing your post…" : postNow ? "Approve and post now" : allowPostNow ? "Approve and schedule" : "Schedule Post"}
           </button>

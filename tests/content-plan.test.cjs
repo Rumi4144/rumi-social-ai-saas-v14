@@ -101,6 +101,7 @@ for(const route of ['schedule','now']) test(`${route} refuses unfinished reel an
   '@/lib/campaign/content-plan':plan,
   '@/lib/campaign/photo-matching':{verifyPhotoEvidence:()=>[]},'@/lib/publishing/google-business':{},'@/lib/publishing/idempotency':{},'@/lib/publishing/providers':{},
   '@/lib/publishing/facebook-video':{campaignVideoId:()=>null},
+  '@/lib/tiktok/options':load('lib/tiktok/options.ts'),'@/lib/tiktok/prepare':{prepareTikTokSettings:()=>{throw Error('must not prepare TikTok');}},
  });
  const req={json:async()=>({contentItemId:'draft',socialConnectionId:'account',socialConnectionIds:['account'],scheduledFor:'2027-01-01T12:00:00Z'})};
  for(type of ['reel_post','presenter_post','story_post']) {const result=await api.POST(req);assert.equal(result.status,400);assert.match(result.body.error,type === "story_post" ? /publish it manually/ : /Finish and select/);}

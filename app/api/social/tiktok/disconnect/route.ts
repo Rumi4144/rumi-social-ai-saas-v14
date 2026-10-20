@@ -6,6 +6,7 @@ export async function POST() {
   try {
     const ctx = await tenantContext();
 
+    if(ctx.role==="viewer")return NextResponse.json({error:"Your role cannot disconnect TikTok."},{status:403});
     await prisma.socialConnection.deleteMany({
       where: {
         organizationId: ctx.organizationId,

@@ -6,6 +6,7 @@ export async function GET() {
   try {
     const ctx = await tenantContext();
 
+    if(ctx.role==="viewer")return NextResponse.json({error:"Ask a workspace administrator to connect TikTok."},{status:403});
     const clientKey = process.env.TIKTOK_CLIENT_KEY;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
@@ -35,14 +36,14 @@ export async function GET() {
     const params = new URLSearchParams({
       client_key: clientKey,
       response_type: "code",
-      scope: "user.info.basic",
+      scope: "user.info.basic,video.publish",
       redirect_uri: redirectUri,
       state,
     });
 
-    return NextResponse.redirect(
-      `https://www.tiktok.com/v2/auth/authorize/?${params.toString()}`
-    );
+    const response=NextResponse.redirect(`https://www.tiktok.com/v2/auth/authorize/?${params.toString()}`);
+    response.cookies.set("tiktok_oauth",state,{httpOnly:true,secure:new URL(appUrl).protocol==="https:",sameSite:"lax",path:"/api/social/tiktok",maxAge:600});
+    return response;
   } catch (error) {
     return NextResponse.json(
       {

@@ -31,7 +31,7 @@ export default function WeeklyReels({project,campaignId,organizationId,music,mus
     const ext=blob.type==="video/mp4"?"mp4":"webm",downloadUrl=URL.createObjectURL(blob);urls.current.push(downloadUrl);
     const pathname=day.pathname||`reels/${organizationId}/${day.contentItemId}/${crypto.randomUUID()}.${ext}`;
     work[i]={...day,downloadUrl,pathname};snapshot.current=[...work];setDays([...work]);
-    await upload(pathname,blob,{access:"private",contentType:blob.type,multipart:true,handleUploadUrl:"/api/reels/upload",clientPayload:JSON.stringify({campaignId,contentItemId:day.contentItemId,title:day.headline,duration:reelDuration(dayProject)})});
+    await upload(pathname,blob,{access:"private",contentType:blob.type,multipart:true,handleUploadUrl:"/api/reels/upload",clientPayload:JSON.stringify({campaignId,contentItemId:day.contentItemId,title:day.headline,sceneCount:dayProject.scenes.length,duration:reelDuration(dayProject)})});
     let assetId="";for(let attempt=0;attempt<20;attempt++){const response=await fetch(`/api/reels/upload?pathname=${encodeURIComponent(pathname)}`);const data=response.ok?await response.json():{};if(data.assetId){assetId=data.assetId;break;}await new Promise(resolve=>setTimeout(resolve,1000));}
     if(!assetId)throw new Error("Upload completed; the library is still updating. Resume shortly to check it and finish the remaining days.");
     work[i]={...work[i],assetId};snapshot.current=[...work];setDays([...work]);

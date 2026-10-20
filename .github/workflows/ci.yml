@@ -45,6 +45,7 @@ jobs:
         env:
           SHOWCASE_OUTPUT_DIR: qa-showcase
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: node tests/tiktok-posting-browser.cjs
       - run: node tests/publishing-position-browser.cjs
       - run: node tests/campaign-setup-browser.cjs
       - run: node tests/campaign-photo-browser.cjs

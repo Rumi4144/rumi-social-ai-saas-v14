@@ -1,3 +1,4 @@
+import { publishTikTokVideo } from "./tiktok";
 import { publishGoogleBusiness } from "./google-business";
 import { publishYouTubeCampaign } from "./youtube-campaign";
 import { decryptSecret } from "@/lib/security/crypto";
@@ -31,6 +32,7 @@ export async function publishToProvider(input: {
   contentItemId?: string;
   publishJobId?: string;
 }): Promise<PublishResult> {
+  if(input.platform.toLowerCase()==="tiktok"){const assetId=campaignVideoId(input.mediaUrl);return assetId?publishTikTokVideo({...input,assetId}):{ok:false,retryable:false,error:"Select a finished MP4 reel for TikTok."};}
   if (input.platform.toLowerCase() === "google_business") return publishGoogleBusiness(input);
   if (input.platform.toLowerCase() === "youtube") {
     const assetId = campaignVideoId(input.mediaUrl);

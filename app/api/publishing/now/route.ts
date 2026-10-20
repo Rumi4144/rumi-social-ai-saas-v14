@@ -1,3 +1,5 @@
+import { TikTokOptions } from "@/lib/tiktok/options";
+import { prepareTikTokSettings } from "@/lib/tiktok/prepare";
 import { googleBusinessPost } from "@/lib/publishing/google-business";
 import { campaignVideoId } from "@/lib/publishing/facebook-video";
 import { NextResponse } from "next/server";
@@ -10,6 +12,7 @@ import { z } from "zod";
 
 export const maxDuration = 60;
 const S = z.object({
+  tiktok:TikTokOptions.optional(),
   contentItemId: z.string(),
   socialConnectionId: z.string(),
   youtube: z.object({ certified: z.literal(true), privacy: z.enum(["public", "unlisted", "private"]).default("private"), madeForKids: z.boolean(), containsSyntheticMedia: z.boolean() }).optional(),
@@ -28,6 +31,7 @@ export async function POST(req: Request) {
 
     const ctx = await tenantContext();
 
+    if(ctx.role==="viewer")return NextResponse.json({error:"Your role cannot publish posts."},{status:403});
     const item = await prisma.contentItem.findFirst({
       where: {
         id: parsed.data.contentItemId,
@@ -73,10 +77,14 @@ export async function POST(req: Request) {
       );
     }
 
-    if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube"].includes(connection.provider.toLowerCase())) return NextResponse.json({ error: "Choose Facebook, Instagram or YouTube for automatic video publishing. Download the clip for other platforms." }, { status: 400 });
+    if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube", "tiktok"].includes(connection.provider.toLowerCase())) return NextResponse.json({ error: "Choose a supported video account for publishing." }, { status: 400 });
 
     if (connection.provider === "youtube" && (!parsed.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
     if (connection.provider === "google_business") { try { googleBusinessPost(item.caption || item.headline || "", item.mediaUrl); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "This post is not supported by Google Business Profile." }, { status: 400 }); } }
+    let tiktokSettings;
+    if(connection.provider==="tiktok"){
+      try{tiktokSettings=await prepareTikTokSettings(ctx.organizationId,item,connection,parsed.data.tiktok);}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Review TikTok settings."},{status:400});}
+    }
     const publishTime = new Date();
     const key = publishKey(
       item.id,
@@ -99,6 +107,7 @@ export async function POST(req: Request) {
     });
 
     if (connection.provider === "youtube") await tx.job.create({ data: { id: `youtube_settings_${job.id}`, organizationId: ctx.organizationId, type: "YOUTUBE_CAMPAIGN_SETTINGS", status: "ready", payload: { ...parsed.data.youtube!, connectionId: connection.id } } });
+    if(connection.provider==="tiktok")await tx.job.create({data:{id:`tiktok_settings_${job.id}`,organizationId:ctx.organizationId,type:"TIKTOK_POST_SETTINGS",status:"ready",payload:tiktokSettings!}});
     return job;
     });
 
