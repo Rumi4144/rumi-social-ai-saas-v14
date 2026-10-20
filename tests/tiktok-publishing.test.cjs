@@ -11,6 +11,18 @@ const creator={creator_nickname:'Master Mind',creator_username:'mastermind',priv
 const connection={id:'connection',organizationId:'own',provider:'tiktok',externalId:'creator',encryptedToken:'encrypted',status:'connected'};
 const json={NextResponse:{json:(body,options={})=>({body,status:options.status||200})}};
 
+test('TikTok distinguishes private-account test restrictions from approval errors without exposing provider details',async()=>{
+ let code='unaudited_client_can_only_post_to_private_accounts';
+ const api=load('lib/tiktok/client.ts',{'@/lib/security/crypto':{},'@/lib/prisma':{prisma:{}},__fetch:async()=>new Response(JSON.stringify({error:{code,message:'sensitive provider details',log_id:'private-log'}}),{status:403})});
+ await assert.rejects(api.tikTokJson('video/init','token'),error=>{
+  assert.match(error.message,/account itself to be private/);
+  assert.match(error.message,/Only me.*not enough/);
+  assert.doesNotMatch(error.message,/sensitive|private-log|approval is required/);return true;
+ });
+ code='unauthorized_client';await assert.rejects(api.tikTokJson('video/init','token'),/Direct Post approval \(unauthorized_client\)/);
+ code='url_ownership_unverified';await assert.rejects(api.tikTokJson('video/init','token'),/URL properties/);
+});
+
 test('TikTok requires explicit privacy and consent, valid disclosure and current creator limits',()=>{
  const api=load('lib/tiktok/options.ts');
  assert.ok(api.TikTokOptions.safeParse(options).success);

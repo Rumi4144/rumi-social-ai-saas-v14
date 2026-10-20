@@ -30,7 +30,8 @@ export async function tikTokJson(path:string,token:string,body:unknown={}){
     const code=String(result.error?.code||"request_failed");
     if(code==="scope_not_authorized")throw new Error("Reconnect TikTok and approve video posting. The TikTok developer app must have Content Posting API enabled.");
     if(code==="url_ownership_unverified")throw new Error("The app administrator must verify rumisocialai.com in TikTok's URL properties before video posting.");
-    if(code.includes("unaudited")||code.includes("unauthorized_client"))throw new Error("TikTok app approval is required for this posting option. Check the developer app's Direct Post approval.");
+    if(code==="unaudited_client_can_only_post_to_private_accounts")throw new Error("TikTok requires the test account itself to be private before this app completes its audit. Choosing Only me for the video is not enough. Connect a private test account, or set this account to private in TikTok before starting a new test.");
+    if(code.includes("unaudited")||code.includes("unauthorized_client"))throw new Error(`TikTok app approval is required for this posting option. Check the developer app's Direct Post approval (${code.replace(/[^a-zA-Z0-9_]/g, "").slice(0,100)}).`);
     throw new Error(`TikTok could not complete this request (${code}).`);
   }
   return result.data;
