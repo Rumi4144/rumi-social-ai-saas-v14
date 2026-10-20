@@ -4,21 +4,21 @@ import {TikTokOptions,type TikTokPostOptions as Options,type TikTokCreator,valid
 const privacyLabels:Record<string,string>={PUBLIC_TO_EVERYONE:"Everyone",MUTUAL_FOLLOW_FRIENDS:"Friends",FOLLOWER_OF_CREATOR:"Followers",SELF_ONLY:"Only me"};
 type Draft=Omit<Options,"consent"|"privacy">&{consent:boolean;privacy:string};
 const empty:Draft={title:"",privacy:"",allowComment:false,allowDuet:false,allowStitch:false,commercial:false,ownBrand:false,brandedContent:false,aiGenerated:false,consent:false};
-export default function TikTokPostOptions({connectionId,contentItemId,assetId,disabled,onChange}:{connectionId:string;contentItemId:string;assetId?:string;disabled:boolean;onChange:(options:Options|null)=>void}){
+export default function TikTokPostOptions({connectionId,contentItemId,assetId,disabled,onChange,sandbox=false,accountId}:{connectionId:string;contentItemId:string;assetId?:string;accountId?:string;sandbox?:boolean;disabled:boolean;onChange:(options:Options|null)=>void}){
  const [info,setInfo]=useState<{creator:TikTokCreator;post:{title:string;duration:number;videoUrl:string};publicPostingApproved:boolean}>();
  const [value,setValue]=useState<Draft>(empty),[error,setError]=useState("");
  useEffect(()=>{
   const controller=new AbortController();setInfo(undefined);setValue(empty);setError("");onChange(null);
-  fetch(`/api/social/tiktok/creator?connectionId=${encodeURIComponent(connectionId)}&contentItemId=${encodeURIComponent(contentItemId)}${assetId?`&assetId=${encodeURIComponent(assetId)}`:""}`,{cache:"no-store",signal:controller.signal}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not load TikTok options.");if(controller.signal.aborted)return;setInfo(data);setValue({...empty,title:data.post.title});}).catch(error=>{if(!controller.signal.aborted)setError(error.message);});
+  fetch(`/api/social/${sandbox?"tiktok-test":"tiktok"}/creator?connectionId=${encodeURIComponent(connectionId)}&contentItemId=${encodeURIComponent(contentItemId)}${assetId?`&assetId=${encodeURIComponent(assetId)}`:""}${sandbox?`&accountId=${encodeURIComponent(accountId||"")}`:""}`,{cache:"no-store",signal:controller.signal}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not load TikTok options.");if(controller.signal.aborted)return;setInfo(data);setValue({...empty,title:data.post.title});}).catch(error=>{if(!controller.signal.aborted)setError(error.message);});
   return()=>controller.abort();
- },[connectionId,contentItemId,assetId,onChange]);
+ },[connectionId,contentItemId,assetId,onChange,sandbox,accountId]);
  useEffect(()=>{
   const parsed=TikTokOptions.safeParse(value);
   if(!info||!parsed.success){onChange(null);return;}
   try{validateTikTokOptions(parsed.data,info.creator,info.post.duration);onChange(parsed.data);}catch{onChange(null);}
  },[value,info,onChange]);
  const change=(update:Partial<Draft>)=>setValue(old=>({...old,...update,consent:false}));
- if(error)return <section aria-label="TikTok posting settings"><p role="alert">{error}</p><a href="/api/social/tiktok/connect">Reconnect TikTok for posting</a></section>;
+ if(error)return <section aria-label="TikTok posting settings"><p role="alert">{error}</p><a href={sandbox?"/api/social/tiktok-test/connect":"/api/social/tiktok/connect"}>Reconnect TikTok for posting</a></section>;
  if(!info)return <p role="status">Checking TikTok posting options…</p>;
  const creator=info.creator;
  const tooLong=info.post.duration>creator.max_video_post_duration_sec;

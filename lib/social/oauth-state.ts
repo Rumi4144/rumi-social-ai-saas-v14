@@ -6,6 +6,7 @@ type OAuthState = {
   provider: "instagram" | "youtube" | "tiktok" | "facebook";
   expiresAt: number;
   redirectUri?: string;
+  environment?: "sandbox";
 };
 
 function secret() {
@@ -131,12 +132,14 @@ export function createTikTokOAuthState(input: {
   userId: string;
   organizationId: string;
   redirectUri?: string;
+  environment?: "sandbox";
 }) {
   const state: OAuthState = {
     userId: input.userId,
     organizationId: input.organizationId,
     provider: "tiktok",
     redirectUri: input.redirectUri,
+    environment: input.environment,
     expiresAt: Date.now() + 10 * 60 * 1000,
   };
 

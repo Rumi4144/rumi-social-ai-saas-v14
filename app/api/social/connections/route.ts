@@ -10,6 +10,7 @@ export async function GET() {
       where: {
         organizationId: ctx.organizationId,
         status: "connected",
+        provider: { not: "tiktok_sandbox" },
       },
       select: {
         id: true,

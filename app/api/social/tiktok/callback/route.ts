@@ -40,6 +40,7 @@ export async function GET(req: Request) {
     }
 
     const state = verifyTikTokOAuthState(stateValue);
+    if(state.environment)throw new Error("TIKTOK_OAUTH_RESPONSE_INVALID");
     const configured = tikTokOAuthConfig(appUrl);
     const redirectUri = state.redirectUri || configured.redirectUri;
     // Only accept the configured registered callback, never a URL from query input.

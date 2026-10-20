@@ -27,3 +27,13 @@ TikTok still controls permission, quota, moderation, audit and domain verificati
 - Full unit suite and production build also run in CI.
 
 References: https://developers.tiktok.com/doc/content-sharing-guidelines ; https://developers.tiktok.com/doc/content-posting-api-reference-direct-post ; https://developers.tiktok.com/doc/content-posting-api-reference-query-creator-info ; https://developers.tiktok.com/doc/content-posting-api-reference-get-video-status
+
+## Administrator sandbox test area
+
+`/settings/tiktok-test` is restricted to the app super administrator. It uses `TIKTOK_SANDBOX_CLIENT_KEY` and `TIKTOK_SANDBOX_CLIENT_SECRET`, with a distinct sandbox callback at `/api/social/tiktok-test/callback/`. Register that exact callback and the main URL prefix in the TikTok sandbox, add the selected account as a target user, and confirm the sandbox permits `video.publish` before connecting. These settings do not grant or imply production approval.
+
+The test grant is tagged `environment: sandbox`, encrypted, bound to the sandbox client key and open ID, and stored under provider `tiktok_sandbox`. Normal connection lists and publishing cannot use it; the production OAuth callback rejects sandbox state. The original workspace connection is not replaced. Test grants refresh only with sandbox credentials.
+
+The test screen reuses the normal TikTok preview, caption, privacy, interaction, disclosure and explicit consent controls. It accepts only saved MP4s owned by the selected business and binds consent to the exact test account. The server independently enforces `SELF_ONLY` even if public production posting has been approved. A manual click starts one test upload, with a claimed idempotency receipt before initialization. Test receipts use `TIKTOK_SANDBOX_POST` Jobs, not PublishJobs; campaign publication status is never changed. A separate status action polls the same receipt. Ambiguous initialization requires checking TikTok before any new attempt. No background worker sends sandbox test uploads.
+
+Credentials, account authorization, actual API access and a real private upload must still be checked in the developer portal. Tests and a successful build do not establish those external conditions.

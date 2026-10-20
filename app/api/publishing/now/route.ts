@@ -77,6 +77,8 @@ export async function POST(req: Request) {
       );
     }
 
+    if(connection.provider==="tiktok_sandbox")return NextResponse.json({error:"Use the separate TikTok test area."},{status:403});
+
     if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube", "tiktok"].includes(connection.provider.toLowerCase())) return NextResponse.json({ error: "Choose a supported video account for publishing." }, { status: 400 });
 
     if (connection.provider === "youtube" && (!parsed.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
