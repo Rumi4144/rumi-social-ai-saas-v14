@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { tikTokOAuthConfig } from "@/lib/tiktok/oauth-config";
 import { tenantContext } from "@/lib/auth/context";
 import { createTikTokOAuthState } from "@/lib/social/oauth-state";
 
@@ -24,19 +25,18 @@ export async function GET() {
       );
     }
 
-    // Must exactly match the URI registered in TikTok Sandbox.
-    const redirectUri =
-      `${appUrl}/api/social/tiktok/callback/`;
+    const { redirectUri, scope } = tikTokOAuthConfig(appUrl);
 
     const state = createTikTokOAuthState({
       userId: ctx.userId,
       organizationId: ctx.organizationId,
+      redirectUri,
     });
 
     const params = new URLSearchParams({
       client_key: clientKey,
       response_type: "code",
-      scope: "user.info.basic,video.publish",
+      scope,
       redirect_uri: redirectUri,
       state,
     });

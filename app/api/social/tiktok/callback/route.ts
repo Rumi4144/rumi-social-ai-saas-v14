@@ -1,3 +1,4 @@
+import { tikTokOAuthConfig } from "@/lib/tiktok/oauth-config";
 import { cookies } from "next/headers";
 import { tenantContext } from "@/lib/auth/context";
 import { NextResponse } from "next/server";
@@ -39,6 +40,22 @@ export async function GET(req: Request) {
     }
 
     const state = verifyTikTokOAuthState(stateValue);
+    const configured = tikTokOAuthConfig(appUrl);
+    const redirectUri = state.redirectUri || configured.redirectUri;
+    // Only accept the configured registered callback, never a URL from query input.
+    if (redirectUri !== configured.redirectUri) throw new Error("TIKTOK_REDIRECT_URI_INVALID");
+    if (url.origin !== new URL(appUrl).origin) {
+      if (url.origin !== new URL(redirectUri).origin) throw new Error("TIKTOK_REDIRECT_URI_INVALID");
+      // Relay back to the initiating host before reading its host-only session/state cookie.
+      // The token exchange still uses TikTok's original registered redirect URI.
+      const destination = new URL("/api/social/tiktok/callback/", appUrl);
+      destination.searchParams.set("code", code);
+      destination.searchParams.set("state", stateValue);
+      const response = NextResponse.redirect(destination.toString());
+      response.headers.set("Cache-Control", "no-store");
+      response.headers.set("Referrer-Policy", "no-referrer");
+      return response;
+    }
     const ctx=await tenantContext();
     if(ctx.role==="viewer"||ctx.userId!==state.userId||ctx.organizationId!==state.organizationId||(await cookies()).get("tiktok_oauth")?.value!==stateValue)throw new Error("TIKTOK_WORKSPACE_FORBIDDEN");
 
@@ -59,8 +76,6 @@ export async function GET(req: Request) {
       throw new Error("TIKTOK_WORKSPACE_FORBIDDEN");
     }
 
-    const redirectUri =
-      `${appUrl}/api/social/tiktok/callback/`;
 
     // Exchange authorization code for TikTok tokens.
     const tokenRes = await fetch(

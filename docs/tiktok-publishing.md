@@ -1,11 +1,11 @@
 # TikTok video publishing
 
-The app supports Direct Post for finished MP4 campaign reels. TikTok sign-in alone does not grant publishing permission. Existing connections must reconnect and grant `video.publish`.
+The app supports Direct Post for finished MP4 campaign reels. TikTok sign-in alone does not grant publishing permission. Existing connections must reconnect and grant `video.publish` after the production revision granting that scope is approved.
 
 ## Production setup
 
 1. In the existing TikTok developer app, add Content Posting API and enable Direct Post. Request `video.publish` alongside the existing `user.info.basic` permission. Keep the existing client key and secret in the production environment.
-2. Keep the registered redirect URI exactly `https://rumisocialai.com/api/social/tiktok/callback/` (including the trailing slash). OAuth connects must start and finish while signed into the same Rumi Social workspace.
+2. Until the new production revision is approved, OAuth requests only `user.info.basic` and uses the previously approved `https://rumi-social-ai-saas-v14.vercel.app/api/social/tiktok/callback/`. That host relays the signed response to the main domain, where the original user session, workspace and host-only state cookie are checked before token exchange. The exchange retains the original registered redirect URI. After approval, set `TIKTOK_CONTENT_POSTING_APPROVED=true` and redeploy to request `video.publish` and use the main-domain callback. `TIKTOK_REDIRECT_URI` can explicitly choose an approved callback on either trusted deployment host; arbitrary origins are rejected. Keep the registered redirect URI exactly `https://rumisocialai.com/api/social/tiktok/callback/` (including the trailing slash). OAuth connects must start and finish while signed into the same Rumi Social workspace.
 3. Verify `https://rumisocialai.com/` in the developer app's URL properties. Server-stored video is delivered using `PULL_FROM_URL` from an expiring, tenant-bound signed `/api/video/tiktok/<assetId>` URL; it does not redirect to a private Blob URL. Hosting must serve the approved domain.
 4. Reconnect from Settings → TikTok → Reconnect TikTok for posting. The account card checks the granted scope and queries current creator settings. This check never sends a video to TikTok.
 5. Complete TikTok's required Direct Post audit. Until approval is confirmed, `TIKTOK_PUBLIC_POSTING_APPROVED` remains unset/false and only `SELF_ONLY` choices returned by TikTok are offered. Unaudited clients also require private creator accounts and have TikTok-imposed testing caps. Set `TIKTOK_PUBLIC_POSTING_APPROVED=true` and redeploy only after confirmed approval. Do not infer approval from a successful account connection.

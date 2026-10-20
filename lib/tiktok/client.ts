@@ -6,7 +6,7 @@ export function tikTokGrant(connection:Connection){
   if(!connection.encryptedToken)throw new Error("Reconnect TikTok in Settings to enable video posting.");
   const grant=JSON.parse(decryptSecret(connection.encryptedToken));
   if(grant.openId!==connection.externalId)throw new Error("TikTok account changed. Reconnect in Settings.");
-  if(!String(grant.scope||"").split(/[ ,]+/).includes("video.publish"))throw new Error("TikTok is linked for sign-in only. Reconnect TikTok in Settings and approve video posting.");
+  if(!String(grant.scope||"").split(/[ ,]+/).includes("video.publish"))throw new Error(process.env.TIKTOK_CONTENT_POSTING_APPROVED === "true" ? "TikTok is linked for sign-in only. Reconnect TikTok in Settings and approve video posting." : "TikTok is linked for sign-in only. Video posting is waiting for TikTok to approve the app’s Content Posting revision.");
   return grant;
 }
 export async function tikTokAccessToken(connection:Connection){

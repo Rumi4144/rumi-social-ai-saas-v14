@@ -93,17 +93,42 @@ test('TikTok scheduling stores the reviewed caption, privacy and exact asset wit
  assert.equal(response.status,201);assert.equal(jobCount,1);assert.equal(saved.id,'tiktok_settings_publish');assert.equal(saved.organizationId,'own');assert.equal(saved.payload.assetId,'clip');assert.equal(saved.payload.options.title,options.title);assert.equal(saved.payload.options.privacy,'SELF_ONLY');
 });
 
-test('TikTok connect requests publishing scope, binds the OAuth cookie and rejects viewers',async()=>{
+test('TikTok connect requests only approved scopes, binds the OAuth cookie and rejects viewers',async()=>{
  let role='owner';const previous=process.env.TIKTOK_CLIENT_KEY,app=process.env.NEXT_PUBLIC_APP_URL;process.env.TIKTOK_CLIENT_KEY='key';process.env.NEXT_PUBLIC_APP_URL='https://app.test';
  try{
  const api=load('app/api/social/tiktok/connect/route.ts',{'next/server':{NextResponse:{json:json.NextResponse.json,redirect:url=>({url,cookies:{set:(...args)=>{cookie=args;}}})}},'@/lib/auth/context':{tenantContext:async()=>({userId:'user',organizationId:'own',role})},'@/lib/social/oauth-state':{createTikTokOAuthState:()=> 'signed-state'}});
- let cookie;const response=await api.GET();const url=new URL(response.url);assert.equal(url.searchParams.get('scope'),'user.info.basic,video.publish');assert.equal(cookie[0],'tiktok_oauth');assert.equal(cookie[1],'signed-state');assert.equal(cookie[2].httpOnly,true);role='viewer';assert.equal((await api.GET()).status,403);
+ let cookie;const response=await api.GET();const url=new URL(response.url);assert.equal(url.searchParams.get('scope'),'user.info.basic');assert.equal(cookie[0],'tiktok_oauth');assert.equal(cookie[1],'signed-state');assert.equal(cookie[2].httpOnly,true);role='viewer';assert.equal((await api.GET()).status,403);
  }finally{if(previous===undefined)delete process.env.TIKTOK_CLIENT_KEY;else process.env.TIKTOK_CLIENT_KEY=previous;if(app===undefined)delete process.env.NEXT_PUBLIC_APP_URL;else process.env.NEXT_PUBLIC_APP_URL=app;}
 });
 
 test('TikTok OAuth callback stays bound to the signed-in user and workspace before exchanging tokens',async()=>{
  let exchanges=0;const cookie='signed-state';
  const api=load('app/api/social/tiktok/callback/route.ts',{'next/server':{NextResponse:{redirect:url=>({url})}},'next/headers':{cookies:async()=>({get:()=>({value:cookie})})},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'other',userId:'other',role:'owner'})},'@/lib/social/oauth-state':{verifyTikTokOAuthState:()=>({organizationId:'own',userId:'user'})},'@/lib/security/crypto':{},'@/lib/prisma':{prisma:{}},__fetch:async()=>{exchanges++;throw Error('must not exchange');}});
- const key=process.env.TIKTOK_CLIENT_KEY,secret=process.env.TIKTOK_CLIENT_SECRET;process.env.TIKTOK_CLIENT_KEY='key';process.env.TIKTOK_CLIENT_SECRET='secret';
- try{const result=await api.GET(new Request('https://app.test/api/social/tiktok/callback/?code=code&state=signed-state'));assert.match(result.url,/reason=workspace/);assert.equal(exchanges,0);}finally{if(key===undefined)delete process.env.TIKTOK_CLIENT_KEY;else process.env.TIKTOK_CLIENT_KEY=key;if(secret===undefined)delete process.env.TIKTOK_CLIENT_SECRET;else process.env.TIKTOK_CLIENT_SECRET=secret;}
+ const app=process.env.NEXT_PUBLIC_APP_URL;process.env.NEXT_PUBLIC_APP_URL='https://app.test';const key=process.env.TIKTOK_CLIENT_KEY,secret=process.env.TIKTOK_CLIENT_SECRET;process.env.TIKTOK_CLIENT_KEY='key';process.env.TIKTOK_CLIENT_SECRET='secret';
+ try{const result=await api.GET(new Request('https://app.test/api/social/tiktok/callback/?code=code&state=signed-state'));assert.match(result.url,/reason=workspace/);assert.equal(exchanges,0);}finally{if(app===undefined)delete process.env.NEXT_PUBLIC_APP_URL;else process.env.NEXT_PUBLIC_APP_URL=app;if(key===undefined)delete process.env.TIKTOK_CLIENT_KEY;else process.env.TIKTOK_CLIENT_KEY=key;if(secret===undefined)delete process.env.TIKTOK_CLIENT_SECRET;else process.env.TIKTOK_CLIENT_SECRET=secret;}
+});
+
+test('live TikTok configuration retains the approved legacy address until posting approval',()=>{
+ const approval=process.env.TIKTOK_CONTENT_POSTING_APPROVED,override=process.env.TIKTOK_REDIRECT_URI;
+ delete process.env.TIKTOK_CONTENT_POSTING_APPROVED;delete process.env.TIKTOK_REDIRECT_URI;
+ try{const api=load('lib/tiktok/oauth-config.ts');assert.equal(api.tikTokOAuthConfig('https://rumisocialai.com').redirectUri,'https://rumi-social-ai-saas-v14.vercel.app/api/social/tiktok/callback/');assert.equal(api.tikTokOAuthConfig('https://rumisocialai.com').scope,'user.info.basic');
+ process.env.TIKTOK_CONTENT_POSTING_APPROVED='true';assert.equal(api.tikTokOAuthConfig('https://rumisocialai.com').scope,'user.info.basic,video.publish');assert.equal(api.tikTokOAuthConfig('https://rumisocialai.com').redirectUri,'https://rumisocialai.com/api/social/tiktok/callback/');
+ process.env.TIKTOK_REDIRECT_URI='https://attacker.test/api/social/tiktok/callback/';assert.throws(()=>api.tikTokOAuthConfig('https://rumisocialai.com'),/INVALID/);
+ }finally{for(const [key,value] of Object.entries({TIKTOK_CONTENT_POSTING_APPROVED:approval,TIKTOK_REDIRECT_URI:override})){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
+});
+
+test('legacy callback relays signed state to the original host; exchange still requires its session cookie and original redirect',async()=>{
+ const previous=Object.fromEntries(['NEXT_PUBLIC_APP_URL','AUTH_SECRET','TIKTOK_CLIENT_KEY','TIKTOK_CLIENT_SECRET','TIKTOK_CONTENT_POSTING_APPROVED','TIKTOK_REDIRECT_URI'].map(k=>[k,process.env[k]]));
+ Object.assign(process.env,{NEXT_PUBLIC_APP_URL:'https://rumisocialai.com',AUTH_SECRET:'test-state-secret',TIKTOK_CLIENT_KEY:'key',TIKTOK_CLIENT_SECRET:'secret'});delete process.env.TIKTOK_CONTENT_POSTING_APPROVED;delete process.env.TIKTOK_REDIRECT_URI;
+ try{
+ const redirectUri='https://rumi-social-ai-saas-v14.vercel.app/api/social/tiktok/callback/';
+ const states=load('lib/social/oauth-state.ts');const state=states.createTikTokOAuthState({userId:'user',organizationId:'own',redirectUri});
+ let cookie=state,contextReads=0,exchanges=0,saved=false;
+ const api=load('app/api/social/tiktok/callback/route.ts',{'next/server':{NextResponse:{redirect:url=>({url,headers:new Headers(),cookies:{set(){}}})}},'next/headers':{cookies:async()=>({get:()=>cookie?{value:cookie}:undefined})},'@/lib/auth/context':{tenantContext:async()=>{contextReads++;return {userId:'user',organizationId:'own',role:'owner'};}},'@/lib/security/crypto':{encryptSecret:()=> 'encrypted'},'@/lib/prisma':{prisma:{membership:{findFirst:async()=>({role:'owner'})},user:{findUnique:async()=>null},socialConnection:{findFirst:async()=>null,create:async()=>{saved=true;}}}},__fetch:async(url,init)=>{exchanges++;if(url.includes('/oauth/token/')){assert.equal(init.body.get('redirect_uri'),redirectUri);return new Response(JSON.stringify({access_token:'token',open_id:'account',scope:'user.info.basic'}));}return new Response(JSON.stringify({data:{user:{open_id:'account'}}}));}});
+ const legacy=new Request(`${redirectUri}?code=code&state=${encodeURIComponent(state)}`);
+ const relay=await api.GET(legacy);assert.equal(new URL(relay.url).origin,'https://rumisocialai.com');assert.equal(contextReads,0);assert.equal(exchanges,0);assert.equal(relay.headers.get('Referrer-Policy'),'no-referrer');
+ cookie='wrong';const rejected=await api.GET(new Request(relay.url));assert.match(rejected.url,/reason=workspace/);assert.equal(exchanges,0);
+ cookie=state;const success=await api.GET(new Request(relay.url));assert.match(success.url,/tiktok=connected/);assert.equal(exchanges,2);assert.equal(saved,true);
+ const invalid=await api.GET(new Request(`${redirectUri}?code=code&state=forged`));assert.match(invalid.url,/tiktok=error/);assert.equal(exchanges,2);
+ }finally{for(const [key,value] of Object.entries(previous)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
 });

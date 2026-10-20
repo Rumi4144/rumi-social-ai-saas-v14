@@ -5,6 +5,7 @@ type OAuthState = {
   organizationId: string;
   provider: "instagram" | "youtube" | "tiktok" | "facebook";
   expiresAt: number;
+  redirectUri?: string;
 };
 
 function secret() {
@@ -129,11 +130,13 @@ export function verifyYouTubeOAuthState(value: string): OAuthState {
 export function createTikTokOAuthState(input: {
   userId: string;
   organizationId: string;
+  redirectUri?: string;
 }) {
   const state: OAuthState = {
     userId: input.userId,
     organizationId: input.organizationId,
     provider: "tiktok",
+    redirectUri: input.redirectUri,
     expiresAt: Date.now() + 10 * 60 * 1000,
   };
 
