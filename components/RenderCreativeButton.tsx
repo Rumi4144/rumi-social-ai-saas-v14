@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SHOWCASE_STYLES, automaticShowcaseStyle } from "@/lib/render/showcase";
-import CreativeTemplatePicker from "@/components/CreativeTemplatePicker";
+import { SHOWCASE_STYLES, automaticShowcaseStyle, isShowcaseStyle } from "@/lib/render/showcase";
+import { renderSocialSvg } from "@/lib/render/svg";
+import CreativeTemplatePicker, { CreativeSvgPreview } from "@/components/CreativeTemplatePicker";
 import type { StudioBrand } from "@/lib/studio/creative-context";
 
 export default function RenderCreativeButton({
@@ -11,6 +12,8 @@ export default function RenderCreativeButton({
   headline,
   caption,
   imageUrl,
+  displayUrl,
+  initialDesignStyle,
   brand,
   imageUrls,
   textPosition = "left",
@@ -22,13 +25,16 @@ export default function RenderCreativeButton({
   headline: string;
   caption?: string | null;
   imageUrl: string;
+  displayUrl?: string;
+  initialDesignStyle?: string;
   brand?: StudioBrand;
   imageUrls?: string[];
   textPosition?: "left" | "right" | "top";
   existingCreative?: boolean;
   format?: "portrait" | "story";
 }) {
-  const [designStyle, setDesignStyle] = useState("automatic");
+  const [designStyle, setDesignStyle] = useState(initialDesignStyle === "classic" || isShowcaseStyle(initialDesignStyle) ? initialDesignStyle! : "automatic");
+  const [designChanged, setDesignChanged] = useState(false);
   const [status, setStatus] = useState("");
 
   const choices = useMemo(() => [
@@ -39,6 +45,16 @@ export default function RenderCreativeButton({
   const preview = useMemo(() => ({ ...brand, brand: brand?.name || "Your business", headline,
     cta: "Discover More", imageUrl, imageUrls, textPosition, format,
   }), [brand, headline, imageUrl, imageUrls, textPosition, format]);
+
+  const selectedPreview = useMemo(() => renderSocialSvg({
+    ...preview, designStyle: designStyle === "automatic" ? automaticShowcaseStyle(contentItemId, brand?.designStyle) : designStyle,
+  }), [preview, designStyle, contentItemId, brand?.designStyle]);
+
+  function chooseDesign(value: string) {
+    setDesignStyle(value);
+    setDesignChanged(true);
+    setStatus("");
+  }
 
   async function render() {
     setStatus("Creating...");
@@ -103,7 +119,11 @@ export default function RenderCreativeButton({
 
   return (
     <div>
-      <CreativeTemplatePicker label="Post design" value={designStyle} onChange={setDesignStyle} options={choices} preview={preview} disabled={status === "Creating..."} />
+      <div role="img" aria-label={`${headline} design preview`} style={{ width: "100%", borderRadius: 18, overflow: "hidden", marginBottom: 20 }}>
+        {displayUrl && !designChanged ? <img src={displayUrl} alt="" style={{ width: "100%", height: "auto", display: "block" }} /> : <CreativeSvgPreview svg={selectedPreview} />}
+      </div>
+      <CreativeTemplatePicker label="Post design" value={designStyle} onChange={chooseDesign} options={choices} preview={preview} disabled={status === "Creating..."} />
+      {designChanged && <p role="status" style={{ fontSize: 14 }}>Preview updated. Choose “{existingCreative ? "Update Branded Creative" : "Create Branded Creative"}” to save this design.</p>}
       {designStyle === "cinematic" && <p style={{ fontSize: 14 }}>Layered photos and elegant type. Extra views come from photos attached to this post.</p>}
       <button
         type="button"

@@ -219,7 +219,7 @@ export default async function Campaign({
               </div>}
               {photoNeedsReview && <p role="status">Check this photo before publishing: its source has not been verified against the named product. Use “Choose photo from website” below to select the exact item.</p>}
               {!originalImage && <p>Choose a matching website photo below or generate an image. A different product photo will not be substituted automatically.</p>}
-              {displayAsset?.url && (
+              {displayAsset?.url && !originalImage?.url && (
                 <img
                   src={displayAsset.url}
                   alt={item.headline || "Campaign creative"}
@@ -241,6 +241,8 @@ export default async function Campaign({
                   headline={item.headline || "Campaign Creative"}
                   caption={item.caption}
                   imageUrl={originalImage.url}
+                  displayUrl={displayAsset?.url || undefined}
+                  initialDesignStyle={metadata && typeof metadata === "object" && !Array.isArray(metadata) && typeof metadata.designStyle === "string" ? metadata.designStyle : undefined}
                   brand={{
                     name:campaign.brand.name,
                     primaryColor:campaign.brand.primaryColor||'#173d36',
