@@ -5,6 +5,7 @@ import { tenantContext } from "@/lib/auth/context";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/http/errors";
 import { privateReelPath, reelAssetId } from "@/lib/reels/storage";
+import { videoBytes } from '@/lib/video/media';
 const S = z.object({ campaignId: z.string(), contentItemId: z.string(), title: z.string().max(160), duration: z.number().min(3).max(90), sceneCount:z.number().int().min(1).max(6), productSubject:z.string().max(500).optional() });
 export async function GET(req: Request) {
   try {
@@ -32,6 +33,8 @@ export async function POST(req: Request) {
         const item = await prisma.contentItem.findFirst({ where: { id: p.contentItemId, campaignId: p.campaignId, campaign: { brand: { organizationId: p.organizationId } } } });
         if (!item) throw new Error("Campaign no longer available");
         const id = reelAssetId(blob.pathname);
+        // Verify the actual stored bytes before an uploaded file becomes a ready reel.
+        await videoBytes({id,organizationId:p.organizationId,contentItemId:p.contentItemId,url:`/api/video/media/${id}`,metadata:{pathname:blob.pathname,contentType:blob.pathname.endsWith('.mp4')?'video/mp4':'video/webm'}});
         await prisma.mediaAsset.upsert({ where: { id }, update: {}, create: { id, organizationId: p.organizationId, campaignId: p.campaignId, contentItemId: p.contentItemId, kind: "campaign_video", provider: "reel-editor", url: `/api/video/media/${id}`, prompt: p.title, metadata: { pathname: blob.pathname, duration: p.duration, sceneCount:p.sceneCount, productSubject:p.productSubject||null, publishMode: "review", contentType: blob.pathname.endsWith(".mp4") ? "video/mp4" : "video/webm" } } });
       },
     });

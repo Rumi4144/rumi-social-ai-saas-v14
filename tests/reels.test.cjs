@@ -83,9 +83,10 @@ test('private video ranges return only requested bytes and reject invalid ranges
   const r=await api.privateVideoResponse(new Request('https://app.test/video',{headers:{range:'bytes=99-'}}),'owned','video/mp4','reel.mp4');assert.equal(r.status,416);
 });
 test('reel upload signs ownership and completion stays in that campaign', async () => {
- let hooks, saved;
+ let hooks, saved, rejectVideo=false;
  const response={NextResponse:{json:body=>body}};
  const api=load('app/api/reels/upload/route.ts',{
+  '@/lib/video/media':{videoBytes:async asset=>{assert.equal(asset.organizationId,'org-a');if(rejectVideo)throw Error('audio only');return {contentType:'video/mp4'};}},
   '@vercel/blob/client':{handleUpload:async h=>{hooks=h;return{};}},'next/server':response,
   '@/lib/auth/context':{tenantContext:async()=>({organizationId:'org-a',role:'owner'})},
   '@/lib/prisma':{prisma:{contentItem:{findFirst:async q=>q.where.campaign.brand.organizationId==='org-a'?{id:'post-a'}:null},mediaAsset:{upsert:async q=>{saved=q;}}}},
@@ -100,6 +101,7 @@ test('reel upload signs ownership and completion stays in that campaign', async 
  const token=await hooks.onBeforeGenerateToken(pathname,payload);
  await assert.rejects(hooks.onUploadCompleted({blob:{pathname:pathname.replace('org-a','org-b')},tokenPayload:token.tokenPayload}));
  await hooks.onUploadCompleted({blob:{pathname},tokenPayload:token.tokenPayload});
+ saved=undefined;rejectVideo=true;await assert.rejects(hooks.onUploadCompleted({blob:{pathname},tokenPayload:token.tokenPayload}),/audio only/);assert.equal(saved,undefined);rejectVideo=false;await hooks.onUploadCompleted({blob:{pathname},tokenPayload:token.tokenPayload});
  assert.equal(saved.create.organizationId,'org-a');assert.equal(saved.create.contentItemId,'post-a');assert.equal(saved.create.metadata.publishMode,'review');assert.equal(saved.create.metadata.sceneCount,1);
 });
 test('editor cannot load another workspace campaign or its images', async () => {

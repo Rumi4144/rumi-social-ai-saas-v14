@@ -1,12 +1,13 @@
 import { drawReel, type ReelMedia } from "./draw";
 import { assertReelHasMedia, recorderMime, reelDuration, REEL_WIDTH, REEL_HEIGHT, type ReelProject } from "./timeline";
 import { prepareMusic, type MusicSettings } from "./music";
+import {assertMp4Video} from '@/lib/video/mp4';
 
 export async function loadReelMedia(project: ReelProject): Promise<{ media: ReelMedia[]; logo?: HTMLImageElement }> {
   const image = (src: string) => new Promise<HTMLImageElement>((resolve, reject) => { const item = new Image(); item.crossOrigin = "anonymous"; item.onload = () => resolve(item); item.onerror = () => reject(new Error("One image could not be loaded. Choose another image.")); item.src = src; });
   const media = await Promise.all(project.scenes.map(scene => scene.kind === "image" ? image(scene.src) : new Promise<HTMLVideoElement>((resolve, reject) => {
     const item = document.createElement("video"); item.crossOrigin = "anonymous"; item.muted = true; item.playsInline = true; item.preload = "auto";
-    item.onloadeddata = () => resolve(item); item.onerror = () => reject(new Error("One clip could not be loaded. Choose another MP4 clip.")); item.src = scene.src; item.load();
+    item.onloadeddata = () => item.videoWidth>0&&item.videoHeight>0 ? resolve(item) : reject(new Error('One saved clip has no picture. Replace it with the original photos or a working MP4 before exporting.')); item.onerror = () => reject(new Error("One clip could not be loaded. Choose another MP4 clip.")); item.src = scene.src; item.load();
   })));
   return { media, logo: project.logo ? await image(project.logo) : undefined };
 }
@@ -39,6 +40,8 @@ export async function exportReel(input: MusicSettings & { project: ReelProject; 
     if (input.signal.aborted) throw new Error("Export cancelled.");
     drawReel(ctx, input.project, media, 0, logo);
     stream = canvas.captureStream(30);
+    const videoTrack=stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack|undefined;
+    if(!videoTrack||videoTrack.readyState!=='live')throw new Error('Your browser did not capture a video track. Try exporting again in Chrome. No reel was saved.');
     if (input.music || sources.length || mediaAudio.length) destination.stream.getAudioTracks().forEach(track => stream!.addTrack(track));
     recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 4_000_000, audioBitsPerSecond: 128_000 });
     const parts: Blob[] = [];
@@ -51,6 +54,7 @@ export async function exportReel(input: MusicSettings & { project: ReelProject; 
     const { frameAt } = await import("./timeline");
     const started = performance.now();
     recorder.start(500);
+    videoTrack.requestFrame?.();
     sources.forEach(source => source.start());
     stopMusic = beginMusic();
     timer = setInterval(() => {
@@ -66,10 +70,12 @@ export async function exportReel(input: MusicSettings & { project: ReelProject; 
         activeIndex = nextIndex;
       }
       drawReel(ctx, input.project, media, time, logo); input.progress(Math.floor(time / duration * 100));
+      videoTrack.requestFrame?.();
       if (time >= duration || input.signal.aborted) { clearInterval(timer); timer = undefined; if (recorder?.state === "recording") recorder.stop(); }
     }, 1000 / 30);
     const blob = await done;
     if (!blob.size) throw new Error("The browser produced an empty reel. Try again.");
+    if(blob.type==='video/mp4')assertMp4Video(new Uint8Array(await blob.arrayBuffer()));
     return blob;
   } finally {
     if (timer) clearInterval(timer);

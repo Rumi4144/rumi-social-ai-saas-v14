@@ -181,3 +181,14 @@ test('existing Facebook upload is rechecked read-only instead of blindly reporte
  remote={ok:false,pending:true};result=await api.GET(req);assert.equal(result.body.jobs[0].status,'processing');
  remote={ok:true};result=await api.GET(req);assert.equal(result.body.jobs[0].status,'published');assert.equal(checks,3);
 });
+
+test('Facebook rejects an audio-only saved MP4 before claiming or submitting an upload',async()=>{
+ let creates=0,uploads=0;
+ const api=load('lib/publishing/facebook-video.ts',{
+  '@/lib/prisma':{prisma:{mediaAsset:{findFirst:async()=>({id:'clip',url:'/api/video/media/clip'})},job:{findFirst:async()=>null,create:async()=>{creates++;}}}},
+  '@/lib/video/media':{videoBytes:async()=>{throw Error('This MP4 contains audio only, with no video track.');}},
+  __fetch:async()=>{uploads++;throw Error('must not upload');},
+ });
+ const result=await api.publishFacebookVideo({pageId:'page',pageAccessToken:'token',caption:'Caption',assetId:'clip',organizationId:'own',contentItemId:'post',publishJobId:'job'});
+ assert.equal(result.ok,false);assert.equal(result.retryable,false);assert.match(result.error,/audio only|saved video could not be verified/);assert.equal(creates,0);assert.equal(uploads,0);
+});

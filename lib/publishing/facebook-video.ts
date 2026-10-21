@@ -23,7 +23,8 @@ export async function publishFacebookVideo(input: { pageId: string; pageAccessTo
     return result;
   }
   if (existing) return { ok: false, retryable: false, error: "Video upload needs review before retrying. Check the Facebook Page to avoid posting twice." };
-  const clip = await videoBytes(asset);
+  let clip:Awaited<ReturnType<typeof videoBytes>>;
+  try{clip=await videoBytes(asset);}catch(error){return {ok:false,retryable:false,error:error instanceof Error?error.message:'The saved video could not be verified. Export it again before posting.'};}
   if (clip.contentType !== "video/mp4") return { ok: false, retryable: false, error: "Facebook publishing requires an MP4 clip." };
   // Claim before submitting. An interrupted upload must never create a second post.
   try {
