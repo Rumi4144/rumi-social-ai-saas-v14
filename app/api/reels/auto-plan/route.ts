@@ -31,7 +31,7 @@ export async function POST(req: Request) {
       catch (error) { throw Object.assign(new Error("Reel source read failed", { cause: error }), { reelStep: label }); }
     };
     const [assets, posts, jobs] = await Promise.all([
-      read("loading saved photo details", prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, campaignId: { in: ids }, status: "ready", url: { not: null }, kind: { in: ["ai_image", "product_photo", "reel_scene_image"] } }, select: { id: true, organizationId: true, campaignId: true, contentItemId: true, kind: true, status: true, prompt: true, metadata: true }, orderBy: [{ createdAt: "desc" }, { id: "asc" }] })),
+      read("loading saved photo details", prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, campaignId: { in: ids }, status: { in: ["ready", "superseded"] }, url: { not: null }, kind: { in: ["ai_image", "product_photo", "reel_scene_image"] } }, select: { id: true, organizationId: true, campaignId: true, contentItemId: true, kind: true, status: true, prompt: true, metadata: true }, orderBy: [{ createdAt: "desc" }, { id: "asc" }] })),
       read("loading saved captions", prisma.contentItem.findMany({ where: { campaignId: { in: ids } }, select: { id: true, campaignId: true, type: true, headline: true, caption: true } })),
       read("loading saved campaign history", prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: "CREATE_EVERYTHING", status: "succeeded", OR: ids.map(id => ({ payload: { path: ["campaignId"], equals: id } })) }, select: { payload: true, result: true }, orderBy: { createdAt: "desc" } })),
     ]);

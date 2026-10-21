@@ -15,7 +15,7 @@ export default function PhotoLibraryPicker({ organizationId, campaignId, content
     const timer = setTimeout(() => controller.abort(), 20000);
     let disposed = false;
     setLoading(true); setPhotos([]); setHasMore(false); setMessage("");
-    const params = new URLSearchParams({ organizationId, campaignId, ...(contentItemId?{contentItemId}:{}), ...(allBusinessPhotos?{scope:"all"}:{}), q: query, page: String(page), ...(purpose !== "scene" ? {includeArchived:"1"} : {}), ...(purpose === "campaign" ? {setup:"1"} : {}) });
+    const params = new URLSearchParams({ organizationId, campaignId, ...(contentItemId?{contentItemId}:{}), ...(allBusinessPhotos?{scope:"all"}:{}), q: query, page: String(page), includeArchived:"1", ...(purpose === "campaign" ? {setup:"1"} : {}) });
     fetch(`/api/reels/library?${params}`, { cache: "no-store", signal: controller.signal }).then(async response => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load your photos.");
@@ -31,7 +31,7 @@ export default function PhotoLibraryPicker({ organizationId, campaignId, content
       {productSubject&&<><p>{allBusinessPhotos?"Showing all business photos.":`Showing verified photos for ${productSubject}.`}</p><button type="button" disabled={disabled||loading} onClick={()=>{setAllBusinessPhotos(value=>!value);setPage(1);setQuery("");setSearch("");}}>{allBusinessPhotos?"Show matching product only":"Browse all business photos"}</button></>}
       <label>Search photos or campaign names<input value={search} maxLength={120} placeholder="For example: relaxation, confidence, ocean…" disabled={disabled} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); setQuery(search.trim()); setPage(1); setReload(value => value + 1); } }} /></label>
       <button type="button" disabled={disabled || loading} onClick={() => { setQuery(search.trim()); setPage(1); setReload(value => value + 1); }}>Search photos</button>
-      <p role="status">{loading ? "Loading your photos…" : message || (!photos.length ? productSubject&&!allBusinessPhotos?"No verified saved photos match this product. Load its website photos or upload the correct photo.":"No saved photos found. Try another search or generate a new scene photo." : purpose === "campaign" ? "Choose photos for your new campaign." : purpose === "post" ? "Choose a saved photo to use for this post." : "Choose a photo to use for this scene.")}</p>
+      <p role="status">{loading ? "Loading your photos…" : message || (!photos.length ? productSubject&&!allBusinessPhotos?"No verified saved photos match this product. Load its website photos or upload the correct photo.":"No saved photos found. Try another search, or choose a photo from your website." : purpose === "campaign" ? "Choose photos for your new campaign." : purpose === "post" ? "Choose a saved photo to use for this post." : "Choose a photo to use for this scene.")}</p>
       {message && <button type="button" disabled={disabled || loading} onClick={() => setReload(value => value + 1)}>Try again</button>}
       <div className={styles.library}>{photos.map(photo => <div className={styles.photo} key={photo.id}>
         <img src={photo.thumbnail} alt={photo.label || "Campaign photo"} loading="lazy" />

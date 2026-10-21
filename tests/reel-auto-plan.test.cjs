@@ -68,10 +68,10 @@ test('post ownership and campaign membership are validated before media access',
  let query;const api=route({contentItem:{findFirst:async q=>{query=q;return null}},mediaAsset:{findMany:()=>{throw Error('must not query')}}});
  assert.equal((await api.POST(request())).status,404);assert.equal(query.where.id,'post');assert.equal(query.where.campaignId,'current');assert.equal(query.where.campaign.brand.organizationId,'mind');
 });
-test('API gathers only same-brand ready photos and leaves original posts untouched',async()=>{
+test('API gathers valid saved photos from the same brand and leaves original posts untouched',async()=>{
  let mediaQuery,jobQuery;const item={...post,campaignId:'current',campaign:{id:'current',title:'Calm moments',brand:{id:brand.id,name:brand.name}}};
  const api=route({$queryRaw:async q=>{assert.ok(q.values.includes('mind'));assert.ok(q.values.includes('breath'));assert.match(q.sql,/md5/);return [{id:'breath',url:'saved-photo:fingerprint'}]},contentItem:{findFirst:async()=>item,findMany:async()=>[item]},campaign:{findMany:async q=>{assert.equal(q.where.brandId,brand.id);assert.equal(q.where.brand.organizationId,'mind');return [{id:'current'},{id:'past'}]}},mediaAsset:{findMany:async q=>{mediaQuery=q;return [asset('breath','Notice breathing',{contentItemId:'post'})]}},job:{findMany:async q=>{jobQuery=q;return []}}});
- const result=await api.POST(request());assert.equal(result.status,200);assert.equal(mediaQuery.where.organizationId,'mind');assert.deepEqual(Array.from(mediaQuery.where.campaignId.in),['current','past']);assert.equal(mediaQuery.where.status,'ready');assert.equal(mediaQuery.select.url,undefined);assert.equal(jobQuery.where.organizationId,'mind');assert.equal(result.body.post.caption,post.caption);assert.equal(result.body.brand.id,brand.id);assert.equal(result.body.sources[0].id,'breath');
+ const result=await api.POST(request());assert.equal(result.status,200);assert.equal(mediaQuery.where.organizationId,'mind');assert.deepEqual(Array.from(mediaQuery.where.campaignId.in),['current','past']);assert.deepEqual(Array.from(mediaQuery.where.status.in),['ready','superseded']);assert.equal(mediaQuery.select.url,undefined);assert.equal(jobQuery.where.organizationId,'mind');assert.equal(result.body.post.caption,post.caption);assert.equal(result.body.brand.id,brand.id);assert.equal(result.body.sources[0].id,'breath');
 });
 
 test('Rumi product drafts keep whole guitar photos visible and do not reuse hypnosis images',()=>{
@@ -135,3 +135,8 @@ test('cinematic showcase preference works for any business without replacing exp
 });
 
 test('guitar businesses use showcase even when assigned the broad music industry',()=>{assert.equal(automaticReelStyle({...brand,name:'Rumi Guitars',industry:'Music & Arts'}),'showcase');});
+
+test('previously replaced photos remain reusable while failed, deleted and foreign photos stay excluded',()=>{
+ const result=plan([asset('saved','Notice breathing',{status:'superseded'}),asset('failed','Notice breathing',{status:'failed'}),asset('deleted','Notice breathing',{status:'deleted'}),asset('foreign','Notice breathing',{status:'superseded',brandId:'other-brand'}),asset('tenant','Notice breathing',{status:'superseded',organizationId:'other-org'})]);
+ assert.deepEqual(Array.from(result.sources,s=>s.id),['saved']);
+});

@@ -93,7 +93,7 @@ export function automaticReelPlan(input: { organizationId: string; campaignId: s
   for (const word of tokens(brand.name)) headlineTopic.delete(word);
   if (holiday && !post.occasion) warnings.push("The saved holiday slot could not be identified. Choose an occasion photo before exporting.");
   const productSubject = reelProductSubject(post, brand);
-  const eligible = input.assets.filter(asset => asset.organizationId === input.organizationId && asset.brandId === brand.id && asset.status === "ready" && ["ai_image", "product_photo", "reel_scene_image"].includes(asset.kind) && !!asset.url && reelPhotoMatchesProduct(productSubject, asset) && subjectCompatible(asset, targetText) && (!holiday || (!!post.occasion && occasionMatches(asset, post.occasion))));
+  const eligible = input.assets.filter(asset => asset.organizationId === input.organizationId && asset.brandId === brand.id && ["ready", "superseded"].includes(asset.status) && ["ai_image", "product_photo", "reel_scene_image"].includes(asset.kind) && !!asset.url && reelPhotoMatchesProduct(productSubject, asset) && subjectCompatible(asset, targetText) && (!holiday || (!!post.occasion && occasionMatches(asset, post.occasion))));
   if (productSubject && !eligible.length) warnings.push(`No verified photos match ${productSubject}. Load this product’s gallery; another product will not be substituted.`);
   const used = new Set<string>();
   const sources: ReelSource[] = [];
