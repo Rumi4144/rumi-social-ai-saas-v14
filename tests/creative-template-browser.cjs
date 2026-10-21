@@ -32,15 +32,15 @@ let browser,server;const writes=[];
  for(const style of ['Modern Gradient','Framed Editorial','Geometric Focus']){
   const choice=campaign.getByRole('button',{name:new RegExp('^'+style)});await choice.click();assert.equal(await choice.getAttribute('aria-pressed'),'true');
   assert.equal(await choice.locator('svg image[href="/photo.svg"]').count(),1,'Real source image must appear once in the preview');
-  const artwork=await large.locator('svg').evaluate(node=>node.outerHTML);
+  const artwork=await large.locator('.creative-svg-preview > svg').evaluate(node=>node.outerHTML);
   assert.notEqual(artwork,previous,'The large preview must change immediately with the selected design');previous=artwork;
-  assert.equal(normalize(artwork),normalize(await choice.locator('svg').evaluate(node=>node.outerHTML)),'Large preview must match the selected card');
+  assert.equal(normalize(artwork),normalize(await choice.locator('.creative-svg-preview > svg').evaluate(node=>node.outerHTML)),'Large preview must match the selected card');
   assert.equal(await large.locator('svg image[href="/photo.svg"]').count(),1,'Keep the original photo in the large preview');
  }
  await campaign.getByRole('button',{name:/More layouts/}).click();
  for(const label of ['Classic photo overlay','Automatic variety']){
   const choice=campaign.getByRole('button',{name:new RegExp('^'+label)});await choice.click();
-  assert.equal(normalize(await large.locator('svg').evaluate(node=>node.outerHTML)),normalize(await choice.locator('svg').evaluate(node=>node.outerHTML)));
+  assert.equal(normalize(await large.locator('.creative-svg-preview > svg').evaluate(node=>node.outerHTML)),normalize(await choice.locator('.creative-svg-preview > svg').evaluate(node=>node.outerHTML)));
  }
  assert.deepEqual(writes,[],'Changing designs must not generate, save or publish anything');
  const ids=await page.locator('svg [id]').evaluateAll(nodes=>nodes.map(n=>n.id));assert.equal(new Set(ids).size,ids.length,'SVG gradient and mask IDs must be isolated between cards');
