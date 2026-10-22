@@ -8,7 +8,7 @@ import { labJobId, labRefresh, labSummary, type LabPayload } from "@/lib/ai-lab/
 import { labQuote, labSubmit, LabProviderError } from "@/lib/ai-lab/providers";
 
 export const maxDuration = 60;
-const inputSchema = z.object({ model: z.enum(["flux", "infinitetalk"]), prompt: z.string().trim().min(10).max(2000), imageAssetId: z.string().max(150).optional(), audioAssetId: z.string().max(150).optional() }).strict();
+const inputSchema = z.object({ model: z.enum(["flux", "infinitetalk", "speech"]), prompt: z.string().trim().min(10).max(2000), imageAssetId: z.string().max(150).optional(), audioAssetId: z.string().max(150).optional(), voiceId: z.enum(["Calm_Woman", "Friendly_Person", "Patient_Man"]).optional() }).strict().refine(input => input.model !== "speech" || (input.prompt.length <= 600 && Boolean(input.voiceId)), "Choose a voice and a script up to 600 characters.");
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("quote"), organizationId: z.string(), input: inputSchema }),
   z.object({ action: z.literal("generate"), organizationId: z.string(), quoteId: z.string().max(150), requestId: z.string().uuid(), acknowledge: z.literal(true) }),

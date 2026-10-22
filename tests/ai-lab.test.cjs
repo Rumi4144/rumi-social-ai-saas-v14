@@ -52,3 +52,22 @@ test('provider adapters use fixed models, live complete-input quotes and no subm
  for(const url of ['http://api.bfl.ai/v1/get_result','https://api.bfl.ai.evil.com/v1/get_result','https://api.bfl.ai/v1/other','https://user:pass@api.bfl.ai/v1/get_result'])assert.throws(()=>provider.bflPollingUrl(url));
  calls=[];const bad=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async()=>{calls.push(1);throw Error('network');}});await assert.rejects(()=>bad.labSubmit({model:'flux',prompt:'A portrait'}));assert.equal(calls.length,1);
 });
+test('speech requires an allowed preset and a bounded script before any generation',async()=>{
+ const f=fixture();
+ for(const input of [{model:'speech',prompt:'A friendly introduction'}, {model:'speech',prompt:'A friendly introduction',voiceId:'invented'}, {model:'speech',prompt:'x'.repeat(601),voiceId:'Calm_Woman'}])assert.equal((await f.post({action:'quote',input})).status,400);
+ const q=await f.post({action:'quote',input:{model:'speech',prompt:'Learn about self-hypnosis with Master Mind.',voiceId:'Calm_Woman'}});assert.equal(q.status,200);assert.equal(f.state.calls,0);await f.post(f.generate(q.body.quoteId));assert.equal(f.state.calls,1);
+});
+test('speech quote and generation preserve the exact script and share the WaveSpeed connection',async()=>{
+ const calls=[],script='Learn about self-hypnosis with Master Mind. Visit master-mind.us.';
+ const provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>url.includes('/model/price')?{code:200,data:{currency:'USD',discounted_price:.0166}}:{code:200,data:{id:'speech-task'}}};}});
+ const input={model:'speech',prompt:script,voiceId:'Calm_Woman'};
+ assert.equal(await provider.labQuote(input),.0166);await provider.labSubmit(input);
+ assert.equal(calls[0].body.model_id,'minimax/speech-02-hd');assert.equal(calls[0].body.inputs.text,script);assert.equal(calls[1].body.text,script);assert.equal(calls[1].body.voice_id,'Calm_Woman');assert.equal(calls[1].body.format,'mp3');assert.equal(calls[1].url,'https://api.wavespeed.ai/api/v3/minimax/speech-02-hd');
+});
+test('finished speech is saved privately and becomes a tenant-owned reusable audio input',async()=>{
+ const job={id:'voice-job',organizationId:'own',status:'running',createdAt:new Date(),payload:{model:'speech',prompt:'A friendly introduction',voiceId:'Calm_Woman',estimateUsd:.02,taskId:'task'}};
+ const assets=[],stored=[];let polls=0;
+ const prisma={job:{updateMany:async()=>({count:1}),update:async q=>{Object.assign(job,q.data);return job;},findUniqueOrThrow:async()=>job},mediaAsset:{upsert:async q=>{assets.push(q.create);return q.create;}}};
+ const jobs=load('lib/ai-lab/jobs.ts',{'@/lib/prisma':{prisma},'@vercel/blob':{put:async(path,bytes,options)=>stored.push({path,options})},'@/lib/reels/public-fetch':{fetchPublicBytes:async()=>({bytes:Buffer.from('mp3 audio'),contentType:'audio/mpeg'})},'./catalog':catalog,'./providers':{labPoll:async()=>{polls++;return {status:'ready',url:'https://provider.test/voice.mp3'};}}});
+ await jobs.labRefresh(job);assert.equal(job.status,'succeeded');assert.equal(stored[0].options.access,'private');assert.equal(stored[0].path,'ai-lab/own/voice-job.mp3');assert.equal(assets[0].organizationId,'own');assert.equal(assets[0].metadata.kind,'audio');assert.equal(assets[0].metadata.voiceId,'Calm_Woman');assert.equal(jobs.labSummary(job).audioAssetId,'voice-job');assert.equal(jobs.labSummary(job).kind,'audio');await jobs.labRefresh(job);assert.equal(polls,1);
+});

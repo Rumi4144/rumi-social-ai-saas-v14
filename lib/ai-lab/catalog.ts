@@ -1,9 +1,11 @@
 export const labModels = {
   flux: { name: "FLUX image", provider: "Black Forest Labs", model: "flux-3-image-klein", kind: "image", estimateUsd: 0.009, source: "https://docs.bfl.ai/flux_3/flux3_image_klein" },
   infinitetalk: { name: "InfiniteTalk Fast", provider: "WaveSpeedAI", model: "wavespeed-ai/infinitetalk-fast", kind: "video", estimateUsd: 0.225, source: "https://wavespeed.ai/models/wavespeed-ai/infinitetalk-fast" },
+  speech: { name: "AI voice", provider: "WaveSpeedAI", model: "minimax/speech-02-hd", kind: "audio", estimateUsd: 0.02, source: "https://wavespeed.ai/models/minimax/speech-02-hd" },
 } as const;
 export type LabModel = keyof typeof labModels;
-export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string; audioAssetId?: string };
+export const labVoices = { Calm_Woman: "Calm woman", Friendly_Person: "Friendly person", Patient_Man: "Patient man" } as const;
+export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string; audioAssetId?: string; voiceId?: keyof typeof labVoices };
 export function labConfigured(model: LabModel) {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN && (model === "flux" ? process.env.BFL_API_KEY : process.env.WAVESPEED_API_KEY));
 }
