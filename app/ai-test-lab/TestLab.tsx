@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import styles from "./lab.module.css";
+import PresenterGallery from "../studio/presenters/PresenterGallery";
 import { labVoices, labVoiceStyles } from "../../lib/ai-lab/catalog";
 
 type Model = { id: "flux" | "infinitetalk" | "speech" | "holding"; name: string; provider: string; model: string; kind: "image" | "video" | "audio"; configured: boolean; estimateUsd: number; source: string };
@@ -33,6 +34,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
   const [voiceId, setVoiceId] = useState<keyof typeof labVoices>("Friendly_Person");
   const [voiceEmotion, setVoiceEmotion] = useState<keyof typeof labVoiceStyles>("neutral");
   const [voiceSpeed, setVoiceSpeed] = useState(1);
+  const [gallerySelection,setGallerySelection]=useState<number|null>(null);
   const [product, setProduct] = useState<PhotoInput | null>(null);
   const [holdProduct, setHoldProduct] = useState(false), [productReviewed, setProductReviewed] = useState(false);
   const [holdingJobId, setHoldingJobId] = useState("");
@@ -89,9 +91,10 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
       if (!sent.ok) throw new Error("Upload did not finish. Choose the file again.");
       await request("/api/ai-lab/upload", { action: "complete", organizationId: lab.organizationId, assetId: ticket.assetId });
       (kind === "image" ? setImage : kind === "product" ? setProduct : setAudio)({ id: ticket.assetId, name: file.name });
-      if (kind === "image") setProductReviewed(false);
-      setMessage("Upload ready. No video generation has started.");
-    } catch (error) { setMessage((error as Error).message); }
+      if (kind === "image") {setProductReviewed(false);setGallerySelection(null);}
+      setMessage("Photo or recording ready. No paid image or video generation has started.");
+      return true;
+    } catch (error) { setMessage((error as Error).message); return false; }
     finally { setBusy(false); }
   }
   async function estimate(target: Model["id"] = model) {
@@ -154,8 +157,9 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
         {model === "infinitetalk" && <div className={styles.uploads}>
           <h2>2. Choose your presenter and voice</h2>
           <p>Choose a presenter photo you have permission to use. Type a script for an AI voice, or upload your own recording.</p>
+          {presenterMode && <PresenterGallery selected={gallerySelection} disabled={busy || active || !selected?.configured} onChoose={async(file,index)=>{const ready=await upload(file,"image");if(ready)setGallerySelection(index);return ready;}}/>}
           <label>Presenter photo<input aria-label="Presenter photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || active || !selected?.configured} onChange={e => { const file = e.target.files?.[0]; if (file) void upload(file, "image"); }}/><small>{image?.name || "JPEG, PNG or WebP · up to 10 MB"}</small></label>
-          {!!lab?.inputs?.length && <><label htmlFor="saved-presenter">Or choose a saved presenter photo</label><select id="saved-presenter" value={image?.id || ""} disabled={busy || active} onChange={e => {setImage(lab.inputs?.find(item => item.id === e.target.value) || null);setProductReviewed(false);invalidate();}}><option value="">Choose saved photo</option>{lab.inputs.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></>}
+          {!!lab?.inputs?.length && <><label htmlFor="saved-presenter">Or choose a saved presenter photo</label><select id="saved-presenter" value={image?.id || ""} disabled={busy || active} onChange={e => {setImage(lab.inputs?.find(item => item.id === e.target.value) || null);setGallerySelection(null);setProductReviewed(false);invalidate();}}><option value="">Choose saved photo</option>{lab.inputs.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></>}
           <label className={styles.consent}><input type="checkbox" checked={holdProduct} disabled={busy || active} onChange={e=>{setHoldProduct(e.target.checked);invalidate();}}/>Have the presenter hold a guitar or product</label>
           {holdProduct && <div className={styles.setup}>
             <p>Use the presenter photo above and a clear photo of the exact guitar. We prepare the holding pose here, then use it for your talking video.</p>
