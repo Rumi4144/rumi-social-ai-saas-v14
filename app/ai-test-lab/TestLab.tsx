@@ -31,6 +31,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
   const [script, setScript] = useState((initialPost?.caption || initialPost?.headline || "").slice(0,600));
   const [voiceId, setVoiceId] = useState<keyof typeof labVoices>("Calm_Woman");
   const [voiceJobId, setVoiceJobId] = useState("");
+  const [scriptSeconds, setScriptSeconds] = useState(15);
   const [compare, setCompare] = useState<string[]>([]);
   const requestId = useRef("");
   const pending = useRef(false);
@@ -110,6 +111,16 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
     catch (error) { setMessage((error as Error).message); }
     finally { setBusy(false); }
   }
+  async function createScript() {
+    if (!lab || !campaignId || !postId || busy) return;
+    setBusy(true); setMessage("Writing a presenter script from your campaign post…");
+    try {
+      const result = await request("/api/video/presenter/script", { organizationId: lab.organizationId, campaignId, contentItemId: postId, seconds: scriptSeconds });
+      setScript(result.script); setAudio(null); setVoiceJobId(""); invalidate();
+      setMessage("Script ready. Review or edit the words, then get the voice cost estimate. No voice or video has started.");
+    } catch (error) { setMessage((error as Error).message); }
+    finally { setBusy(false); }
+  }
   return <div className={styles.lab}>
     <header className={styles.header}><div><span className={styles.eyebrow}>YOUR CREATIVE WORKBENCH</span><h1>{presenterMode ? "Presenter ads" : "AI Test Lab"}</h1><p>{presenterMode ? `Create a talking-presenter ad for ${workspaceName} with the lower-cost WaveSpeed workflow.` : `Try a small sample. Compare the results. Find what works for ${workspaceName}.`}</p></div><span className={styles.badge}>{presenterMode ? "Lower-cost default" : "Experimental"}</span></header>
     <div className={styles.notice}>{presenterMode ? "Create your voice first, then approve the video estimate. Finished videos are saved to the chosen campaign post for review. Nothing publishes automatically." : "Tests stay separate from your campaigns. Each generation uses the provider’s paid balance. Nothing publishes automatically."}</div>
@@ -134,6 +145,11 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
           </div>
           {voiceMode === "upload" ? <label>Voice recording<input aria-label="Voice recording" type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/ogg,audio/webm,.m4a" disabled={busy || !selected?.configured} onChange={e => { const file = e.target.files?.[0]; if (file) void upload(file, "audio"); }}/><small>{audio?.name || "MP3, WAV, M4A, Ogg or WebM · up to 10 MB"}</small></label> : <>
             <label htmlFor="lab-script">Spoken script</label>
+            {presenterMode && <div className={styles.setup}>
+              <label htmlFor="script-length">Script length</label><select id="script-length" value={scriptSeconds} disabled={busy || active} onChange={e => setScriptSeconds(Number(e.target.value))}><option value={15}>About 15 seconds</option><option value={30}>About 30 seconds</option></select>
+              <button type="button" disabled={busy || active || !lab || !campaignId || !postId} onClick={createScript}>Create script for me</button>
+              <p className={styles.hint}>Uses your campaign post and Brand Brain. Script writing uses your connected OpenAI API balance. Review the draft before generating a voice.</p>
+            </div>}
             <textarea id="lab-script" rows={4} maxLength={600} value={script} disabled={busy} onChange={e => { setScript(e.target.value); setAudio(null); invalidate(); }} placeholder="Type the exact words your presenter should say…"/>
             <label htmlFor="lab-voice">AI voice</label>
             <select id="lab-voice" value={voiceId} disabled={busy} onChange={e => { setVoiceId(e.target.value as keyof typeof labVoices); setAudio(null); invalidate(); }}>{Object.entries(labVoices).map(([id,name]) => <option key={id} value={id}>{name}</option>)}</select>
