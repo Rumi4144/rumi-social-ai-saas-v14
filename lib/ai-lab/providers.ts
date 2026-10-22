@@ -37,8 +37,11 @@ export async function labQuote(input: LabInput, media?: { image: string; audio: 
 }
 export async function labSubmit(input: LabInput, media?: { image: string; audio: string }) {
   if (input.model === "flux") {
+    const prompt = `${input.prompt}
+
+Mobile readability guidance: If the requested image includes advertising text, design it to be read comfortably on a phone at feed size. Use a very large bold headline, large supporting text, a prominent call-to-action button, and a clearly readable website address. Use strong text/background contrast, generous line spacing and safe margins. Give the requested lettering enough space; avoid tiny lettering, dense paragraphs, condensed fonts and narrow text columns. Prefer short supporting copy only when the request allows it. Preserve all supplied exact wording and spelling; never silently shorten or omit required text. If necessary, reduce the photograph's share of the layout instead of shrinking the words. Follow any explicit text sizing or layout instructions in the request. If the request is for a clean photo, no text, or no lettering, do not add any text, buttons or website addresses.`;
     const result = await json("https://api.bfl.ai/v1/flux-3-image-klein", process.env.BFL_API_KEY!, {
-      prompt: input.prompt, aspect_ratio: "4:5", resolution: "1k", output_format: "png",
+      prompt, aspect_ratio: "4:5", resolution: "1k", output_format: "png",
     }, true);
     if (typeof result.id !== "string" || typeof result.polling_url !== "string") throw new LabProviderError(false);
     return { taskId: result.id, pollingUrl: bflPollingUrl(result.polling_url) };
