@@ -5,6 +5,16 @@ const home='https://store.example/';
 const products=[...Array.from({length:12},(_,i)=>({name:'MakerA Model A'+i,permalink:home+'product/a'+i,images:[{src:home+'a'+i+'.jpg'},{src:home+'a'+i+'-back.jpg'}]})),...['MakerB','MakerC','MakerD','MakerE','MakerF','MakerG','MakerH','MakerI','MakerJ','MakerK'].map((name,i)=>({name:name+' Model B'+i,permalink:home+'product/b'+i,images:[{src:home+'b'+i+'.jpg'}]}))];
 const fetcher=async url=>url===home?{contentType:'text/html',bytes:Buffer.from('<h1>Our store</h1><script src="/wp-content/shop.js"></script>')}:{contentType:'application/json',bytes:Buffer.from(JSON.stringify(products))};
 const mocks={'@/lib/reels/public-fetch':{fetchPublicBytes:fetcher}};
+test('WordPress storefront pages over 500 KB still reach their product catalog within a finite limit',async()=>{
+ const html='<h1>Our Store</h1><script src="/wp-content/shop.js"></script>'+ ' '.repeat(523237);
+ const helper=load('lib/campaign/website-topics.ts',{'@/lib/reels/public-fetch':{fetchPublicBytes:async(url,maxBytes)=>{
+  const bytes=Buffer.from(url===home?html:JSON.stringify(products));
+  assert.ok(maxBytes<=4_000_000);if(bytes.length>maxBytes)throw Error('page too large');
+  return {contentType:url===home?'text/html':'application/json',bytes};
+ }}});
+ const ideas=await helper.websiteBriefSuggestions('Our Store',home);
+ assert.equal(ideas.length,22);assert.equal(ideas[1].label,'MakerB Model B0');
+});
 test('full catalog topics interleave product families and retain exact product source pages',async()=>{
  const helper=load('lib/campaign/website-topics.ts',mocks);const ideas=await helper.websiteBriefSuggestions('Our Store',home);
  assert.equal(ideas.length,22);assert.equal(ideas.filter(i=>i.sourceUrl.includes('/product/')).length,22);

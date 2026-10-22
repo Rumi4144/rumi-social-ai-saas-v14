@@ -24,13 +24,14 @@ export function extractWebsiteTopics(html:string,url:string,name:string):{labels
 }
 export async function websiteBriefSuggestions(name:string,website:string):Promise<BriefSuggestion[]> {
   const home=new URL(/^https?:\/\//i.test(website)?website:`https://${website}`);
-  const root=await fetchPublicBytes(home.href,500_000);
+  // WordPress storefronts include substantial theme markup; match the photo reader's bounded limit.
+  const root=await fetchPublicBytes(home.href,1_000_000);
   if(!/text\/html|application\/xhtml/i.test(root.contentType))throw new Error("Website topics require a public HTML page.");
   const first=extractWebsiteTopics(root.bytes.toString("utf8"),home.href,name);
   const catalog=await websiteCatalog(home.href,root.bytes.toString("utf8"));
   const records=catalog.length ? catalog.map(item=>({label:item.label,sourceUrl:item.sourceUrl})) : first.labels.map(label=>({label,sourceUrl:home.href}));
   const pages=catalog.length ? [] : await Promise.allSettled(first.links.map(async url=>{
-    const page=await fetchPublicBytes(url,500_000);if(!/text\/html|application\/xhtml/i.test(page.contentType))return [];
+    const page=await fetchPublicBytes(url,1_000_000);if(!/text\/html|application\/xhtml/i.test(page.contentType))return [];
     return extractWebsiteTopics(page.bytes.toString("utf8"),url,name).labels.map(label=>({label,sourceUrl:url}));
   }));
   for(const page of pages)if(page.status==="fulfilled")records.push(...page.value);
