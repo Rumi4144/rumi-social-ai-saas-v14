@@ -17,6 +17,7 @@ export function labSummary(job: Job) {
   return { id: job.id, status: job.status, model: payload.model, prompt: payload.prompt, kind: labModels[payload.model].kind,
     estimateUsd: payload.estimateUsd, error: job.error, createdAt: job.createdAt,
     voiceId: payload.voiceId,
+    imageAssetId: payload.model === "holding" && job.status === "succeeded" ? job.id : null,
     audioAssetId: payload.model === "speech" && job.status === "succeeded" ? job.id : null,
     campaignId: detached ? undefined : payload.campaignId, contentItemId: detached ? undefined : payload.contentItemId,
     url: job.status === "succeeded" ? `/api/ai-lab/file?jobId=${job.id}` : null };
@@ -44,8 +45,12 @@ export async function labRefresh(job: Job) {
         id: job.id, organizationId: job.organizationId, kind: "ai_lab_input", provider: "wavespeed", status: "ready", url: result.url,
         metadata: { kind: "audio", contentType, voiceId: payload.voiceId!, source: "generated_speech" },
       } });
+      if (payload.model === "holding") await prisma.mediaAsset.upsert({ where: { id: job.id }, update: {}, create: {
+        id: job.id, organizationId: job.organizationId, kind: "ai_lab_input", provider: "wavespeed", status: "ready", url: result.url,
+        metadata: { kind: "image", contentType, source: "generated_holding", filename: "Prepared product presenter" },
+      } });
       let attachmentError: string | null = null;
-      if (!audio && payload.campaignId && payload.contentItemId) {
+      if (!audio && payload.model !== "holding" && payload.campaignId && payload.contentItemId) {
         const post = await prisma.contentItem.findFirst({ where: { id: payload.contentItemId, campaignId: payload.campaignId, campaign: { brand: { organizationId: job.organizationId } } }, select: { id: true } });
         if (!post) attachmentError = "Your sample is saved and can be downloaded. Its campaign post was removed, so it was not attached to a post.";
         else await prisma.mediaAsset.upsert({ where: { id: job.id }, update: {}, create: {

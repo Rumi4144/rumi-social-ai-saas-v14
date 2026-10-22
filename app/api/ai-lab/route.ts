@@ -8,7 +8,7 @@ import { labJobId, labRefresh, labSummary, type LabPayload } from "@/lib/ai-lab/
 import { labQuote, labSubmit, LabProviderError } from "@/lib/ai-lab/providers";
 
 export const maxDuration = 60;
-const inputSchema = z.object({ model: z.enum(["flux", "infinitetalk", "speech"]), prompt: z.string().trim().min(10).max(2000), imageAssetId: z.string().max(150).optional(), audioAssetId: z.string().max(150).optional(), voiceId: z.enum(["Calm_Woman", "Friendly_Person", "Patient_Man"]).optional(), campaignId: z.string().min(1).max(150).optional(), contentItemId: z.string().min(1).max(150).optional() }).strict().refine(input => input.model !== "speech" || (input.prompt.length <= 600 && Boolean(input.voiceId)), "Choose a voice and a script up to 600 characters.").refine(input => Boolean(input.campaignId) === Boolean(input.contentItemId), "Choose both a campaign and post.");
+const inputSchema = z.object({ model: z.enum(["flux", "infinitetalk", "speech", "holding"]), prompt: z.string().trim().min(10).max(2000), imageAssetId: z.string().max(150).optional(), audioAssetId: z.string().max(150).optional(), productAssetId: z.string().max(150).optional(), productReviewed: z.boolean().optional(), voiceId: z.enum(["Calm_Woman", "Friendly_Person", "Patient_Man"]).optional(), campaignId: z.string().min(1).max(150).optional(), contentItemId: z.string().min(1).max(150).optional() }).strict().refine(input => input.model !== "speech" || (input.prompt.length <= 600 && Boolean(input.voiceId)), "Choose a voice and a script up to 600 characters.").refine(input => Boolean(input.campaignId) === Boolean(input.contentItemId), "Choose both a campaign and post.");
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("quote"), organizationId: z.string(), input: inputSchema }),
   z.object({ action: z.literal("generate"), organizationId: z.string(), quoteId: z.string().max(150), requestId: z.string().uuid(), acknowledge: z.literal(true) }),
@@ -19,9 +19,15 @@ async function inputMedia(org: string, input: LabInput) {
     const post = await prisma.contentItem.findFirst({ where: { id: input.contentItemId, campaignId: input.campaignId, campaign: { brand: { organizationId: org } } }, select: { id: true } });
     if (!post) throw new Error("Campaign post not found in this workspace.");
   }
-  if (input.model !== "infinitetalk") return undefined;
-  const assets = await prisma.mediaAsset.findMany({ where: { organizationId: org, id: { in: [input.imageAssetId || "", input.audioAssetId || ""] }, kind: "ai_lab_input", status: "ready", createdAt: { gt: new Date(Date.now() - 6 * 86400000) } } });
+  if (!["infinitetalk", "holding"].includes(input.model)) return undefined;
+  const assets = await prisma.mediaAsset.findMany({ where: { organizationId: org, id: { in: [input.imageAssetId || "", input.model === "holding" ? input.productAssetId || "" : input.audioAssetId || ""] }, kind: "ai_lab_input", status: "ready", createdAt: { gt: new Date(Date.now() - 6 * 86400000) } } });
   const image = assets.find(a => a.id === input.imageAssetId && (a.metadata as {kind?:string})?.kind === "image");
+  if (input.model === "holding") {
+    const product = assets.find(a => a.id === input.productAssetId && (a.metadata as {kind?:string})?.kind === "image");
+    if (!image?.url || !product?.url || image.id === product.id) throw new Error("Choose two current image references from this workspace.");
+    return { image: image.url, product: product.url };
+  }
+  if ((image?.metadata as {source?:string})?.source === "generated_holding" && input.productReviewed !== true) throw new Error("Review the prepared product photo before creating a video.");
   const audio = assets.find(a => a.id === input.audioAssetId && (a.metadata as {kind?:string})?.kind === "audio");
   if (!image?.url || !audio?.url) throw new Error("Choose a current presenter photo and voice recording from this workspace.");
   return { image: image.url, audio: audio.url };
@@ -31,7 +37,8 @@ export async function GET() {
     const ctx = await tenantContext();
     if (!labCanRun(ctx.role)) throw new Error("FORBIDDEN");
     const jobs = await prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: "AI_LAB" }, orderBy: { createdAt: "desc" }, take: 30 });
-    return NextResponse.json({ organizationId: ctx.organizationId, dailyLimitUsd: labDailyLimit(), models: Object.entries(labModels).map(([id, model]) => ({ id, ...model, configured: labConfigured(id as LabInput["model"]) })), jobs: jobs.map(labSummary) }, { headers: { "Cache-Control": "no-store" } });
+    const inputs = await prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, kind: "ai_lab_input", status: "ready", createdAt: { gt: new Date(Date.now() - 6 * 86400000) } }, orderBy: { createdAt: "desc" }, take: 40 });
+    return NextResponse.json({ inputs: inputs.filter(asset => (asset.metadata as {kind?:string})?.kind === "image").map(asset => ({id:asset.id, name:(asset.metadata as {filename?:string})?.filename || ((asset.metadata as {source?:string})?.source === "generated_holding" ? "Prepared product presenter" : "Saved presenter or product photo"), needsReview:(asset.metadata as {source?:string})?.source === "generated_holding" })), organizationId: ctx.organizationId, dailyLimitUsd: labDailyLimit(), models: Object.entries(labModels).map(([id, model]) => ({ id, ...model, configured: labConfigured(id as LabInput["model"]) })), jobs: jobs.map(labSummary) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiError(error, "Could not open the test lab."); }
 }
 export async function POST(req: Request) {

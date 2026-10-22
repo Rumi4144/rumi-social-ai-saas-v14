@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       const recent = await prisma.mediaAsset.count({ where: { organizationId: ctx.organizationId, kind: "ai_lab_input", createdAt: { gt: new Date(Date.now() - 86400000) } } });
       if (recent >= 20) return NextResponse.json({ error: "Today's upload allowance is used." }, { status: 429 });
       const ticket = await labUploadTicket(p.filename, p.size, p.contentType);
-      const asset = await prisma.mediaAsset.create({ data: { organizationId: ctx.organizationId, kind: "ai_lab_input", provider: "wavespeed", status: "uploading", url: ticket.download_url, metadata: { kind: p.contentType.startsWith("image/") ? "image" : "audio", size: p.size, contentType: p.contentType } } });
+      const asset = await prisma.mediaAsset.create({ data: { organizationId: ctx.organizationId, kind: "ai_lab_input", provider: "wavespeed", status: "uploading", url: ticket.download_url, metadata: { filename: p.filename, kind: p.contentType.startsWith("image/") ? "image" : "audio", size: p.size, contentType: p.contentType } } });
       return NextResponse.json({ assetId: asset.id, upload: ticket.upload });
     }
     const asset = await prisma.mediaAsset.findFirst({ where: { id: p.assetId, organizationId: ctx.organizationId, kind: "ai_lab_input", status: "uploading", createdAt: { gt: new Date(Date.now() - 3600000) } } });

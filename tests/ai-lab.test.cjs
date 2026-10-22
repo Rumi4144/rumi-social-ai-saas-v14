@@ -2,10 +2,10 @@ const {test}=require('node:test'), assert=require('node:assert/strict'), fs=requ
 function load(file,deps={},extra={}){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module,exports:module.exports,require:n=>n in deps?deps[n]:require(n),URL,Date,process,AbortSignal,console,...extra});return module.exports;}
 const catalog=load('lib/ai-lab/catalog.ts');
 function fixture(){
- const state={jobs:new Map(),org:'own',role:'owner',calls:0,fail:null,quoteCost:.009,saveFailure:false,foreignPost:false};
+ const state={jobs:new Map(),org:'own',role:'owner',calls:0,fail:null,quoteCost:.009,saveFailure:false,foreignPost:false,assets:[]};
  const matches=(j,w)=>j&&(!w.id||j.id===w.id)&&(!w.organizationId||j.organizationId===w.organizationId)&&(!w.type||j.type===w.type)&&(!w.status||(w.status.in?w.status.in.includes(j.status):j.status===w.status))&&(!w.createdAt?.gt||j.createdAt>w.createdAt.gt)&&(!w.createdAt?.gte||j.createdAt>=w.createdAt.gte);
  const job={findFirst:async q=>[...state.jobs.values()].find(j=>matches(j,q.where))||null,findMany:async q=>[...state.jobs.values()].filter(j=>matches(j,q.where)),create:async q=>{const item={id:q.data.id||'quote-'+state.jobs.size,createdAt:new Date(),error:null,...q.data};if(state.jobs.has(item.id))throw Error('duplicate');state.jobs.set(item.id,item);return item;},updateMany:async q=>{const item=state.jobs.get(q.where.id);if(!matches(item,q.where))return {count:0};Object.assign(item,q.data);return {count:1};},update:async q=>{if(state.saveFailure){state.saveFailure=false;throw Error('temporary database failure');}const item=state.jobs.get(q.where.id);Object.assign(item,q.data);return item;}};
- const prisma={job,contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,state.org);return state.foreignPost?null:{id:q.where.id};}},mediaAsset:{findMany:async()=>[]}};let tail=Promise.resolve();prisma.$transaction=(fn,opts)=>{assert.equal(opts.isolationLevel,'Serializable');const run=tail.then(async()=>{const snapshot=structuredClone(state.jobs);try{return await fn(prisma);}catch(e){state.jobs=snapshot;throw e;}});tail=run.catch(()=>{});return run;};
+ const prisma={job,contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,state.org);return state.foreignPost?null:{id:q.where.id};}},mediaAsset:{findMany:async q=>state.assets.filter(a=>a.organizationId===q.where.organizationId && a.kind===q.where.kind && a.status===q.where.status && a.createdAt>q.where.createdAt.gt && (!q.where.id || q.where.id.in.includes(a.id))) }};let tail=Promise.resolve();prisma.$transaction=(fn,opts)=>{assert.equal(opts.isolationLevel,'Serializable');const run=tail.then(async()=>{const snapshot=structuredClone(state.jobs);try{return await fn(prisma);}catch(e){state.jobs=snapshot;throw e;}});tail=run.catch(()=>{});return run;};
  class ProviderError extends Error{constructor(definitive){super();this.definitive=definitive;}}
  const jobs={labJobId:(org,id)=>org+id,labSummary:j=>({id:j.id,status:j.status,error:j.error,estimateUsd:j.payload.estimateUsd}),labRefresh:async j=>j};
  const api=load('app/api/ai-lab/route.ts',{'next/server':{NextResponse:{json:(body,opts)=>({body,status:opts?.status||200})}},'@/lib/prisma':{prisma},'@/lib/auth/context':{tenantContext:async()=>({organizationId:state.org,role:state.role})},'@/lib/http/errors':{apiError:e=>({status:e.message==='FORBIDDEN'?403:500})},'@/lib/ai-lab/catalog':{...catalog,labConfigured:()=>true},'@/lib/ai-lab/jobs':jobs,'@/lib/ai-lab/providers':{LabProviderError:ProviderError,labQuote:async()=>state.quoteCost,labSubmit:async()=>{state.calls++;if(state.fail)throw state.fail;return {taskId:'task'};}}});
@@ -87,4 +87,38 @@ test('campaign presenter is saved as reviewable video; deleted destination prese
   if(deleted){assert.equal(assets.length,0);assert.equal(jobs.labSummary(job).campaignId,undefined);assert.match(job.error,/sample is saved/);}
   else{assert.equal(assets[0].kind,'campaign_video');assert.equal(assets[0].provider,'wavespeed');assert.equal(assets[0].campaignId,'campaign');assert.equal(assets[0].metadata.pathname,'ai-lab/own/video-job.mp4');assert.equal(assets[0].metadata.duration,15);assert.equal(assets[0].metadata.publishMode,'review');}
  }
+});
+
+test('product preparation uses two owned current image references and rechecks them before spending',async()=>{
+ const f=fixture();const img=(id,overrides={})=>({id,organizationId:'own',kind:'ai_lab_input',status:'ready',createdAt:new Date(),metadata:{kind:'image'},url:'https://provider.test/'+id+'.png',...overrides});
+ f.state.assets=[img('presenter'),img('product',{organizationId:'foreign'})];
+ const input={model:'holding',prompt:'Hold this exact guitar naturally.',imageAssetId:'presenter',productAssetId:'product'};
+ assert.equal((await f.post({action:'quote',input})).status,422);assert.equal(f.state.calls,0);
+ f.state.assets[1]=img('product',{createdAt:new Date(Date.now()-7*86400000)});assert.equal((await f.post({action:'quote',input})).status,422);
+ f.state.assets[1]=img('product');const quote=await f.post({action:'quote',input});assert.equal(quote.status,200);
+ f.state.assets[1].status='deleted';assert.equal((await f.post(f.generate(quote.body.quoteId))).status,500);assert.equal(f.state.calls,0);
+ f.state.assets[1].status='ready';assert.equal((await f.post(f.generate(quote.body.quoteId))).status,200);assert.equal(f.state.calls,1);
+});
+test('prepared holding photos require explicit product review before video quotes',async()=>{
+ const f=fixture();f.state.assets=[{id:'image',organizationId:'own',kind:'ai_lab_input',status:'ready',createdAt:new Date(),metadata:{kind:'image',source:'generated_holding'},url:'https://provider.test/image.png'},{id:'audio',organizationId:'own',kind:'ai_lab_input',status:'ready',createdAt:new Date(),metadata:{kind:'audio'},url:'https://provider.test/audio.mp3'}];
+ const input={model:'infinitetalk',prompt:'Friendly natural delivery.',imageAssetId:'image',audioAssetId:'audio'};
+ assert.equal((await f.post({action:'quote',input})).status,422);
+ assert.equal((await f.post({action:'quote',input:{...input,productReviewed:true}})).status,200);assert.equal(f.state.calls,0);
+});
+test('holding adapter quotes and submits the identical two-reference FLUX edit without OpenAI or Runway',async()=>{
+ const calls=[];const provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>url.includes('/model/price')?{code:200,data:{currency:'USD',discounted_price:.012}}:{code:200,data:{id:'holding-task'}}};}});
+ const input={model:'holding',prompt:'Natural relaxed pose.'},media={image:'https://provider.test/presenter.png',product:'https://provider.test/guitar.png'};
+ assert.equal(await provider.labQuote(input,media),.012);assert.equal((await provider.labSubmit(input,media)).taskId,'holding-task');
+ assert.equal(calls[0].body.model_id,'wavespeed-ai/flux-2-klein-4b/edit');assert.match(calls[1].url,/wavespeed-ai\/flux-2-klein-4b\/edit$/);assert.deepEqual(calls[0].body.inputs,calls[1].body);assert.equal(calls[1].body.images[0],media.image);assert.equal(calls[1].body.images[1],media.product);assert.match(calls[1].body.prompt,/headstock/);assert.equal(calls.length,2);
+});
+test('finished holding image is private, reusable and remains separate from the campaign product photo',async()=>{
+ const job={id:'holding-job',organizationId:'own',status:'running',updatedAt:new Date(0),payload:{model:'holding',prompt:'Hold the guitar.',taskId:'task',estimateUsd:.012,campaignId:'campaign',contentItemId:'post'}};const assets=[];
+ const prisma={job:{updateMany:async()=>({count:1}),update:async q=>Object.assign(job,q.data),findUniqueOrThrow:async()=>job},mediaAsset:{upsert:async q=>{assets.push(q.create);return q.create;}}};
+ const jobs=load('lib/ai-lab/jobs.ts',{'@/lib/video/mp4':{},'@/lib/prisma':{prisma},'@vercel/blob':{put:async(path)=>assert.equal(path,'ai-lab/own/holding-job.png')},'@/lib/reels/public-fetch':{fetchPublicBytes:async()=>({bytes:Buffer.from('fixture'),contentType:'image/png'})},'./catalog':catalog,'./providers':{labPoll:async()=>({status:'ready',url:'https://provider.test/holding.png'})}});
+ await jobs.labRefresh(job);assert.equal(job.status,'succeeded');assert.equal(assets.length,1);assert.equal(assets[0].kind,'ai_lab_input');assert.equal(assets[0].metadata.source,'generated_holding');assert.equal(assets[0].campaignId,undefined);assert.equal(jobs.labSummary(job).imageAssetId,'holding-job');
+});
+test('saved photo picker exposes only ready unexpired images in the active workspace',async()=>{
+ const f=fixture();const base={organizationId:'own',kind:'ai_lab_input',status:'ready',createdAt:new Date(),metadata:{kind:'image',filename:'My presenter.jpg'}};
+ f.state.assets=[{...base,id:'own-photo'},{...base,id:'other-photo',organizationId:'foreign'},{...base,id:'old-photo',createdAt:new Date(Date.now()-7*86400000)},{...base,id:'unfinished',status:'uploading'},{...base,id:'audio',metadata:{kind:'audio'}}];
+ const result=await f.api.GET();assert.equal(result.status,200);assert.equal(result.body.inputs.length,1);assert.equal(result.body.inputs[0].id,'own-photo');assert.equal(result.body.inputs[0].name,'My presenter.jpg');assert.equal(result.body.inputs[0].url,undefined);
 });
