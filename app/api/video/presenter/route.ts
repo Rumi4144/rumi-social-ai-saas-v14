@@ -8,14 +8,14 @@ import { presenterCost, presenterConcept, PRESENTER_LOOKS } from "@/lib/presente
 import { startPresenter, type PresenterPayload } from "@/lib/presenter/jobs";
 import { failVideo, refreshVideo, videoSummary } from "@/lib/video/jobs";
 export const maxDuration=60;
-const S=z.object({requestId:z.string().uuid(),campaignId:z.string().min(1),contentItemId:z.string().min(1),productId:z.string().optional(),productImage:z.string().max(2_000_000).optional(),productName:z.string().trim().min(1).max(180),productDetails:z.string().max(8000).default(""),characterImage:z.string().max(2_000_000).optional(),delivery:z.enum(["natural","spanish","relaxed","british","australian","french","persian","cowboy","newyork"]).default("natural"),look:z.enum(["woman","man","neutral"]).default("neutral"),script:z.string().trim().min(10).max(500),duration:z.union([z.literal(5),z.literal(10),z.literal(15)]).default(10),consent:z.literal(true)});
+const S=z.object({provider:z.literal("runway"),requestId:z.string().uuid(),campaignId:z.string().min(1),contentItemId:z.string().min(1),productId:z.string().optional(),productImage:z.string().max(2_000_000).optional(),productName:z.string().trim().min(1).max(180),productDetails:z.string().max(8000).default(""),characterImage:z.string().max(2_000_000).optional(),delivery:z.enum(["natural","spanish","relaxed","british","australian","french","persian","cowboy","newyork"]).default("natural"),look:z.enum(["woman","man","neutral"]).default("neutral"),script:z.string().trim().min(10).max(500),duration:z.union([z.literal(5),z.literal(10),z.literal(15)]).default(10),consent:z.literal(true)});
 const reply=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{"Cache-Control":"no-store"}});
 const summary=(job:Parameters<typeof videoSummary>[0])=>({...videoSummary(job),campaignId:(job.payload as unknown as PresenterPayload).campaignId,contentItemId:(job.payload as unknown as PresenterPayload).contentItemId});
 const isPresenter=(payload:unknown)=>(payload as {mode?:string})?.mode==="presenter";
 export async function POST(req:Request){try{
  const ctx=await tenantContext();if(ctx.role==="viewer")return reply({error:"Your workspace role cannot generate videos."},403);
  if(Number(req.headers.get("content-length"))>4_100_000)return reply({error:"Use reference photos under 1 MB each."},413);
- const parsed=S.safeParse(await req.json());if(!parsed.success)return reply({error:"Choose a campaign post and product photo, add a script and confirm the cost."},400);const p=parsed.data;
+ const parsed=S.safeParse(await req.json());if(!parsed.success)return reply({error:"For premium Runway generation, explicitly choose Runway, select a campaign post and photo, add a script and confirm its cost."},400);const p=parsed.data;
  const existing=await prisma.job.findFirst({where:{id:p.requestId,organizationId:ctx.organizationId,type:"RUNWAY_VIDEO"}});
  if(existing)return isPresenter(existing.payload)?reply({job:summary(existing)}):reply({error:"This request ID belongs to another video."},409);
  if(!runwayConfigured())return reply({error:"Connect Runway and private video storage before generating. No credits were charged."},503);

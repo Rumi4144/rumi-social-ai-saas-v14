@@ -10,7 +10,7 @@ export async function videoBytes(asset: { url: string | null; metadata: unknown;
   const metadata = asset.metadata as { pathname?: string; contentType?: string } | null;
   const pathname = metadata?.pathname;
   // Generated clips must come from this workspace's private store.
-  if (!pathname || (pathname !== `runway/${asset.organizationId}/${asset.id}.mp4` && (!asset.contentItemId || !privateReelPath(pathname, asset.organizationId, asset.contentItemId)))) throw new Error("Video storage unavailable.");
+  if (!pathname || (pathname !== `runway/${asset.organizationId}/${asset.id}.mp4` && pathname !== `ai-lab/${asset.organizationId}/${asset.id}.mp4` && (!asset.contentItemId || !privateReelPath(pathname, asset.organizationId, asset.contentItemId)))) throw new Error("Video storage unavailable.");
   const stored = await get(pathname, { access: "private" });
   if (stored?.statusCode !== 200 || stored.blob.size > 100_000_000) throw new Error("Video unavailable.");
   const bytes = Buffer.from(await new Response(stored.stream).arrayBuffer());

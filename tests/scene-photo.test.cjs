@@ -8,6 +8,7 @@ function fixture(){
  const api=load('app/api/reels/scene-photo/route.ts',{
   'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},'@/lib/prisma':{prisma},
   '@/lib/auth/context':{tenantContext:async()=>({organizationId:state.org,role:state.role})},'@/lib/http/errors':{apiError:error=>({status:error.message==='FORBIDDEN'?403:500,body:{error:error.message}})},
+  '@/lib/ai/image-provider':{imageConfiguration:()=>({provider:'bfl',model:'flux-3-image-klein'}),generateImage:async input=>{state.requests ||= new Set();if(!state.requests.has(input.requestId)){state.calls++;state.requests.add(input.requestId);}state.prompt=input.prompt;state.options={maxRetries:0};if(state.fail)throw state.fail;return {base64:'aW1hZ2U=',provider:'bfl',model:'flux-3-image-klein'};}},
   openai:class {constructor(options){state.options=options;}images={generate:async input=>{state.calls++;state.prompt=input.prompt;if(state.fail)throw state.fail;return {data:[{b64_json:'aW1hZ2U='}]};}}},
  });
  const body={organizationId:'own',campaignId:'campaign',contentItemId:'post',sceneId:'scene1',sceneNumber:1,requestId:'12345678-1234-4234-8234-123456789abc',direction:'Close-up of hands beside a closed laptop in soft natural light.'};

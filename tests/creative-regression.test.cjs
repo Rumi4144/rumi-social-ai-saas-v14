@@ -74,7 +74,7 @@ test('regeneration rejects another tenant before making image-provider request',
   let calls = 0;
   class OpenAI { constructor() { calls++; } }
   const route = load('app/api/creative/generate-image/route.ts', { 'next/server': response, openai: OpenAI, '@/lib/auth/context': { tenantContext: async () => ({ organizationId: 'own-org' }) }, '@/lib/prisma': { prisma: { contentItem: { findFirst: async q => { assert.equal(q.where.campaign.brand.organizationId, 'own-org'); return null; } } } } });
-  const result = await route.POST({ json: async () => ({ campaignId: 'other-campaign', contentItemId: 'other-item', prompt: 'Generate a fresh subject.' }) });
+  const result = await route.POST({ json: async () => ({ requestId:'12345678-1234-4234-8234-123456789abc', campaignId: 'other-campaign', contentItemId: 'other-item', prompt: 'Generate a fresh subject.' }) });
   assert.equal(result.status, 404); assert.equal(calls, 0);
 });
 

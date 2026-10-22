@@ -1,6 +1,12 @@
 # AI Test Lab
 
-`/ai-test-lab` is a separate owner/administrator test area. It does not change campaign defaults or publish samples. The sidebar link is available in the normal app navigation; non-administrators see an explanation rather than paid controls.
+`/ai-test-lab` is a separate owner/administrator test area. It does not publish samples. The sidebar link is available in the normal app navigation; non-administrators see an explanation rather than paid controls.
+
+## Ad creation defaults
+
+Campaign images, manual photo regeneration, and reel scene photos default to BFL FLUX 3 Image Klein at 1K. `IMAGE_PROVIDER` defaults to `bfl`; setting it explicitly to `openai` selects the previous image provider. Missing credentials never trigger a paid fallback. Existing Rumi image credit behavior is preserved. Provider tasks are retained so status/download retries reuse the purchased image.
+
+`/studio/presenters` defaults to the WaveSpeed workflow for owners and administrators, with a campaign/post selector, typed-script voice preview or uploaded recording, and separate explicit provider-cost approvals. Finished clips are saved as campaign media and can be selected for the post or opened in the reel editor. Nothing is automatically published. This direct-provider workflow uses the same daily estimate allowance as the lab and does not deduct additional Rumi generation credits. Runway product demonstrations remain available through the explicitly labeled premium option (`?provider=runway`); the legacy API requires that provider selection. Other cinematic Runway video tools keep their existing behavior.
 
 ## Setup
 

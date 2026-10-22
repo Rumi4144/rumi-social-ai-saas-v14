@@ -5,7 +5,7 @@ export const labModels = {
 } as const;
 export type LabModel = keyof typeof labModels;
 export const labVoices = { Calm_Woman: "Calm woman", Friendly_Person: "Friendly person", Patient_Man: "Patient man" } as const;
-export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string; audioAssetId?: string; voiceId?: keyof typeof labVoices };
+export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string; audioAssetId?: string; voiceId?: keyof typeof labVoices; campaignId?: string; contentItemId?: string };
 export function labConfigured(model: LabModel) {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN && (model === "flux" ? process.env.BFL_API_KEY : process.env.WAVESPEED_API_KEY));
 }

@@ -8,13 +8,17 @@ import { labJobId, labRefresh, labSummary, type LabPayload } from "@/lib/ai-lab/
 import { labQuote, labSubmit, LabProviderError } from "@/lib/ai-lab/providers";
 
 export const maxDuration = 60;
-const inputSchema = z.object({ model: z.enum(["flux", "infinitetalk", "speech"]), prompt: z.string().trim().min(10).max(2000), imageAssetId: z.string().max(150).optional(), audioAssetId: z.string().max(150).optional(), voiceId: z.enum(["Calm_Woman", "Friendly_Person", "Patient_Man"]).optional() }).strict().refine(input => input.model !== "speech" || (input.prompt.length <= 600 && Boolean(input.voiceId)), "Choose a voice and a script up to 600 characters.");
+const inputSchema = z.object({ model: z.enum(["flux", "infinitetalk", "speech"]), prompt: z.string().trim().min(10).max(2000), imageAssetId: z.string().max(150).optional(), audioAssetId: z.string().max(150).optional(), voiceId: z.enum(["Calm_Woman", "Friendly_Person", "Patient_Man"]).optional(), campaignId: z.string().min(1).max(150).optional(), contentItemId: z.string().min(1).max(150).optional() }).strict().refine(input => input.model !== "speech" || (input.prompt.length <= 600 && Boolean(input.voiceId)), "Choose a voice and a script up to 600 characters.").refine(input => Boolean(input.campaignId) === Boolean(input.contentItemId), "Choose both a campaign and post.");
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("quote"), organizationId: z.string(), input: inputSchema }),
   z.object({ action: z.literal("generate"), organizationId: z.string(), quoteId: z.string().max(150), requestId: z.string().uuid(), acknowledge: z.literal(true) }),
   z.object({ action: z.literal("refresh"), organizationId: z.string(), jobId: z.string().max(150) }),
 ]);
 async function inputMedia(org: string, input: LabInput) {
+  if (input.campaignId && input.contentItemId) {
+    const post = await prisma.contentItem.findFirst({ where: { id: input.contentItemId, campaignId: input.campaignId, campaign: { brand: { organizationId: org } } }, select: { id: true } });
+    if (!post) throw new Error("Campaign post not found in this workspace.");
+  }
   if (input.model !== "infinitetalk") return undefined;
   const assets = await prisma.mediaAsset.findMany({ where: { organizationId: org, id: { in: [input.imageAssetId || "", input.audioAssetId || ""] }, kind: "ai_lab_input", status: "ready", createdAt: { gt: new Date(Date.now() - 6 * 86400000) } } });
   const image = assets.find(a => a.id === input.imageAssetId && (a.metadata as {kind?:string})?.kind === "image");

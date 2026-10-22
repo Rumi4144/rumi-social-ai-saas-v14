@@ -1,7 +1,8 @@
 import {saveGeneratedPhoto} from "@/lib/creative/image-history";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import OpenAI from "openai";
+import {generateImage, ImagePendingError} from "@/lib/ai/image-provider";
+export const maxDuration=180;
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 import { occasionVisualConcept, savedPostOccasion } from "@/lib/ai/occasion";
@@ -10,6 +11,7 @@ import { buildVisualConcept } from "@/lib/ai/visual-plan";
 import { recentBrandConcepts } from "@/lib/ai/visual-history";
 
 const S = z.object({
+  requestId: z.string().uuid(),
   campaignId: z.string().optional(),
   contentItemId: z.string().optional(),
   prompt: z.string().min(10),
@@ -19,6 +21,7 @@ const S = z.object({
 export async function POST(req: Request) {
   try {
     const ctx = await tenantContext();
+    if (ctx.role === "viewer") return NextResponse.json({error:"FORBIDDEN"},{status:403});
 
     const p = S.safeParse(await req.json());
 
@@ -49,36 +52,8 @@ export async function POST(req: Request) {
     const concept = occasion ? occasionVisualConcept(occasion) : buildVisualConcept({ businessContext, variationIndex: recentConcepts.length, recentConcepts });
     const prompt = buildVisualDirection({ brand, businessContext, occasion, campaignGoal: contentItem.campaign.goal, headline: contentItem.headline, contentType: contentItem.type, platform: contentItem.platform, visualDirection: p.data.prompt, visualConcept: concept, recentConcepts, variationIndex: recentConcepts.length });
 
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: "OPENAI_API_KEY_MISSING" },
-        { status: 500 }
-      );
-    }
-
-    const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-
-    const size =
-      p.data.format === "square"
-        ? "1024x1024"
-        : "1024x1536";
-
-    const result = await client.images.generate({
-      model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
-      prompt,
-      size,
-      quality: "medium",
-      output_format: "png",
-      n: 1,
-    });
-
-    const base64 = result.data?.[0]?.b64_json;
-
-    if (!base64) {
-      throw new Error("IMAGE_GENERATION_EMPTY");
-    }
+    const generated = await generateImage({organizationId:ctx.organizationId,requestId:`manual:${p.data.contentItemId}:${p.data.requestId}`,prompt,requestDescription:p.data.prompt,format:p.data.format});
+    const base64=generated.base64;
 
     const dataUrl = `data:image/png;base64,${base64}`;
 
@@ -87,14 +62,14 @@ export async function POST(req: Request) {
       campaignId: p.data.campaignId,
       contentItemId: p.data.contentItemId,
       kind: "ai_image",
-      provider: "openai",
+      provider: generated.provider,
       status: "ready",
       url: dataUrl,
       prompt,
       metadata: {
-        model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
+        model: generated.model,
         format: p.data.format,
-        size,
+        ...(generated.size ? {size:generated.size} : {}),
         subjectCategory: concept.subjectCategory,
         occasion: occasion || null,
       },
@@ -115,6 +90,7 @@ export async function POST(req: Request) {
       format: p.data.format,
     });
   } catch (e) {
+    if(e instanceof ImagePendingError)return NextResponse.json({error:e.message},{status:409});
     const message =
       e instanceof Error ? e.message : "IMAGE_GENERATION_FAILED";
 

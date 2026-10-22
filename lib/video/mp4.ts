@@ -2,6 +2,17 @@ type Box={type:string;start:number;end:number;payload:number};
 const u32=(b:Uint8Array,p:number)=>b[p]*16777216+b[p+1]*65536+b[p+2]*256+b[p+3];
 const tag=(b:Uint8Array,p:number)=>String.fromCharCode(...b.subarray(p,p+4));
 const invalid=()=>new Error('This MP4 has no complete recorded video. Export the reel again from its photos before saving or posting.');
+/** Read a finite movie-header duration when the encoder provides one. */
+export function mp4Duration(bytes:Uint8Array):number|undefined{
+ try{
+  const moov=boxes(bytes,0,bytes.length).find(box=>box.type==='moov');if(!moov)return;
+  const header=boxes(bytes,moov.payload,moov.end).find(box=>box.type==='mvhd');if(!header)return;
+  const v1=bytes[header.payload]===1,scaleOffset=header.payload+(v1?20:12),durationOffset=scaleOffset+4;
+  if(durationOffset+(v1?8:4)>header.end)return;
+  const scale=u32(bytes,scaleOffset),duration=v1?u32(bytes,durationOffset)*4294967296+u32(bytes,durationOffset+4):u32(bytes,durationOffset);
+  const seconds=duration/scale;return Number.isFinite(seconds)&&seconds>0&&seconds<=3600?seconds:undefined;
+ }catch{return undefined;}
+}
 function boxes(bytes:Uint8Array,start:number,end:number):Box[]{
  const result:Box[]=[];
  for(let p=start;p<end;){

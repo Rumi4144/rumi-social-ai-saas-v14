@@ -28,6 +28,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       return new NextResponse(new Uint8Array(clip.bytes), { headers: { ...headers, "Content-Length": String(clip.bytes.length) } });
     }
     const meta = asset.metadata as { pathname?: string; contentType?: string } | null;
+    if (meta?.pathname === `ai-lab/${ctx.organizationId}/${asset.id}.mp4`) return privateVideoResponse(_req, meta.pathname, "video/mp4", `presenter-${asset.id}.mp4`);
     if (meta?.pathname && asset.contentItemId && privateReelPath(meta.pathname, ctx.organizationId, asset.contentItemId)) return privateVideoResponse(_req, meta.pathname, meta.contentType === "video/webm" ? "video/webm" : "video/mp4", `reel-${asset.id}.${meta.contentType === "video/webm" ? "webm" : "mp4"}`);
     if (meta?.pathname === `runway/${ctx.organizationId}/${asset.id}.mp4`) return NextResponse.redirect(new URL(`/api/video/file?jobId=${asset.id}`, _req.url));
     const url = new URL(asset.url, _req.url);

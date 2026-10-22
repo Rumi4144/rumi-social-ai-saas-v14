@@ -1,6 +1,7 @@
 import {campaignSetupPhotos,attachSetupPhoto} from "@/lib/campaign/setup-photos";
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
+import {generateImage, imageConfiguration, ImageRejectedError} from "@/lib/ai/image-provider";
+export const maxDuration=180;
 import { prisma } from "@/lib/prisma";
 import { recentBrandConcepts } from "@/lib/ai/visual-history";
 import { generateCampaign } from "@/lib/ai/campaign";
@@ -141,12 +142,14 @@ export async function POST(req: Request) {
   });
   if (claimed.count !== 1) return NextResponse.json({ status: "idle" });
 
+  let imageRequested=false;
   try {
     if (job.type === "GENERATE_IMAGE") {
       const p = job.payload as {
         campaignId: string;
         contentItemId: string;
         prompt: string;
+        frozenImagePrompt?: string;
         format?: "square" | "portrait" | "story";
         sourceImageUrl?: string;
         sourceEvidence?: PhotoEvidence;
@@ -225,42 +228,26 @@ export async function POST(req: Request) {
       ),
     });
 
-      const size: "1024x1024" | "1024x1536" =
-        format === "square" ? "1024x1024" : "1024x1536";
-
       let dataUrl: string;
-      let imageProvider: "website" | "openai";
+      let imageProvider: string;
+      let imageModel: string = "website";
+      let generatedSize: string | undefined;
 
       if (p.sourceImageUrl) {
         // Use the real product photograph selected from the website.
         dataUrl = p.sourceImageUrl;
         imageProvider = "website";
       } else {
-        if (!process.env.OPENAI_API_KEY) {
-          throw new Error("OPENAI_API_KEY_MISSING");
-        }
+        imageConfiguration();
 
-        const client = new OpenAI({
-          apiKey: process.env.OPENAI_API_KEY,
-        });
-
-        const result = await client.images.generate({
-          model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
-          prompt: visualDirectorPrompt,
-          size,
-          quality: "medium",
-          output_format: "png",
-          n: 1,
-        });
-
-        const base64 = result.data?.[0]?.b64_json;
-
-        if (!base64) {
-          throw new Error("IMAGE_GENERATION_EMPTY");
-        }
-
-        dataUrl = `data:image/png;base64,${base64}`;
-        imageProvider = "openai";
+        const frozenPrompt=p.frozenImagePrompt || visualDirectorPrompt;
+        if(!p.frozenImagePrompt)await prisma.job.update({where:{id:job.id},data:{payload:{...p,frozenImagePrompt:frozenPrompt}}});
+        imageRequested=true;
+        const generated=await generateImage({organizationId:job.organizationId,requestId:`worker:${job.id}`,prompt:frozenPrompt,format});
+        dataUrl = `data:image/png;base64,${generated.base64}`;
+        imageProvider = generated.provider;
+        imageModel = generated.model;
+        generatedSize = generated.size;
       }
 
       const imageData = {
@@ -273,9 +260,9 @@ export async function POST(req: Request) {
         url: dataUrl,
         prompt: p.prompt,
         metadata: {
-          model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
+          model: imageModel,
           format,
-          size,
+          ...(generatedSize ? {size:generatedSize} : {}),
           subjectCategory: p.visualConcept?.subjectCategory || "unrecorded",
           occasion: occasion || null,
           sourceEvidence: p.sourceEvidence || null,
@@ -725,22 +712,25 @@ Leave intentional negative space for Rumi Social AI typography.`,
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown worker error";
 
+    // Resume the same frozen image task after polling, download or layout storage errors.
+    // Definitive provider rejection stops; uncertain paid submissions never auto-resubmit.
+    const retryImage=job.type === "GENERATE_IMAGE" && imageRequested && !(e instanceof ImageRejectedError);
     await prisma.job.update({
       where: { id: job.id },
       data: {
-        status: "failed",
+        status: retryImage ? "queued" : "failed",
         error: msg,
-        progress: 100,
+        progress: retryImage ? 20 : 100,
       },
     });
 
     return NextResponse.json(
       {
-        status: "failed",
+        status: retryImage ? "queued" : "failed",
         jobId: job.id,
         error: msg,
       },
-      { status: 500 },
+      { status: retryImage ? 202 : 500 },
     );
   }
 }

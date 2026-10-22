@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 export default function RegenerateImageButton({
   campaignId,
@@ -17,12 +17,14 @@ export default function RegenerateImageButton({
   label?: string;
   showRegenerate?: boolean;
 }) {
+  const requestId = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
 
   async function regenerate() {
     if (busy) return;
     setBusy(true);
+    requestId.current ||= crypto.randomUUID();
     setStatus("Generating...");
 
     const prompt = `Create a fresh, brand-relevant visual concept for this campaign message: ${headline}.
@@ -36,6 +38,7 @@ Generate underlying photography or artwork only, with no text or branding; leave
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          requestId: requestId.current,
           campaignId,
           contentItemId,
           prompt,
@@ -81,6 +84,7 @@ Generate underlying photography or artwork only, with no text or branding; leave
     }
 
     setStatus("✓ Image and branded creative updated");
+    requestId.current = null;
     window.location.reload();
     } catch (error) {
       setStatus(

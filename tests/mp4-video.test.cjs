@@ -1,11 +1,17 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const moduleShim={exports:{}};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../lib/video/mp4.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module:moduleShim,exports:moduleShim.exports});
-const {assertMp4Video}=moduleShim.exports;
+const {assertMp4Video,mp4Duration}=moduleShim.exports;
 const u32=n=>{const b=Buffer.alloc(4);b.writeUInt32BE(n);return b;};
 const box=(type,...parts)=>{const body=Buffer.concat(parts);return Buffer.concat([u32(body.length+8),Buffer.from(type),body]);};
 const track=(handler,id,count)=>box('trak',box('tkhd',Buffer.alloc(12),u32(id)),box('mdia',box('hdlr',Buffer.alloc(8),Buffer.from(handler)),box('minf',box('stbl',box('stsz',Buffer.alloc(8),u32(count))))));
 const mp4=(tracks,fragments=[])=>Buffer.concat([box('ftyp',Buffer.from('isom0000')),box('moov',...tracks),...fragments,box('mdat',Buffer.from([1,2,3,4]))]);
+test('movie duration supports both header versions and ignores unusable metadata',()=>{
+ const duration=(version,scale,ticks)=>mp4Duration(box('moov',box('mvhd',Buffer.from([version,0,0,0]),Buffer.alloc(version?16:8),u32(scale),...(version?[u32(0),u32(ticks)]:[u32(ticks)]))));
+ assert.equal(duration(0,1000,15000),15);assert.equal(duration(1,48000,720000),15);
+ assert.equal(duration(0,0,15000),undefined);assert.equal(duration(0,1,3601),undefined);
+ assert.equal(mp4Duration(Buffer.from('bad')),undefined);assert.equal(mp4Duration(box('moov',box('mvhd',Buffer.alloc(3)))),undefined);
+});
 test('audio in an MP4 container is rejected even with media payload and positive duration metadata',()=>{
  assert.throws(()=>assertMp4Video(mp4([track('soun',2,400)])),/audio only/);
  assert.doesNotThrow(()=>assertMp4Video(mp4([track('soun',2,400),track('vide',1,450)])));

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { tenantContext } from "@/lib/auth/context";
 
+export const maxDuration=180;
+
 export async function POST(req: Request) {
   try {
     // Require a valid logged-in tenant.

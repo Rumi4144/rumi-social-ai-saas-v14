@@ -65,7 +65,7 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
       </section>
     </div>
     <section className="card" style={{ marginTop: 28 }}><h2>Finished reels</h2><p>Combine campaign photos or presenter clips with captions, music or nature sounds, and your workspace’s branded ending.</p><a className="button" href="/studio/reels">Open reel editor</a></section>
-    <section className="card" style={{ marginTop: 28 }}><h2>AI presenter videos</h2><p>Introduce a product, service, or campaign topic with a short spoken script.</p><a className="button" href="/studio/presenters">Open presenter studio</a></section>
+    <section className="card" style={{ marginTop: 28 }}><h2>AI presenter videos</h2><p>Introduce a product, service, or campaign topic with a short spoken script. Lower-cost WaveSpeed presenters are the default, with a cost estimate before generation.</p><a className="button" href="/studio/presenters">Open presenter studio</a></section>
     <RunwayVideo />
   </>;
 }
