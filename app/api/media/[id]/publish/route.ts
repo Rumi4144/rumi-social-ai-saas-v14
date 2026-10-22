@@ -82,7 +82,7 @@ export async function GET(
       // Match the same image-selection logic used by the campaign page.
       const originalImage =
         candidateImages.find(
-          (candidate) => candidate.provider === "openai"
+          (candidate) => ["bfl", "openai"].includes(candidate.provider)
         ) ||
         candidateImages.find(
           (candidate) =>

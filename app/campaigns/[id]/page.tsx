@@ -135,7 +135,7 @@ export default async function Campaign({
             itemAssets.find(asset => asset.kind === "product_photo" && asset.provider === "website") ||
             itemAssets.find(
               (asset) =>
-                asset.kind === "ai_image" && asset.provider === "openai",
+                asset.kind === "ai_image" && ["bfl", "openai"].includes(asset.provider),
             ) ||
             itemAssets.find(
               (asset) =>
