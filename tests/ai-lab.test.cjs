@@ -122,3 +122,12 @@ test('saved photo picker exposes only ready unexpired images in the active works
  f.state.assets=[{...base,id:'own-photo'},{...base,id:'other-photo',organizationId:'foreign'},{...base,id:'old-photo',createdAt:new Date(Date.now()-7*86400000)},{...base,id:'unfinished',status:'uploading'},{...base,id:'audio',metadata:{kind:'audio'}}];
  const result=await f.api.GET();assert.equal(result.status,200);assert.equal(result.body.inputs.length,1);assert.equal(result.body.inputs[0].id,'own-photo');assert.equal(result.body.inputs[0].name,'My presenter.jpg');assert.equal(result.body.inputs[0].url,undefined);
 });
+
+test('voice presets, style and pace are bounded and the quote exactly matches synthesis settings',async()=>{
+ const f=fixture();const input={model:'speech',prompt:'Find a guitar that speaks to you.',voiceId:'Casual_Guy',voiceEmotion:'happy',voiceSpeed:.95};
+ for(const change of [{voiceSpeed:0},{voiceSpeed:2},{voiceEmotion:'invented'},{voiceId:'invented'}])assert.equal((await f.post({action:'quote',input:{...input,...change}})).status,400);
+ assert.equal((await f.post({action:'quote',input})).status,200);
+ const calls=[];const provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>url.includes('/model/price')?{code:200,data:{currency:'USD',discounted_price:.004}}:{code:200,data:{id:'voice-task'}}};}});
+ await provider.labQuote(input);await provider.labSubmit(input);assert.deepEqual(calls[0].body.inputs,calls[1].body);assert.equal(calls[1].body.text,input.prompt);assert.equal(calls[1].body.voice_id,'Casual_Guy');assert.equal(calls[1].body.emotion,'happy');assert.equal(calls[1].body.speed,.95);assert.equal(calls[1].body.sample_rate,44100);assert.equal(calls[1].body.bitrate,128000);
+ const defaults=provider.speechInputs({model:'speech',voiceId:'Friendly_Person',prompt:'A conversational introduction.'});assert.equal(defaults.speed,1);assert.equal(defaults.emotion,'neutral');
+});

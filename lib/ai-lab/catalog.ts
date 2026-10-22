@@ -5,8 +5,9 @@ export const labModels = {
   speech: { name: "AI voice", provider: "WaveSpeedAI", model: "minimax/speech-02-hd", kind: "audio", estimateUsd: 0.02, source: "https://wavespeed.ai/models/minimax/speech-02-hd" },
 } as const;
 export type LabModel = keyof typeof labModels;
-export const labVoices = { Calm_Woman: "Calm woman", Friendly_Person: "Friendly person", Patient_Man: "Patient man" } as const;
-export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string; productAssetId?: string; productReviewed?: boolean; audioAssetId?: string; voiceId?: keyof typeof labVoices; campaignId?: string; contentItemId?: string };
+export const labVoices = { Friendly_Person: "Friendly · conversational", Casual_Guy: "Casual man", Wise_Woman: "Warm woman", Elegant_Man: "Polished man", Calm_Woman: "Calm woman", Patient_Man: "Patient man", Deep_Voice_Man: "Deep male voice" } as const;
+export const labVoiceStyles = {neutral:"Conversational",happy:"Warm and upbeat"} as const;
+export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string; productAssetId?: string; productReviewed?: boolean; audioAssetId?: string; voiceId?: keyof typeof labVoices; voiceEmotion?: keyof typeof labVoiceStyles; voiceSpeed?: number; campaignId?: string; contentItemId?: string };
 export function labConfigured(model: LabModel) {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN && (model === "flux" ? process.env.BFL_API_KEY : process.env.WAVESPEED_API_KEY));
 }
