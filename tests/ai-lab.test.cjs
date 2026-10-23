@@ -156,3 +156,10 @@ test('international English previews retain the script and quote the selected do
  assert.equal(f.state.calls,0);assert.equal((await f.post({action:'quote',input:{...base,accentSpeaker:'French_CasualMan'}})).status,200);
  assert.equal(catalog.labAccentVoice('Casual_Guy','southern'),'moss_audio_076697ad-7144-11f0-a447-9613c873494c');assert.equal(catalog.labAccentAvailable('Calm_Woman','southern'),false);
 });
+
+test('guitar preparation widens the camera framing rather than shrinking the reference instrument',()=>{
+ const provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog}),media={image:'https://provider.test/person.jpg',product:'https://provider.test/guitar.jpg'};
+ const full=provider.holdingInputs({model:'holding',prompt:'Natural pose.',holdingPose:'guitar'},media);
+ assert.match(full.prompt,/FULL-SIZE ADULT GUITAR/);assert.match(full.prompt,/Move the camera farther away/);assert.match(full.prompt,/across the presenter's lap/);assert.match(full.prompt,/never shorten the neck/);assert.equal(full.images[1],media.product);
+ const other=provider.holdingInputs({model:'holding',prompt:'Hold this product.',holdingPose:'reference'},media);assert.doesNotMatch(other.prompt,/FULL-SIZE ADULT GUITAR/);assert.match(other.prompt,/reference product's real-world scale/);
+});
