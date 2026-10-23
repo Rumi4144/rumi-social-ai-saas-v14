@@ -65,11 +65,11 @@ test('speech quote and generation preserve the exact script and share the WaveSp
  assert.equal(calls[0].body.model_id,'minimax/speech-02-hd');assert.equal(calls[0].body.inputs.text,script);assert.equal(calls[1].body.text,script);assert.equal(calls[1].body.voice_id,'Calm_Woman');assert.equal(calls[1].body.format,'mp3');assert.equal(calls[1].url,'https://api.wavespeed.ai/api/v3/minimax/speech-02-hd');
 });
 test('finished speech is saved privately and becomes a tenant-owned reusable audio input',async()=>{
- const job={id:'voice-job',organizationId:'own',status:'running',createdAt:new Date(),payload:{model:'speech',prompt:'A friendly introduction',voiceId:'Calm_Woman',estimateUsd:.02,taskId:'task'}};
+ const job={id:'voice-job',organizationId:'own',status:'running',createdAt:new Date(),payload:{model:'speech',prompt:'A friendly introduction',voiceId:'Calm_Woman',voiceAccent:'french',accentSpeaker:'French_MovieLeadFemale',estimateUsd:.02,taskId:'task'}};
  const assets=[],stored=[];let polls=0;
  const prisma={job:{updateMany:async()=>({count:1}),update:async q=>{Object.assign(job,q.data);return job;},findUniqueOrThrow:async()=>job},mediaAsset:{upsert:async q=>{assets.push(q.create);return q.create;}}};
  const jobs=load('lib/ai-lab/jobs.ts',{'@/lib/video/mp4':{assertMp4Video:()=>{},mp4Duration:()=>15},'@/lib/prisma':{prisma},'@vercel/blob':{put:async(path,bytes,options)=>stored.push({path,options})},'@/lib/reels/public-fetch':{fetchPublicBytes:async()=>({bytes:Buffer.from('mp3 audio'),contentType:'audio/mpeg'})},'./catalog':catalog,'./providers':{labPoll:async()=>{polls++;return {status:'ready',url:'https://provider.test/voice.mp3'};}}});
- await jobs.labRefresh(job);assert.equal(job.status,'succeeded');assert.equal(stored[0].options.access,'private');assert.equal(stored[0].path,'ai-lab/own/voice-job.mp3');assert.equal(assets[0].organizationId,'own');assert.equal(assets[0].metadata.kind,'audio');assert.equal(assets[0].metadata.voiceId,'Calm_Woman');assert.equal(jobs.labSummary(job).audioAssetId,'voice-job');assert.equal(jobs.labSummary(job).kind,'audio');await jobs.labRefresh(job);assert.equal(polls,1);
+ await jobs.labRefresh(job);assert.equal(job.status,'succeeded');assert.equal(stored[0].options.access,'private');assert.equal(stored[0].path,'ai-lab/own/voice-job.mp3');assert.equal(assets[0].organizationId,'own');assert.equal(assets[0].metadata.kind,'audio');assert.equal(assets[0].metadata.voiceId,'Calm_Woman');assert.equal(assets[0].metadata.voiceAccent,'french');assert.equal(assets[0].metadata.accentSpeaker,'French_MovieLeadFemale');assert.equal(jobs.labSummary(job).accentSpeaker,'French_MovieLeadFemale');assert.equal(jobs.labSummary({...job,payload:{...job.payload,voiceAccent:undefined,accentSpeaker:undefined}}).voiceAccent,'original');assert.equal(jobs.labSummary(job).audioAssetId,'voice-job');assert.equal(jobs.labSummary(job).kind,'audio');await jobs.labRefresh(job);assert.equal(polls,1);
 });
 
 test('campaign destinations are ownership checked before quotes and checked again before spending',async()=>{
@@ -142,4 +142,17 @@ test('regional accents retain original voice choices and quote the exact documen
  const f=fixture(),base={model:'speech',voiceId:'Calm_Woman',prompt:'A calm spoken introduction.'};
  for(const voiceAccent of ['invented','australian','indian'])assert.equal((await f.post({action:'quote',input:{...base,voiceAccent}})).status,400);
  assert.equal(f.state.calls,0);assert.equal((await f.post({action:'quote',input:{...base,voiceAccent:'british'}})).status,200);
+});
+
+test('international English previews retain the script and quote the selected documented speaker',async()=>{
+ const accents=['french','persian','spanish','italian'];let checked=0;
+ for(const voiceAccent of accents)for(const accentSpeaker of Object.keys(catalog.labAccentSpeakers[voiceAccent])){
+  const calls=[];const provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async(url,options)=>{calls.push(JSON.parse(options.body));return {ok:true,json:async()=>url.includes('/model/price')?{code:200,data:{currency:'USD',discounted_price:.003}}:{code:200,data:{id:'task'}}};}});
+  const input={model:'speech',voiceId:'Friendly_Person',voiceAccent,accentSpeaker,prompt:'Explore our guitars. Visit rumiguitars.com today.'};await provider.labQuote(input);await provider.labSubmit(input);assert.equal(calls[1].voice_id,accentSpeaker);assert.equal(calls[1].text,input.prompt);assert.equal(calls[1].language_boost,'English');assert.deepEqual(calls[0].inputs,calls[1]);checked++;
+ }
+ assert.equal(checked,14);
+ const f=fixture(),base={model:'speech',voiceId:'Friendly_Person',voiceAccent:'french',prompt:'A clear English introduction.'};
+ for(const accentSpeaker of ['invented','Persian_male_1_v1','__proto__','constructor'])assert.equal((await f.post({action:'quote',input:{...base,accentSpeaker}})).status,400);
+ assert.equal(f.state.calls,0);assert.equal((await f.post({action:'quote',input:{...base,accentSpeaker:'French_CasualMan'}})).status,200);
+ assert.equal(catalog.labAccentVoice('Casual_Guy','southern'),'moss_audio_076697ad-7144-11f0-a447-9613c873494c');assert.equal(catalog.labAccentAvailable('Calm_Woman','southern'),false);
 });

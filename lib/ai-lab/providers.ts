@@ -4,7 +4,7 @@ export function speechInputs(input: LabInput) {
   if (!input.voiceId || !(input.voiceId in labVoices) || input.prompt.length > 600) throw new Error("Choose a voice and a script up to 600 characters.");
   const speed = input.voiceSpeed ?? 1, emotion = input.voiceEmotion ?? "neutral";
   if (!Number.isFinite(speed) || speed < 0.85 || speed > 1.15 || !(emotion in labVoiceStyles)) throw new Error("Choose a supported speaking style and pace.");
-  return { text: input.prompt, voice_id: labAccentVoice(input.voiceId,input.voiceAccent), speed, emotion, volume: 1, pitch: 0, sample_rate: 44100, bitrate: 128000, english_normalization: true, format: "mp3", language_boost: "English" };
+  return { text: input.prompt, voice_id: labAccentVoice(input.voiceId,input.voiceAccent,input.accentSpeaker), speed, emotion, volume: 1, pitch: 0, sample_rate: 44100, bitrate: 128000, english_normalization: true, format: "mp3", language_boost: "English" };
 }
 export type LabMedia = { image: string; audio?: string; product?: string };
 export function holdingInputs(input: LabInput, media?: LabMedia) {
