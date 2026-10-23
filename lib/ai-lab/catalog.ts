@@ -7,7 +7,21 @@ export const labModels = {
 export type LabModel = keyof typeof labModels;
 export const labVoices = { Friendly_Person: "Friendly · conversational", Casual_Guy: "Casual man", Wise_Woman: "Warm woman", Elegant_Man: "Polished man", Calm_Woman: "Calm woman", Patient_Man: "Patient man", Deep_Voice_Man: "Deep male voice" } as const;
 export const labVoiceStyles = {neutral:"Conversational",happy:"Warm and upbeat"} as const;
-export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string; productAssetId?: string; productReviewed?: boolean; audioAssetId?: string; voiceId?: keyof typeof labVoices; voiceEmotion?: keyof typeof labVoiceStyles; voiceSpeed?: number; campaignId?: string; contentItemId?: string };
+export const labAccents = {original:"Original voice",american:"American English",british:"British English",australian:"Australian English · male voices",indian:"Indian English · male voices"} as const;
+// Documented regional speakers, not a language_boost substitution or accent-transfer promise.
+// https://wavespeed.ai/docs/docs-api/minimax/minimax_speech_voice_id
+const regionalVoices: Record<Exclude<keyof typeof labAccents,"original">,Partial<Record<keyof typeof labVoices,string>>> = {
+  american:{Friendly_Person:"English_FriendlyPerson",Casual_Guy:"English_FriendlyPerson",Wise_Woman:"English_Friendly_Female_3",Elegant_Man:"English_Trustworth_Man",Calm_Woman:"English_CalmWoman",Patient_Man:"English_Gentle-voiced_man",Deep_Voice_Man:"English_ManWithDeepVoice"},
+  british:{Friendly_Person:"English_DecentYoungMan",Casual_Guy:"English_DecentYoungMan",Wise_Woman:"English_Wiselady",Elegant_Man:"English_MaturePartner",Calm_Woman:"English_Graceful_Lady",Patient_Man:"English_PatientMan",Deep_Voice_Man:"English_Deep-VoicedGentleman"},
+  australian:{Friendly_Person:"English_Aussie_Bloke",Casual_Guy:"English_Aussie_Bloke",Elegant_Man:"English_Aussie_Bloke",Patient_Man:"English_Aussie_Bloke",Deep_Voice_Man:"English_Aussie_Bloke"},
+  indian:{Friendly_Person:"English_Diligent_Man",Casual_Guy:"English_Diligent_Man",Elegant_Man:"English_Diligent_Man",Patient_Man:"English_GentleTeacher",Deep_Voice_Man:"English_Diligent_Man"},
+};
+export function labAccentAvailable(voice:keyof typeof labVoices,accent:keyof typeof labAccents){return accent==="original" || Boolean(regionalVoices[accent]?.[voice]);}
+export function labAccentVoice(voice:keyof typeof labVoices,accent:keyof typeof labAccents="original"){
+  if(accent==="original")return voice;
+  const id=regionalVoices[accent]?.[voice];if(!id)throw new Error("This accent is not available for the chosen voice. Choose another accent or voice.");return id;
+}
+export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string; productAssetId?: string; productReviewed?: boolean; audioAssetId?: string; voiceId?: keyof typeof labVoices; voiceAccent?: keyof typeof labAccents; voiceEmotion?: keyof typeof labVoiceStyles; voiceSpeed?: number; campaignId?: string; contentItemId?: string };
 export function labConfigured(model: LabModel) {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN && (model === "flux" ? process.env.BFL_API_KEY : process.env.WAVESPEED_API_KEY));
 }

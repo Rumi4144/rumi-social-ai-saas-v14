@@ -131,3 +131,15 @@ test('voice presets, style and pace are bounded and the quote exactly matches sy
  await provider.labQuote(input);await provider.labSubmit(input);assert.deepEqual(calls[0].body.inputs,calls[1].body);assert.equal(calls[1].body.text,input.prompt);assert.equal(calls[1].body.voice_id,'Casual_Guy');assert.equal(calls[1].body.emotion,'happy');assert.equal(calls[1].body.speed,.95);assert.equal(calls[1].body.sample_rate,44100);assert.equal(calls[1].body.bitrate,128000);
  const defaults=provider.speechInputs({model:'speech',voiceId:'Friendly_Person',prompt:'A conversational introduction.'});assert.equal(defaults.speed,1);assert.equal(defaults.emotion,'neutral');
 });
+
+test('regional accents retain original voice choices and quote the exact documented regional speaker',async()=>{
+ const cases=[['Wise_Woman','british','English_Wiselady'],['Deep_Voice_Man','american','English_ManWithDeepVoice'],['Casual_Guy','australian','English_Aussie_Bloke'],['Patient_Man','indian','English_GentleTeacher']];
+ for(const [voiceId,voiceAccent,resolved] of cases){
+  const calls=[];const provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async(url,options)=>{calls.push(JSON.parse(options.body));return {ok:true,json:async()=>url.includes('/model/price')?{code:200,data:{currency:'USD',discounted_price:.004}}:{code:200,data:{id:'voice-task'}}};}});
+  const input={model:'speech',voiceId,voiceAccent,prompt:'Explore our guitar collection.'};await provider.labQuote(input);await provider.labSubmit(input);assert.equal(calls[1].voice_id,resolved);assert.equal(calls[1].text,input.prompt);assert.equal(calls[1].language_boost,'English');assert.equal(input.voiceId,voiceId);assert.deepEqual(calls[0].inputs,calls[1]);
+ }
+ for(const voiceId of Object.keys(catalog.labVoices))assert.equal(catalog.labAccentVoice(voiceId),voiceId);
+ const f=fixture(),base={model:'speech',voiceId:'Calm_Woman',prompt:'A calm spoken introduction.'};
+ for(const voiceAccent of ['invented','australian','indian'])assert.equal((await f.post({action:'quote',input:{...base,voiceAccent}})).status,400);
+ assert.equal(f.state.calls,0);assert.equal((await f.post({action:'quote',input:{...base,voiceAccent:'british'}})).status,200);
+});

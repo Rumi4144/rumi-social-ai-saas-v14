@@ -16,7 +16,7 @@ export function labSummary(job: Job) {
   const detached = (job.result as {campaignAttached?:boolean}|null)?.campaignAttached === false;
   return { id: job.id, status: job.status, model: payload.model, prompt: payload.prompt, kind: labModels[payload.model].kind,
     estimateUsd: payload.estimateUsd, error: job.error, createdAt: job.createdAt,
-    voiceId: payload.voiceId, voiceEmotion: payload.voiceEmotion ?? "neutral", voiceSpeed: payload.voiceSpeed ?? 1,
+    voiceId: payload.voiceId, voiceAccent: payload.voiceAccent ?? "original", voiceEmotion: payload.voiceEmotion ?? "neutral", voiceSpeed: payload.voiceSpeed ?? 1,
     imageAssetId: payload.model === "holding" && job.status === "succeeded" ? job.id : null,
     audioAssetId: payload.model === "speech" && job.status === "succeeded" ? job.id : null,
     campaignId: detached ? undefined : payload.campaignId, contentItemId: detached ? undefined : payload.contentItemId,
@@ -43,7 +43,7 @@ export async function labRefresh(job: Job) {
       await put(pathname, bytes, { access: "private", contentType, addRandomSuffix: false, allowOverwrite: true, abortSignal: AbortSignal.timeout(30000) });
       if (audio) await prisma.mediaAsset.upsert({ where: { id: job.id }, update: {}, create: {
         id: job.id, organizationId: job.organizationId, kind: "ai_lab_input", provider: "wavespeed", status: "ready", url: result.url,
-        metadata: { kind: "audio", contentType, voiceId: payload.voiceId!, voiceEmotion: payload.voiceEmotion ?? "neutral", voiceSpeed: payload.voiceSpeed ?? 1, source: "generated_speech" },
+        metadata: { kind: "audio", contentType, voiceId: payload.voiceId!, voiceAccent: payload.voiceAccent ?? "original", voiceEmotion: payload.voiceEmotion ?? "neutral", voiceSpeed: payload.voiceSpeed ?? 1, source: "generated_speech" },
       } });
       if (payload.model === "holding") await prisma.mediaAsset.upsert({ where: { id: job.id }, update: {}, create: {
         id: job.id, organizationId: job.organizationId, kind: "ai_lab_input", provider: "wavespeed", status: "ready", url: result.url,
