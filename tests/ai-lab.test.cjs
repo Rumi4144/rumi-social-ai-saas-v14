@@ -172,3 +172,23 @@ test('standing strumming pose keeps the actual guitar and passes API validation'
  assert.match(result.prompt,/standing portrait/);assert.match(result.prompt,/poised mid-strum over the strings/);assert.match(result.prompt,/strap over the shoulder/);assert.match(result.prompt,/No chair, stool, sitting/);assert.doesNotMatch(result.prompt,/presenter's lap|not performing|No text[^.]*playing demonstration/);assert.equal(result.images[1],'https://provider.test/guitar.jpg');
  const f=fixture();const response=await f.post({action:'quote',input});assert.notEqual(response.status,400);
 });
+
+test('exact product layout validates ownership and never sends the product to talking video generation',async()=>{
+ const f=fixture();f.state.assets=['image','audio','product'].map(id=>({id,organizationId:'own',kind:'ai_lab_input',status:'ready',createdAt:new Date(),metadata:{kind:id==='audio'?'audio':'image'},url:`https://provider.test/${id}`}));
+ const input={model:'infinitetalk',prompt:'Friendly natural delivery.',imageAssetId:'image',audioAssetId:'audio',productAssetId:'product',productLayout:'beside'};
+ assert.equal((await f.post({action:'quote',input})).status,200);
+ f.state.assets[2].organizationId='foreign';assert.equal((await f.post({action:'quote',input})).status,422);assert.equal(f.state.calls,0);
+ f.state.assets[2].organizationId='own';f.state.assets[0].metadata.source='generated_holding';assert.equal((await f.post({action:'quote',input})).status,422);
+ const provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog});
+ // Exact product layout is local composition; provider input stays image + voice only.
+ const requests=[];const adapter=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async(url,options)=>{requests.push(JSON.parse(options.body));return {ok:true,json:async()=>({code:200,data:{id:'task'}})};}});
+ await adapter.labSubmit(input,{image:'https://provider.test/image',audio:'https://provider.test/audio'});assert.doesNotMatch(JSON.stringify(requests),/provider.test\/product|productLayout|productAssetId/);
+});
+
+test('original input image proxy is tenant scoped and preserves the uploaded bytes',async()=>{
+ const bytes=Buffer.from('original image bytes');let org='own',role='owner',fetched=0;
+ const api=load('app/api/ai-lab/input-image/route.ts',{'@/lib/auth/context':{tenantContext:async()=>({organizationId:org,role})},'@/lib/prisma':{prisma:{mediaAsset:{findFirst:async q=>{assert.equal(q.where.organizationId,org);assert.equal(q.where.kind,'ai_lab_input');assert.equal(q.where.status,'ready');assert.ok(q.where.createdAt.gt instanceof Date);return org==='own'?{url:'https://provider.test/product',metadata:{kind:'image'}}:null;}}}},'@/lib/ai-lab/catalog':catalog,'@/lib/reels/public-fetch':{fetchPublicBytes:async()=>{fetched++;return {bytes,contentType:'image/png'};}},'@/lib/http/errors':{apiError:()=>new Response('Forbidden',{status:403})}},{Response});
+ const response=await api.GET({url:'https://rumi.test/api/ai-lab/input-image?assetId=product'});assert.equal(response.status,200);assert.deepEqual(Buffer.from(await response.arrayBuffer()),bytes);
+ org='foreign';assert.equal((await api.GET({url:'https://rumi.test/?assetId=product'})).status,404);assert.equal(fetched,1);
+ role='viewer';assert.equal((await api.GET({url:'https://rumi.test/?assetId=product'})).status,403);assert.equal(fetched,1);
+});

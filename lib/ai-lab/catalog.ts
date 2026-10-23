@@ -31,7 +31,7 @@ export function labAccentVoice(voice:keyof typeof labVoices,accent:keyof typeof 
   const id=regionalVoices[accent]?.[voice];if(!id)throw new Error("This accent is not available for the chosen voice. Choose another accent or voice.");return id;
 }
 export function labAccentAvailable(voice:keyof typeof labVoices,accent:keyof typeof labAccents,speaker?:string){try{labAccentVoice(voice,accent,speaker);return true;}catch{return false;}}
-export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string; productAssetId?: string; holdingPose?: "guitar" | "guitar-standing-strum" | "reference"; productReviewed?: boolean; audioAssetId?: string; voiceId?: keyof typeof labVoices; voiceAccent?: keyof typeof labAccents; accentSpeaker?: string; voiceEmotion?: keyof typeof labVoiceStyles; voiceSpeed?: number; campaignId?: string; contentItemId?: string };
+export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string; productAssetId?: string; productLayout?: "beside"; holdingPose?: "guitar" | "guitar-standing-strum" | "reference"; productReviewed?: boolean; audioAssetId?: string; voiceId?: keyof typeof labVoices; voiceAccent?: keyof typeof labAccents; accentSpeaker?: string; voiceEmotion?: keyof typeof labVoiceStyles; voiceSpeed?: number; campaignId?: string; contentItemId?: string };
 export function labConfigured(model: LabModel) {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN && (model === "flux" ? process.env.BFL_API_KEY : process.env.WAVESPEED_API_KEY));
 }
