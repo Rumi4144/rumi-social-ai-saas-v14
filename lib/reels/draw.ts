@@ -1,3 +1,4 @@
+import { drawVideoLogo } from "../video/logo";
 import { drawShowcase } from "./showcase";
 import { ease, photoMotion, entrance, transitionDuration } from "./animation";
 import { distinctSceneIndexes, frameAt, safeColor, wrappedLines, REEL_WIDTH as W, REEL_HEIGHT as H, type ReelProject, type ReelAnimation } from "./timeline";
@@ -176,8 +177,9 @@ export function drawReel(ctx: CanvasRenderingContext2D, project: ReelProject, me
       ctx.save();
       if(animation==="lively") ctx.drawImage(layer.canvas,W*(1-progress),0);
       else {ctx.globalAlpha=progress;ctx.drawImage(layer.canvas,0,0);}
-      ctx.restore(); return;
+      ctx.restore(); if (logo && project.logoThroughout) drawVideoLogo(ctx,logo,W,H,project.logoPosition,project.logoSize); return;
     }
   }
   drawFrame(ctx,project,media,frame,logo);
+  if (logo && project.logoThroughout) drawVideoLogo(ctx,logo,W,H,project.logoPosition,project.logoSize);
 }

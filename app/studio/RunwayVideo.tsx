@@ -1,4 +1,5 @@
 "use client";
+import VideoLogoEditor from "@/components/VideoLogoEditor";
 import { useEffect, useRef, useState } from "react";
 type Video = { id: string; status: string; progress: number; error: string | null; prompt: string; duration: number; cost: number; videoUrl: string | null };
 type Image = { id: string; kind: string; prompt: string | null };
@@ -82,7 +83,7 @@ export default function RunwayVideo() {
     {jobs.length > 0 && <div style={{ display: "grid", gap: 20, marginTop: 28 }}><h3>Your generated videos</h3>{jobs.map(job => <article key={job.id}>
       <strong>{job.duration} second video · {job.status === "succeeded" ? "Ready" : job.status === "saving" ? "Saving video" : job.status === "running" ? `Generating · ${job.progress}%` : job.status}</strong>
       <p>{job.prompt}</p>{job.error && <p role="status">{job.error}</p>}
-      {job.videoUrl && <><video src={job.videoUrl} controls preload="metadata" style={{ maxWidth: "100%", width: 420, maxHeight: 420 }} /><p><a className="button" href={`${job.videoUrl}&download=1`}>Download MP4</a> <a href="/publishing">Open Publishing</a></p></>}
+      {job.videoUrl && <><video src={job.videoUrl} controls preload="metadata" style={{ maxWidth: "100%", width: 420, maxHeight: 420 }} /><p><a className="button" href={`${job.videoUrl}&download=1`}>Download MP4</a> <a href="/publishing">Open Publishing</a></p><VideoLogoEditor src={job.videoUrl}/></>}
       <small>Request ID: {job.id}</small>
     </article>)}</div>}
   </section>;
