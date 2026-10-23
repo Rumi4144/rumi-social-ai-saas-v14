@@ -40,7 +40,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
   const [gallerySelection,setGallerySelection]=useState<number|null>(null);
   const [product, setProduct] = useState<PhotoInput | null>(null);
   const [presenterSource,setPresenterSource]=useState<PhotoInput|null>(null);
-  const [holdingPose,setHoldingPose]=useState<"guitar"|"reference">("guitar");
+  const [holdingPose,setHoldingPose]=useState<"guitar"|"guitar-standing-strum"|"reference">("guitar");
   const [holdProduct, setHoldProduct] = useState(false), [productReviewed, setProductReviewed] = useState(false);
   const [holdingJobId, setHoldingJobId] = useState("");
   const [voiceJobId, setVoiceJobId] = useState("");
@@ -168,13 +168,13 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
           <label className={styles.consent}><input type="checkbox" checked={holdProduct} disabled={busy || active} onChange={e=>{setHoldProduct(e.target.checked);invalidate();}}/>Have the presenter hold a guitar or product</label>
           {holdProduct && <div className={styles.setup}>
             <p>Use the original presenter portrait and a clear photo of the exact guitar. For another attempt, choose the original portrait instead of the earlier prepared product photo.</p>
-            <label htmlFor="holding-pose">Product scale and pose</label><select id="holding-pose" value={holdingPose} disabled={busy || active} onChange={e=>{setHoldingPose(e.target.value as "guitar"|"reference");setProductReviewed(false);invalidate();}}><option value="guitar">Full-size adult guitar · seated, across the lap</option><option value="reference">Other product · match reference scale</option></select>
+            <label htmlFor="holding-pose">Product scale and pose</label><select id="holding-pose" value={holdingPose} disabled={busy || active} onChange={e=>{setHoldingPose(e.target.value as "guitar"|"guitar-standing-strum"|"reference");setProductReviewed(false);invalidate();}}><option value="guitar">Full-size adult guitar · seated, across the lap</option><option value="guitar-standing-strum">Full-size adult guitar · standing, strumming pose</option><option value="reference">Other product · match reference scale</option></select>
             {presenterSource && <p className={styles.hint}>Original presenter reference: {presenterSource.name}</p>}
             {!presenterSource && image?.needsReview && <p className={styles.hint}>Choose an original presenter portrait above before preparing a new holding photo.</p>}
             <label>Guitar or product photo<input aria-label="Guitar or product photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || active || !selected?.configured} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file,"product");}}/><small>{product?.name || "Upload the exact product · up to 10 MB"}</small></label>
             {!!lab?.inputs?.length && <><label htmlFor="saved-product">Or choose a saved product photo</label><select id="saved-product" value={product?.id || ""} disabled={busy || active} onChange={e=>{setProduct(lab.inputs?.find(item=>item.id===e.target.value)||null);invalidate();}}><option value="">Choose saved photo</option>{lab.inputs.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></>}
             <button type="button" disabled={busy || active || !selected?.configured || (!presenterSource && (!image || image.needsReview)) || !product || (presenterSource?.id || image?.id)===product.id || (presenterMode && (!campaignId || !postId))} onClick={()=>estimate("holding")}>Prepare presenter holding product</button>
-            <p className={styles.hint}>Get an image-edit estimate first. Voice and video are priced separately. Check the product shape, details, hands and face before continuing. This creates a holding pose, not a playing demonstration.</p>
+            <p className={styles.hint}>Get an image-edit estimate first. Voice and video are priced separately. Check the product shape, details, hands and face before continuing. This creates a still holding or strumming pose. Presenter animation may not reproduce realistic strumming and does not generate guitar music.</p>
           </div>}
           {image?.needsReview && <div className={styles.setup}>
             {lab?.jobs.find(job=>job.imageAssetId===image.id)?.url && <img className={styles.productPreview} src={lab.jobs.find(job=>job.imageAssetId===image.id)!.url!} alt="Prepared presenter holding product"/>}

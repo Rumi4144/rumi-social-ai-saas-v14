@@ -163,3 +163,12 @@ test('guitar preparation widens the camera framing rather than shrinking the ref
  assert.match(full.prompt,/FULL-SIZE ADULT GUITAR/);assert.match(full.prompt,/Move the camera farther away/);assert.match(full.prompt,/across the presenter's lap/);assert.match(full.prompt,/never shorten the neck/);assert.equal(full.images[1],media.product);
  const other=provider.holdingInputs({model:'holding',prompt:'Hold this product.',holdingPose:'reference'},media);assert.doesNotMatch(other.prompt,/FULL-SIZE ADULT GUITAR/);assert.match(other.prompt,/reference product's real-world scale/);
 });
+
+
+test('standing strumming pose keeps the actual guitar and passes API validation',async()=>{
+ const provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog});
+ const input={model:'holding',prompt:'Natural standing portrait.',holdingPose:'guitar-standing-strum',imageAssetId:'presenter',productAssetId:'product'};
+ const result=provider.holdingInputs(input,{image:'https://provider.test/person.jpg',product:'https://provider.test/guitar.jpg'});
+ assert.match(result.prompt,/standing portrait/);assert.match(result.prompt,/poised mid-strum over the strings/);assert.match(result.prompt,/strap over the shoulder/);assert.match(result.prompt,/No chair, stool, sitting/);assert.doesNotMatch(result.prompt,/presenter's lap|not performing|No text[^.]*playing demonstration/);assert.equal(result.images[1],'https://provider.test/guitar.jpg');
+ const f=fixture();const response=await f.post({action:'quote',input});assert.notEqual(response.status,400);
+});
