@@ -4,14 +4,13 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 import { apiError } from "@/lib/http/errors";
-import { labCanRun } from "@/lib/ai-lab/catalog";
 
 export const maxDuration = 60;
 const input = z.object({ organizationId: z.string(), campaignId: z.string().min(1), contentItemId: z.string().min(1), seconds: z.union([z.literal(15), z.literal(30)]).default(15) });
 export async function POST(req: Request) {
   try {
     const ctx = await tenantContext();
-    if (!labCanRun(ctx.role)) return NextResponse.json({ error: "Your workspace owner or administrator can create presenter scripts." }, { status: 403 });
+    if (!["owner", "admin", "superadmin"].includes(ctx.role) && !ctx.isSuperAdmin) return NextResponse.json({ error: "Your workspace owner or administrator can create presenter scripts." }, { status: 403 });
     const parsed = input.safeParse(await req.json());
     if (!parsed.success) return NextResponse.json({ error: "Choose a campaign post and script length." }, { status: 400 });
     const p = parsed.data;

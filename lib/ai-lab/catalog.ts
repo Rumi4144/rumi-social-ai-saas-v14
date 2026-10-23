@@ -35,7 +35,7 @@ export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string;
 export function labConfigured(model: LabModel) {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN && (model === "flux" ? process.env.BFL_API_KEY : process.env.WAVESPEED_API_KEY));
 }
-export function labCanRun(role: string) { return ["owner", "admin", "superadmin"].includes(role); }
+export function labCanRun(role: string, isSuperAdmin = false) { return isSuperAdmin === true || role === "superadmin"; }
 export function labDailyLimit() {
   const value = Number(process.env.AI_LAB_DAILY_USD || "2");
   return Number.isFinite(value) && value > 0 ? Math.min(value, 10) : 2;

@@ -5,7 +5,7 @@ import { apiError } from "@/lib/http/errors";
 import { labCanRun } from "@/lib/ai-lab/catalog";
 export async function GET(req: Request) {
   try {
-    const ctx = await tenantContext(); if (!labCanRun(ctx.role)) throw new Error("FORBIDDEN");
+    const ctx = await tenantContext(); if (!labCanRun(ctx.role, ctx.isSuperAdmin)) throw new Error("FORBIDDEN");
     const query = new URL(req.url).searchParams;
     const job = await prisma.job.findFirst({ where: { id: query.get("jobId") || "", organizationId: ctx.organizationId, type: "AI_LAB", status: "succeeded" } });
     const result = job?.result as { pathname?: string; contentType?: string } | null;

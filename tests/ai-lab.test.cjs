@@ -2,7 +2,7 @@ const {test}=require('node:test'), assert=require('node:assert/strict'), fs=requ
 function load(file,deps={},extra={}){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module,exports:module.exports,require:n=>n in deps?deps[n]:require(n),URL,Date,process,AbortSignal,console,...extra});return module.exports;}
 const catalog=load('lib/ai-lab/catalog.ts');
 function fixture(){
- const state={jobs:new Map(),org:'own',role:'owner',calls:0,fail:null,quoteCost:.009,saveFailure:false,foreignPost:false,assets:[]};
+ const state={jobs:new Map(),org:'own',role:'superadmin',calls:0,fail:null,quoteCost:.009,saveFailure:false,foreignPost:false,assets:[]};
  const matches=(j,w)=>j&&(!w.id||j.id===w.id)&&(!w.organizationId||j.organizationId===w.organizationId)&&(!w.type||j.type===w.type)&&(!w.status||(w.status.in?w.status.in.includes(j.status):j.status===w.status))&&(!w.createdAt?.gt||j.createdAt>w.createdAt.gt)&&(!w.createdAt?.gte||j.createdAt>=w.createdAt.gte);
  const job={findFirst:async q=>[...state.jobs.values()].find(j=>matches(j,q.where))||null,findMany:async q=>[...state.jobs.values()].filter(j=>matches(j,q.where)),create:async q=>{const item={id:q.data.id||'quote-'+state.jobs.size,createdAt:new Date(),error:null,...q.data};if(state.jobs.has(item.id))throw Error('duplicate');state.jobs.set(item.id,item);return item;},updateMany:async q=>{const item=state.jobs.get(q.where.id);if(!matches(item,q.where))return {count:0};Object.assign(item,q.data);return {count:1};},update:async q=>{if(state.saveFailure){state.saveFailure=false;throw Error('temporary database failure');}const item=state.jobs.get(q.where.id);Object.assign(item,q.data);return item;}};
  const prisma={job,contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,state.org);return state.foreignPost?null:{id:q.where.id};}},mediaAsset:{findMany:async q=>state.assets.filter(a=>a.organizationId===q.where.organizationId && a.kind===q.where.kind && a.status===q.where.status && a.createdAt>q.where.createdAt.gt && (!q.where.id || q.where.id.in.includes(a.id))) }};let tail=Promise.resolve();prisma.$transaction=(fn,opts)=>{assert.equal(opts.isolationLevel,'Serializable');const run=tail.then(async()=>{const snapshot=structuredClone(state.jobs);try{return await fn(prisma);}catch(e){state.jobs=snapshot;throw e;}});tail=run.catch(()=>{});return run;};
@@ -16,7 +16,7 @@ function fixture(){
  return {state,api,post,quote,generate,ProviderError};
 }
 test('workspace changes, viewers and missing cost approval cannot start paid tests',async()=>{
- const f=fixture();f.state.role='viewer';assert.equal((await f.quote()).status,403);f.state.role='owner';assert.equal((await f.post({action:'quote',organizationId:'foreign',input:{model:'flux',prompt:'An image in daylight'}})).status,409);
+ const f=fixture();f.state.role='viewer';assert.equal((await f.quote()).status,403);f.state.role='superadmin';assert.equal((await f.post({action:'quote',organizationId:'foreign',input:{model:'flux',prompt:'An image in daylight'}})).status,409);
  assert.equal((await f.post({...f.generate('missing'),acknowledge:false})).status,400);assert.equal(f.state.calls,0);
 });
 test('identical concurrent submissions reserve one estimate and call the provider once',async()=>{
@@ -186,9 +186,30 @@ test('exact product layout validates ownership and never sends the product to ta
 });
 
 test('original input image proxy is tenant scoped and preserves the uploaded bytes',async()=>{
- const bytes=Buffer.from('original image bytes');let org='own',role='owner',fetched=0;
+ const bytes=Buffer.from('original image bytes');let org='own',role='superadmin',fetched=0;
  const api=load('app/api/ai-lab/input-image/route.ts',{'@/lib/auth/context':{tenantContext:async()=>({organizationId:org,role})},'@/lib/prisma':{prisma:{mediaAsset:{findFirst:async q=>{assert.equal(q.where.organizationId,org);assert.equal(q.where.kind,'ai_lab_input');assert.equal(q.where.status,'ready');assert.ok(q.where.createdAt.gt instanceof Date);return org==='own'?{url:'https://provider.test/product',metadata:{kind:'image'}}:null;}}}},'@/lib/ai-lab/catalog':catalog,'@/lib/reels/public-fetch':{fetchPublicBytes:async()=>{fetched++;return {bytes,contentType:'image/png'};}},'@/lib/http/errors':{apiError:()=>new Response('Forbidden',{status:403})}},{Response});
  const response=await api.GET({url:'https://rumi.test/api/ai-lab/input-image?assetId=product'});assert.equal(response.status,200);assert.deepEqual(Buffer.from(await response.arrayBuffer()),bytes);
  org='foreign';assert.equal((await api.GET({url:'https://rumi.test/?assetId=product'})).status,404);assert.equal(fetched,1);
  role='viewer';assert.equal((await api.GET({url:'https://rumi.test/?assetId=product'})).status,403);assert.equal(fetched,1);
+});
+
+
+test('workspace owners and admins cannot read provider prices or start direct-billed generations',async()=>{
+ for(const role of ['owner','admin','editor','member','viewer']){
+  const f=fixture();f.state.role=role;
+  assert.equal((await f.api.GET()).status,403);
+  assert.equal((await f.quote()).status,403);
+  assert.equal((await f.post(f.generate('guessed-quote'))).status,403);
+  assert.equal(f.state.calls,0);
+ }
+ assert.equal(catalog.labCanRun('owner'),false);assert.equal(catalog.labCanRun('admin'),false);assert.equal(catalog.labCanRun('superadmin'),true);assert.equal(catalog.labCanRun('owner',true),true);
+});
+
+test('customer dashboard excludes provider jobs while platform admin retains access',async()=>{
+ for(const isSuperAdmin of [false,true]){
+ let filter;
+ const api=load('app/api/dashboard/route.ts',{'next/server':{NextResponse:{json:body=>body}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'own',role:'owner',isSuperAdmin,organization:{name:'Shop'}})},'@/lib/prisma':{prisma:{campaign:{count:async()=>0},publishJob:{count:async()=>0},subscription:{findUnique:async()=>({credits:50})},job:{findMany:async q=>{filter=q.where;return [];}}}}});
+ const result=await api.GET();assert.equal(result.credits,50);assert.equal(filter.organizationId,'own');
+ if(isSuperAdmin)assert.equal(filter.type,undefined);else assert.deepEqual(Array.from(filter.type.notIn),['AI_LAB','AI_LAB_QUOTE']);
+ }
 });

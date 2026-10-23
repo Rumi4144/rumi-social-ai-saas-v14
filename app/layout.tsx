@@ -84,7 +84,7 @@ export default async function RootLayout({
             <Link href="/create">✦ Create Everything</Link>
             <Link href="/campaigns">Campaigns</Link>
             <Link href="/studio">Creative Studio</Link>
-            <Link href="/ai-test-lab">AI Test Lab</Link>
+            {isSuperAdmin && <Link href="/ai-test-lab">AI Test Lab</Link>}
             <Link href="/calendar">Campaign Calendar</Link>
             <Link href="/publishing">Publishing Center</Link>
             <Link href="/library">Creative Library</Link>

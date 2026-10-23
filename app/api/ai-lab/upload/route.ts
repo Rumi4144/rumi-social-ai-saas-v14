@@ -13,7 +13,7 @@ const schema = z.discriminatedUnion("action", [
 ]);
 export async function POST(req: Request) {
   try {
-    const ctx = await tenantContext(); if (!labCanRun(ctx.role)) throw new Error("FORBIDDEN");
+    const ctx = await tenantContext(); if (!labCanRun(ctx.role, ctx.isSuperAdmin)) throw new Error("FORBIDDEN");
     const parsed = schema.safeParse(await req.json());
     if (!parsed.success) return NextResponse.json({ error: "Choose a JPEG, PNG, WebP photo or audio file up to 10 MB." }, { status: 400 });
     const p = parsed.data;

@@ -5,6 +5,6 @@ import TestLab from "./TestLab";
 export default async function AITestLabPage() {
   const { context, recovery } = await studioPageContext();
   if (recovery) return <StudioRecovery recovery={recovery} />;
-  if (!labCanRun(context.role)) return <section className="card"><h1>AI Test Lab</h1><p>Ask your workspace owner or administrator to run provider tests.</p></section>;
+  if (!labCanRun(context.role, context.isSuperAdmin)) return <section className="card"><h1>AI Test Lab</h1><p>This page is available only to the Rumi platform administrator. Use Creative Studio for credit-based creation.</p></section>;
   return <TestLab key={context.organizationId} workspaceName={context.organization.name} />;
 }

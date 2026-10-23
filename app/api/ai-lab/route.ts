@@ -39,7 +39,7 @@ async function inputMedia(org: string, input: LabInput) {
 export async function GET() {
   try {
     const ctx = await tenantContext();
-    if (!labCanRun(ctx.role)) throw new Error("FORBIDDEN");
+    if (!labCanRun(ctx.role, ctx.isSuperAdmin)) throw new Error("FORBIDDEN");
     const jobs = await prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: "AI_LAB" }, orderBy: { createdAt: "desc" }, take: 30 });
     const inputs = await prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, kind: "ai_lab_input", status: "ready", createdAt: { gt: new Date(Date.now() - 6 * 86400000) } }, orderBy: { createdAt: "desc" }, take: 40 });
     return NextResponse.json({ inputs: inputs.filter(asset => (asset.metadata as {kind?:string})?.kind === "image").map(asset => ({id:asset.id, name:(asset.metadata as {filename?:string})?.filename || ((asset.metadata as {source?:string})?.source === "generated_holding" ? "Prepared product presenter" : "Saved presenter or product photo"), needsReview:(asset.metadata as {source?:string})?.source === "generated_holding" })), organizationId: ctx.organizationId, dailyLimitUsd: labDailyLimit(), models: Object.entries(labModels).map(([id, model]) => ({ id, ...model, configured: labConfigured(id as LabInput["model"]) })), jobs: jobs.map(labSummary) }, { headers: { "Cache-Control": "no-store" } });
@@ -48,7 +48,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const ctx = await tenantContext();
-    if (!labCanRun(ctx.role)) throw new Error("FORBIDDEN");
+    if (!labCanRun(ctx.role, ctx.isSuperAdmin)) throw new Error("FORBIDDEN");
     const parsed = schema.safeParse(await req.json());
     if (!parsed.success) return NextResponse.json({ error: "Choose a model and describe one sample." }, { status: 400 });
     const p = parsed.data;

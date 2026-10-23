@@ -5,7 +5,7 @@ import {fetchPublicBytes} from '@/lib/reels/public-fetch';
 import {apiError} from '@/lib/http/errors';
 export async function GET(req:Request){
  try{
-  const ctx=await tenantContext();if(!labCanRun(ctx.role))throw new Error('FORBIDDEN');
+  const ctx=await tenantContext();if(!labCanRun(ctx.role, ctx.isSuperAdmin))throw new Error('FORBIDDEN');
   const id=new URL(req.url).searchParams.get('assetId')||'';
   const asset=await prisma.mediaAsset.findFirst({where:{id,organizationId:ctx.organizationId,kind:'ai_lab_input',status:'ready',createdAt:{gt:new Date(Date.now()-6*86400000)}}});
   if(!asset?.url||(asset.metadata as {kind?:string})?.kind!=='image')return new Response('Photo unavailable. Upload the original again.',{status:404});
