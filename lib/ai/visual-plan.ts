@@ -32,6 +32,22 @@ export function businessVisualMode(context: VisualBusinessContext): "product" | 
   return "unknown";
 }
 
+// Fictional casting directions, not claims about the business or its audience.
+// These are independent of post topic so demographics are not tied to problems or roles.
+export const campaignCasting = [
+  "an adult woman in her thirties with medium-brown skin and short curly hair",
+  "an adult man in his fifties with deep-brown skin and closely cropped hair",
+  "an adult woman in her sixties with light skin and short silver hair",
+  "an adult man in his thirties with olive skin and wavy dark hair",
+  "an adult woman in her forties with deep-brown skin and braided hair",
+  "an adult man in his sixties with medium-brown skin and gray hair",
+  "an adult in their forties with light-medium skin, shoulder-length hair and androgynous presentation",
+] as const;
+export function campaignCastingDirection(variationIndex:number){
+  const index=Number.isFinite(variationIndex)?Math.abs(Math.trunc(variationIndex)):0;
+  return `PEOPLE VARIETY — campaign casting slot ${index % campaignCasting.length + 1}: If a recognizable person appears, use a new, distinct fictional face: ${campaignCasting[index % campaignCasting.length]}. Do not reuse the same model, face, hairstyle, outfit or pose from the other days. Keep clothing, activity and setting appropriate to the actual post. These are fictional creative directions, not evidence of a customer's demographics or health condition. Do not assign ethnicity, medical issues, competence or social roles based on appearance. Never portray a fictional model as a real client, practitioner, employee or testimonial. If the user explicitly requested a particular real person or recurring spokesperson, preserve that identity instead and vary other people and scenes. For a composition without a recognizable face, keep that composition; do not add a person just to satisfy this casting direction.`;
+}
+
 export function buildVisualConcept(input: {
   businessContext: VisualBusinessContext;
   variationIndex: number;
@@ -62,7 +78,7 @@ export function buildVisualConcept(input: {
     product: "Make the actual supplied product the primary subject. Preserve its identity and features; do not redesign it or invent inventory. Choose a setting and angle different from recent concepts.",
     conceptual: "Express the message through a relevant human moment or abstract color, light, and movement. Do not replace an abstract benefit with a chair, road, doorway, clock, or arbitrary physical object. Do not invent measurable results or imply guarantees.",
   };
-  return { subjectCategory, direction: directions[subjectCategory] };
+  return { subjectCategory, direction: `${directions[subjectCategory]}\n${campaignCastingDirection(index)}` };
 }
 
 export function buildVisualPlanPrompt(input: {
@@ -79,7 +95,7 @@ Audience: ${input.businessContext.targetAudience || "not supplied"}
 Visual mode: ${businessVisualMode(input.businessContext)}
 Primary subject category: ${input.concept.subjectCategory}
 ${input.concept.direction}
-This subject plan takes priority over conflicting subject, product-hero, or no-people instructions in the original creative direction. Keep the campaign message and factual product information.
+This subject plan takes priority over conflicting subject, product-hero, or no-people instructions in the original creative direction. Unless a specific recurring spokesperson was requested, shared brand styling must not imply a shared face across campaign days. Keep the campaign message and factual product information.
 For a service business, human experience can communicate the service without an invented physical product or equipment. Background furniture may be incidental, never an unrelated hero.
 Never mix another brand's products, services, claims, or identity into this image.
 Recent concepts for THIS brand only (avoid their dominant subjects, actions, settings, and motifs):

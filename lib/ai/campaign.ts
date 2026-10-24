@@ -282,6 +282,8 @@ Across the five Stories, deliberately vary:
 - visual metaphor
 - use of people versus objects/environment
 
+When people appear across the campaign, plan distinct fictional adults with varied age ranges, skin tones, gender presentations, hair, clothing and activities. Do not default to one similar-looking person in every post. Treat inclusive casting as creative direction, never as a factual claim about the business or audience, and do not link appearance to a condition, stereotype or promised result. Preserve a specific recurring spokesperson only if the user explicitly requested one.
+
 Do NOT generate five variations of the same person, landscape,
 sunrise, room, product angle or symbolic metaphor.
 

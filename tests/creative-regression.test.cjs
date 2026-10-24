@@ -192,3 +192,17 @@ test('Facebook rejects an audio-only saved MP4 before claiming or submitting an 
  const result=await api.publishFacebookVideo({pageId:'page',pageAccessToken:'token',caption:'Caption',assetId:'clip',organizationId:'own',contentItemId:'post',publishJobId:'job'});
  assert.equal(result.ok,false);assert.equal(result.retryable,false);assert.match(result.error,/audio only|saved video could not be verified/);assert.equal(creates,0);assert.equal(uploads,0);
 });
+
+
+test('seven-day service images carry seven distinct fictional casting directions into final image prompts',()=>{
+ const businessContext={businessType:'service',description:'Self-hypnosis education and stress management'};const history=[],slots=[];
+ for(let i=0;i<7;i++){
+  const concept=plan.buildVisualConcept({businessContext,variationIndex:i,recentConcepts:history});
+  const prompt=director.buildVisualDirection({brand:{name:'Master Mind'},businessContext,visualConcept:concept,recentConcepts:history,visualDirection:'A woman relaxing on a sofa.'});
+  assert.match(prompt,new RegExp('campaign casting slot '+(i+1)));assert.ok(prompt.includes(plan.campaignCasting[i]));assert.match(prompt,/Do not reuse the same model/);assert.match(prompt,/specific recurring spokesperson/);slots.push(concept.direction.split('PEOPLE VARIETY')[1]);history.push(concept);
+ }
+ assert.equal(new Set(slots).size,7);assert.equal(plan.campaignCasting.length,7);
+});
+test('casting is deterministic for retries and does not force people into object compositions',()=>{
+ assert.equal(plan.campaignCastingDirection(3),plan.campaignCastingDirection(3));assert.match(plan.campaignCastingDirection(0),/do not add a person/);assert.match(plan.campaignCastingDirection(0),/preserve that identity instead/);assert.match(plan.campaignCastingDirection(0),/not evidence/);
+});
