@@ -227,3 +227,10 @@ test('Kling quotes require tenant-owned image and audio and preserve exact-produ
  const quote=await f.post({action:'quote',input});assert.equal(quote.status,200);assert.equal(f.state.jobs.get(quote.body.quoteId).payload.model,'kling');assert.equal(f.state.jobs.get(quote.body.quoteId).payload.productLayout,'beside');
  f.state.assets[1].organizationId='other';assert.equal((await f.post(f.generate(quote.body.quoteId))).status,500);assert.equal(f.state.calls,0);
 });
+
+
+test('price-limit errors show actual estimate, distinct from unavailable inputs and provider pricing failures',async()=>{
+ const f=fixture();f.state.quoteCost=1.75;const priced=await f.quote();assert.equal(priced.status,422);assert.equal(priced.body.code,'LAB_PRICE_LIMIT');assert.equal(priced.body.estimateUsd,1.75);assert.match(priced.body.error,/Shorten the recording/);assert.equal(f.state.jobs.size,0);assert.equal(f.state.calls,0);
+ const missing=await f.post({action:'quote',input:{model:'kling',prompt:'Friendly natural delivery.',imageAssetId:'missing',audioAssetId:'missing'}});assert.equal(missing.body.code,'LAB_INPUT_UNAVAILABLE');assert.match(missing.body.error,/presenter photo and voice/);
+ f.state.quoteCost=NaN;const invalid=await f.quote();assert.equal(invalid.body.code,'LAB_PRICE_UNAVAILABLE');assert.equal(f.state.calls,0);
+});

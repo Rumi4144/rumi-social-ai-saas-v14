@@ -41,7 +41,11 @@ export function labDailyLimit() {
   const value = Number(process.env.AI_LAB_DAILY_USD || "2");
   return Number.isFinite(value) && value > 0 ? Math.min(value, 10) : 2;
 }
+export class LabPriceLimitError extends Error {
+  constructor(public estimateUsd:number){super(`Provider estimate $${estimateUsd.toFixed(2)} exceeds the $1 per-sample limit. Shorten the recording and get a new estimate. No sample was started.`);}
+}
 export function labCost(value: unknown) {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) throw new Error("This test exceeds the $1 provider estimate limit.");
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) throw new Error("Provider did not return a valid price.");
+  if (value > 1) throw new LabPriceLimitError(value);
   return Math.ceil(value * 1_000_000) / 1_000_000;
 }

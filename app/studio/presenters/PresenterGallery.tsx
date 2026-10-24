@@ -11,10 +11,10 @@ export default function PresenterGallery({disabled,selected,onChoose}:{disabled?
     setLoading(true);setError("");
     try {
       const image=new Image();image.src=index===24?"/presenters/flamenco-presenter.svg":"/presenters/presenter-contact-sheet.svg";await image.decode();
-      const canvas=document.createElement("canvas");canvas.width=480;canvas.height=index===24?720:420;
+      const canvas=document.createElement("canvas");canvas.width=768;canvas.height=index===24?1152:672;
       const context=canvas.getContext("2d");if(!context)throw new Error("Could not load this presenter photo.");
-      if(index===24)context.drawImage(image,0,0,image.naturalWidth,image.naturalHeight,0,0,480,720);
-      else {const width=image.naturalWidth/6,height=image.naturalHeight/4;context.drawImage(image,(index%6)*width+3,Math.floor(index/6)*height+2,width-6,height*.86,0,0,480,420);}
+      if(index===24)context.drawImage(image,0,0,image.naturalWidth,image.naturalHeight,0,0,canvas.width,canvas.height);
+      else {const width=image.naturalWidth/6,height=image.naturalHeight/4;context.drawImage(image,(index%6)*width+3,Math.floor(index/6)*height+2,width-6,height*.86,0,0,canvas.width,canvas.height);}
       const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(result=>result?resolve(result):reject(new Error("Could not prepare this presenter photo.")),"image/jpeg",.9));
       await onChoose(new File([blob],`${index===24?"Lucia":PRESENTER_NAMES[index]}-presenter.jpg`,{type:"image/jpeg"}),index);
     } catch {setError("Could not load this presenter. Please try again or upload a photo.");}
