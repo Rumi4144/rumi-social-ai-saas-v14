@@ -33,7 +33,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [acknowledge, setAcknowledge] = useState(false);
   const [voiceMode, setVoiceMode] = useState<"text" | "upload">("text");
   const [script, setScript] = useState((initialPost?.caption || initialPost?.headline || "").slice(0,600));
-  const [voiceId, setVoiceId] = useState<keyof typeof labVoices>("Friendly_Person");
+  const [voiceId, setVoiceId] = useState<keyof typeof labVoices|"">("");
   const [accentSpeaker,setAccentSpeaker]=useState("");
   const [voiceAccent,setVoiceAccent] = useState<keyof typeof labAccents>("original");
   const [voiceEmotion, setVoiceEmotion] = useState<keyof typeof labVoiceStyles>("neutral");
@@ -68,7 +68,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
   useEffect(() => {
     const job = lab?.jobs.find(item => item.id === voiceJobId);
     if (job?.status === "succeeded" && job.audioAssetId) {
-      if (job.prompt === script && job.voiceId === voiceId && (job.voiceAccent ?? "original") === voiceAccent && (job.accentSpeaker || "") === accentSpeaker && (job.voiceEmotion ?? "neutral") === voiceEmotion && (job.voiceSpeed ?? 1) === voiceSpeed) {
+      if (voiceId && job.prompt === script && job.voiceId === voiceId && (job.voiceAccent ?? "original") === voiceAccent && (job.accentSpeaker || "") === accentSpeaker && (job.voiceEmotion ?? "neutral") === voiceEmotion && (job.voiceSpeed ?? 1) === voiceSpeed) {
         setAudio({ id: job.audioAssetId, name: "AI voice · " + labVoices[voiceId] + (voiceAccent === "original" ? "" : " · " + labAccents[voiceAccent]) });
         invalidate();
         setMessage("Your voice is ready. Listen below, then get the video cost estimate.");
@@ -105,7 +105,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
     finally { setBusy(false); }
   }
   async function estimate(target: Model["id"] = model) {
-    if (!lab) return; setBusy(true); setMessage(""); invalidate();
+    if (!lab) return; if(target === "speech" && !voiceId){setMessage("Choose a female or male voice before getting an estimate.");return;} setBusy(true); setMessage(""); invalidate();
     try {
       const result = await request("/api/ai-lab", { action: "quote", organizationId: lab.organizationId, input: { ...campaignContext, model: target, prompt: target === "speech" ? script : target === "holding" ? "Show the presenter naturally holding the exact product in a portrait photo, looking at the camera." : prompt, ...(target === "speech" ? { voiceId, voiceAccent, accentSpeaker:accentSpeaker || undefined, voiceEmotion, voiceSpeed } : {}), ...(target === "holding" ? {imageAssetId:presenterSource?.id || (!image?.needsReview ? image?.id : undefined),productAssetId:product?.id,holdingPose} : {}), ...((target === "infinitetalk" || target === "kling") ? { imageAssetId: image?.id, audioAssetId: audio?.id, productReviewed, ...(besideProduct ? {productLayout:"beside",productAssetId:product?.id} : {}) } : {}) } });
       setQuote({ ...result, purpose: target === "speech" ? "voice" : target === "holding" ? "holding" : "sample" }); requestId.current = crypto.randomUUID();
@@ -154,7 +154,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
     <div className={styles.grid}>
       <section className={styles.panel} aria-label="Create a test sample">
         <h2>{presenterMode ? "1. Choose a campaign post" : "1. Choose your test"}</h2>
-        {presenterMode && <>
+        {(presenterMode || model === "infinitetalk" || model === "kling") && <>
           <label htmlFor="ad-campaign">Campaign</label><select id="ad-campaign" value={campaignId} disabled={busy || active} onChange={e => { setCampaignId(e.target.value); setPostId(""); setScript(""); setAudio(null); invalidate(); }}><option value="">Choose campaign</option>{campaigns.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select>
           <label htmlFor="ad-post">Campaign post</label><select id="ad-post" value={postId} disabled={busy || active || !campaign} onChange={e => { setPostId(e.target.value); const post = campaign?.items.find(item => item.id === e.target.value); setScript((post?.caption || post?.headline || "").slice(0,600)); setAudio(null); invalidate(); }}><option value="">Choose post</option>{campaign?.items.map(item => <option value={item.id} key={item.id}>{item.headline || "Untitled post"}</option>)}</select>
           <p className={styles.hint}>Review the filled script before generating. The video length follows your audio. This workflow animates the presenter photo; use the product option below to prepare a holding pose first. Product details need your review.</p>
@@ -192,22 +192,22 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
           </div>
           {voiceMode === "upload" ? <label>Voice recording<input aria-label="Voice recording" type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/ogg,audio/webm,.m4a" disabled={busy || !selected?.configured} onChange={e => { const file = e.target.files?.[0]; if (file) void upload(file, "audio"); }}/><small>{audio?.name || "MP3, WAV, M4A, Ogg or WebM · up to 10 MB"}</small></label> : <>
             <label htmlFor="lab-script">Spoken script</label>
-            {presenterMode && <div className={styles.setup}>
+            {<div className={styles.setup}>
               <label htmlFor="script-length">Script length</label><select id="script-length" value={scriptSeconds} disabled={busy || active} onChange={e => setScriptSeconds(Number(e.target.value))}><option value={15}>About 15 seconds</option><option value={30}>About 30 seconds</option></select>
               <button type="button" disabled={busy || active || !lab || !campaignId || !postId} onClick={createScript}>Create script for me</button>
-              <p className={styles.hint}>Uses your campaign post and Brand Brain. Script writing uses your connected OpenAI API balance. Review the draft before generating a voice.</p>
+              <p className={styles.hint}>{!campaignId || !postId ? "Choose a campaign and post above to enable script creation. " : ""}Uses your campaign post and Brand Brain. Script writing uses your connected OpenAI API balance. Review the draft before generating a voice.</p>
             </div>}
             <textarea id="lab-script" rows={4} maxLength={600} value={script} disabled={busy} onChange={e => { setScript(e.target.value); setAudio(null); invalidate(); }} placeholder="Type the exact words your presenter should say…"/>
-            <label htmlFor="lab-voice">AI voice</label>
-            <select id="lab-voice" value={voiceId} disabled={busy} onChange={e => { const next=e.target.value as keyof typeof labVoices;setVoiceId(next);if(labAccentSpeakers[voiceAccent])setAccentSpeaker(labAccentVoice(next,voiceAccent));if(!labAccentAvailable(next,voiceAccent)){setVoiceAccent("original");setAccentSpeaker("");setMessage("Accent reset to Original voice because that regional speaker is not available for this voice choice.");}setAudio(null);invalidate(); }}>{Object.entries(labVoices).map(([id,name]) => <option key={id} value={id}>{name}</option>)}</select>
-            <label htmlFor="voice-accent">Accent</label><select id="voice-accent" value={voiceAccent} disabled={busy} onChange={e=>{const next=e.target.value as keyof typeof labAccents;setVoiceAccent(next);setAccentSpeaker(labAccentSpeakers[next]?labAccentVoice(voiceId,next):"");setAudio(null);invalidate();}}>{Object.entries(labAccents).map(([id,name])=><option key={id} value={id} disabled={!labAccentAvailable(voiceId,id as keyof typeof labAccents)}>{name}</option>)}</select>
-            {labAccentSpeakers[voiceAccent] && <><label htmlFor="accent-speaker">Accent speaker</label><select id="accent-speaker" value={accentSpeaker || labAccentVoice(voiceId,voiceAccent)} disabled={busy} onChange={e=>{setAccentSpeaker(e.target.value);setAudio(null);invalidate();}}>{Object.entries(labAccentSpeakers[voiceAccent]!).map(([id,speaker])=><option key={id} value={id}>{speaker.label}</option>)}</select><p className={styles.hint}>English script preview: these speakers are documented for their native language. Your English script is sent unchanged. Preview the pronunciation and accent strength before creating the video. This does not translate your script.</p></>}
+            <label htmlFor="lab-voice">AI voice</label><p className={styles.hint}>Choose the voice explicitly. Uploading a woman’s or man’s photo does not choose a voice. Your selection is kept when you switch video models.</p>
+            <select id="lab-voice" value={voiceId} disabled={busy} onChange={e => { const next=e.target.value as keyof typeof labVoices|"";setVoiceId(next);if(!next){setVoiceAccent("original");setAccentSpeaker("");setAudio(null);invalidate();return;}if(labAccentSpeakers[voiceAccent])setAccentSpeaker(labAccentVoice(next,voiceAccent));if(!labAccentAvailable(next,voiceAccent)){setVoiceAccent("original");setAccentSpeaker("");setMessage("Accent reset to Original voice because that regional speaker is not available for this voice choice.");}setAudio(null);invalidate(); }}><option value="">Choose a female or male voice</option>{Object.entries(labVoices).map(([id,name]) => <option key={id} value={id}>{name}</option>)}</select>
+            <label htmlFor="voice-accent">Accent</label><select id="voice-accent" value={voiceAccent} disabled={busy || !voiceId} onChange={e=>{if(!voiceId)return;const next=e.target.value as keyof typeof labAccents;setVoiceAccent(next);setAccentSpeaker(labAccentSpeakers[next]?labAccentVoice(voiceId,next):"");setAudio(null);invalidate();}}>{Object.entries(labAccents).map(([id,name])=><option key={id} value={id} disabled={!voiceId || !labAccentAvailable(voiceId,id as keyof typeof labAccents)}>{name}</option>)}</select>
+            {voiceId && labAccentSpeakers[voiceAccent] && <><label htmlFor="accent-speaker">Accent speaker</label><select id="accent-speaker" value={accentSpeaker || (voiceId ? labAccentVoice(voiceId,voiceAccent) : "")} disabled={busy} onChange={e=>{setAccentSpeaker(e.target.value);setAudio(null);invalidate();}}>{Object.entries(labAccentSpeakers[voiceAccent]!).map(([id,speaker])=><option key={id} value={id}>{speaker.label}</option>)}</select><p className={styles.hint}>English script preview: these speakers are documented for their native language. Your English script is sent unchanged. Preview the pronunciation and accent strength before creating the video. This does not translate your script.</p></>}
             <p className={styles.hint}>{voiceAccent === "original" ? "Keep the selected voice's original accent, or choose a regional English voice. Australian and Indian options are available for male voices." : "Regional accents use a different preset speaker. Your original voice choice is kept for switching back. Preview the voice before creating the video."}</p>
             <label htmlFor="voice-style">Speaking style</label><select id="voice-style" value={voiceEmotion} disabled={busy} onChange={e=>{setVoiceEmotion(e.target.value as keyof typeof labVoiceStyles);setAudio(null);invalidate();}}>{Object.entries(labVoiceStyles).map(([id,name])=><option key={id} value={id}>{name}</option>)}</select>
             <label htmlFor="voice-pace">Speaking pace</label><select id="voice-pace" value={voiceSpeed} disabled={busy} onChange={e=>{setVoiceSpeed(Number(e.target.value));setAudio(null);invalidate();}}><option value={0.9}>Relaxed · 10% slower</option><option value={0.95}>Slightly slower</option><option value={1}>Normal</option><option value={1.05}>Lively · slightly faster</option></select>
             <p className={styles.hint}>For a natural read, try a conversational voice and short sentences with punctuation. Listen before buying the video. Slower speech makes the video longer; its estimate uses the actual audio.</p>
             <p className={styles.hint}>Up to 600 characters. First approve the voice cost. After listening, approve the video cost separately. Changing the script or voice requires a new voice sample.</p>
-            <button type="button" className={styles.primary} disabled={busy || active || !selected?.configured || script.trim().length < 10 || (presenterMode && (!campaignId || !postId))} onClick={() => estimate("speech")}>Get voice cost estimate</button>
+            <button type="button" className={styles.primary} disabled={busy || active || !voiceId || !selected?.configured || script.trim().length < 10 || (presenterMode && (!campaignId || !postId))} onClick={() => estimate("speech")}>Get voice cost estimate</button>
             {audio && <div className={styles.setup}><strong>{audio.name}</strong>{lab?.jobs.find(job => job.audioAssetId === audio.id)?.url && <audio aria-label="Selected AI voice preview" controls preload="none" src={lab.jobs.find(job => job.audioAssetId === audio.id)!.url!}/>}<p>Your voice is ready to use for the video. No video starts until you approve its estimate.</p></div>}
           </>}
         </div>}

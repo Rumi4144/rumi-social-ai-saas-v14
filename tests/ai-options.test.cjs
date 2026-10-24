@@ -15,7 +15,7 @@ test('catalog page never renders options or supplier prices for customer roles',
 });
 test('test links preselect only supported models and do not accept arbitrary provider names',async()=>{
  for(const model of ['kling','flux','infinitetalk','speech','https://malicious.test']){
-  let chosen;const module=load('app/ai-test-lab/page.tsx',{'@/lib/studio/page-context':{studioPageContext:async()=>({context:{role:'superadmin',isSuperAdmin:true,organizationId:'own',organization:{name:'Test'}}})},'@/components/StudioRecovery':()=>null,'@/lib/ai-lab/catalog':{labCanRun:()=>true},'./TestLab':p=>{chosen=p.initialModel;return React.createElement('p');}});
+  let chosen;const module=load('app/ai-test-lab/page.tsx',{'@/lib/studio/page-context':{studioPageContext:async()=>({context:{role:'superadmin',isSuperAdmin:true,organizationId:'own',organization:{name:'Test'}}})},'@/components/StudioRecovery':()=>null,'@/lib/ai-lab/catalog':{labCanRun:()=>true},'@/lib/prisma':{prisma:{campaign:{findMany:async()=>[]}}},'./TestLab':p=>{chosen=p.initialModel;return React.createElement('p');}});
   renderToStaticMarkup(await module.default({searchParams:Promise.resolve({model})}));assert.equal(chosen,['kling','flux','infinitetalk'].includes(model)?model:undefined);
  }
 });
