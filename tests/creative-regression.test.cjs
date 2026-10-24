@@ -206,3 +206,27 @@ test('seven-day service images carry seven distinct fictional casting directions
 test('casting is deterministic for retries and does not force people into object compositions',()=>{
  assert.equal(plan.campaignCastingDirection(3),plan.campaignCastingDirection(3));assert.match(plan.campaignCastingDirection(0),/do not add a person/);assert.match(plan.campaignCastingDirection(0),/preserve that identity instead/);assert.match(plan.campaignCastingDirection(0),/not evidence/);
 });
+
+test('bounded brand history preserves distinct saved casting before long original directions',async()=>{
+ const saved=Array.from({length:13},(_,i)=>({payload:{visualConcept:plan.buildVisualConcept({businessContext:{businessType:'service'},variationIndex:i}),originalDirection:'Original '.repeat(150)}}));
+ const history=load('lib/ai/visual-history.ts',{'@/lib/prisma':{prisma:{campaign:{findMany:async q=>{assert.equal(q.where.brand.organizationId,'own');return[{id:'campaign'}];}},job:{findMany:async q=>{assert.equal(q.take,12);assert.equal(q.where.organizationId,'own');return saved.slice(-12).reverse();}}}}});
+ const recent=await history.recentBrandConcepts('own','brand');assert.equal(recent.length,12);
+ recent.forEach((item,i)=>{assert.match(item.direction,new RegExp('campaign casting slot '+((i+1)%7+1)));assert.ok(item.direction.length<=600);});
+});
+
+test('seven concurrent post regenerations retain planned casting beyond twelve prior images and tenant scopes',async()=>{
+ const prompts=[];const history=load('lib/ai/visual-history.ts',{'@/lib/prisma':{prisma:{}}});
+ const concepts=Array.from({length:7},(_,i)=>plan.buildVisualConcept({businessContext:{businessType:'service'},variationIndex:i}));
+ let legacyMode=false; const postIds=Array.from({length:7},(_,i)=>'legacy-'+(i*7));
+ const prisma={contentItem:{findMany:async q=>{assert.equal(q.where.campaign.brand.organizationId,'own');assert.equal(q.where.campaignId,'campaign');assert.equal(q.orderBy[0].createdAt,'asc');assert.equal(q.orderBy[1].id,'asc');return postIds.map(id=>({id}));},findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'own');return{id:q.where.id,type:'post',headline:'Stress management',campaign:{goal:'Education',brand:{id:'brand',name:'Master Mind',description:'Self-hypnosis education'}}};}},onboardingState:{findUnique:async()=>({businessType:'service'})},job:{findFirst:async q=>{assert.equal(q.where.organizationId,'own');const id=q.where.payload.equals;if(legacyMode)return{payload:{visualConcept:{subjectCategory:'human'}}};return{payload:{visualConcept:concepts[Number(id.slice(-1))]}};},create:async()=>({})}};
+ const api=load('app/api/creative/generate-image/route.ts',{'next/server':response,'@/lib/prisma':{prisma},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'own',role:'admin'})},'@/lib/ai/visual-history':{...history,recentBrandConcepts:async()=>Array.from({length:12},()=>({subjectCategory:'human',direction:'Previous scene'}))},'@/lib/ai/image-provider':{generateImage:async input=>{prompts.push(input);return{base64:'test',provider:'mock',model:'mock'};},ImagePendingError:class extends Error{}},'@/lib/creative/image-history':{saveGeneratedPhoto:async()=>({id:'asset'})}});
+ const results=await Promise.all(concepts.map((_,i)=>api.POST(new Request('https://app.test/api/creative/generate-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:'00000000-0000-4000-8000-00000000000'+i,campaignId:'campaign',contentItemId:'post'+i,prompt:'Create a useful scene',format:'portrait'})}))));
+ assert.ok(results.every(result=>result.status===200));assert.equal(prompts.length,7);
+ prompts.forEach((input,i)=>{assert.match(input.prompt,new RegExp('campaign casting slot '+(i+1)));assert.match(input.requestId,new RegExp('manual:post'+i+':'));assert.equal(input.requestDescription,'Create a useful scene');});
+ assert.equal(new Set(prompts.map(input=>input.prompt.match(/campaign casting slot (\d+)/)[1])).size,7);
+ legacyMode=true;prompts.length=0;
+ await Promise.all(postIds.map((id,i)=>api.POST(new Request('https://app.test/api/creative/generate-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:'00000000-0000-4000-8000-00000000000'+i,campaignId:'campaign',contentItemId:id,prompt:'Create a useful scene',format:'portrait'})}))));
+ assert.equal(prompts.length,7);assert.equal(new Set(prompts.map(input=>input.prompt.match(/campaign casting slot (\d+)/)[1])).size,7);
+ assert.equal(history.regenerationVariationIndex('post',{subjectCategory:'human'},-1),history.regenerationVariationIndex('post'));
+ const legacy=Array.from({length:7},(_,i)=>history.regenerationVariationIndex('post'+i));assert.equal(new Set(legacy.map(index=>index%7)).size,7);assert.equal(history.regenerationVariationIndex('post0'),history.regenerationVariationIndex('post0'));
+});

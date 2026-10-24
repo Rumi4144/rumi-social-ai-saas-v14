@@ -8,7 +8,7 @@ import { tenantContext } from "@/lib/auth/context";
 import { occasionVisualConcept, savedPostOccasion } from "@/lib/ai/occasion";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
 import { buildVisualConcept } from "@/lib/ai/visual-plan";
-import { recentBrandConcepts } from "@/lib/ai/visual-history";
+import { recentBrandConcepts, regenerationVariationIndex } from "@/lib/ai/visual-history";
 
 const S = z.object({
   requestId: z.string().uuid(),
@@ -49,8 +49,18 @@ export async function POST(req: Request) {
       const planningJob = await prisma.job.findFirst({where:{organizationId:ctx.organizationId,type:"CREATE_EVERYTHING",status:"succeeded",payload:{path:["campaignId"],equals:p.data.campaignId}},orderBy:{createdAt:"desc"},select:{payload:true,result:true}});
       occasion = savedPostOccasion(planningJob?.payload,planningJob?.result,contentItem) || contentItem.headline || "This post's special day";
     }
-    const concept = occasion ? occasionVisualConcept(occasion) : buildVisualConcept({ businessContext, variationIndex: recentConcepts.length, recentConcepts });
-    const prompt = buildVisualDirection({ brand, businessContext, occasion, campaignGoal: contentItem.campaign.goal, headline: contentItem.headline, contentType: contentItem.type, platform: contentItem.platform, visualDirection: p.data.prompt, visualConcept: concept, recentConcepts, variationIndex: recentConcepts.length });
+    const priorPlan = await prisma.job.findFirst({
+      where: { organizationId: ctx.organizationId, type: "GENERATE_IMAGE", payload: { path: ["contentItemId"], equals: contentItem.id } },
+      orderBy: { createdAt: "desc" }, select: { payload: true },
+    });
+    const savedConcept = (priorPlan?.payload as { visualConcept?: Parameters<typeof regenerationVariationIndex>[1] } | undefined)?.visualConcept;
+    const campaignPosts = await prisma.contentItem.findMany({
+      where: { campaignId: contentItem.campaignId || p.data.campaignId, campaign: { brand: { organizationId: ctx.organizationId } } },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true },
+    });
+    const variationIndex = regenerationVariationIndex(contentItem.id, savedConcept, campaignPosts.findIndex(post => post.id === contentItem.id));
+    const concept = occasion ? occasionVisualConcept(occasion) : buildVisualConcept({ businessContext, variationIndex, recentConcepts });
+    const prompt = buildVisualDirection({ brand, businessContext, occasion, campaignGoal: contentItem.campaign.goal, headline: contentItem.headline, contentType: contentItem.type, platform: contentItem.platform, visualDirection: p.data.prompt, visualConcept: concept, recentConcepts, variationIndex });
 
     const generated = await generateImage({organizationId:ctx.organizationId,requestId:`manual:${p.data.contentItemId}:${p.data.requestId}`,prompt,requestDescription:p.data.prompt,format:p.data.format});
     const base64=generated.base64;

@@ -53,6 +53,9 @@ jobs:
       - run: node tests/reels-browser.cjs
       - run: node tests/presenter-browser.cjs
       - run: node tests/ai-lab-browser.cjs
+      - run: node tests/ai-options-browser.cjs
+      - run: node tests/video-logo-browser.cjs
+      - run: node tests/exact-product-browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -60,3 +63,5 @@ jobs:
           path: |
             qa-photo-choices/
             qa-showcase/
+            qa-ai-lab/
+            qa-ai-options/

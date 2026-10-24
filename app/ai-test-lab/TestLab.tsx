@@ -4,6 +4,7 @@ import VideoLogoEditor from "@/components/VideoLogoEditor";
 import { useEffect, useRef, useState } from "react";
 import styles from "./lab.module.css";
 import PresenterGallery from "../studio/presenters/PresenterGallery";
+import { presenterSpeechText, DEFAULT_PRESENTER_DIRECTION } from "../../lib/presenter/speech-text";
 import { labVoices, labVoiceStyles, labAccents, labAccentAvailable, labAccentSpeakers, labAccentVoice } from "../../lib/ai-lab/catalog";
 
 type Model = { id: "flux" | "infinitetalk" | "kling" | "speech" | "holding"; name: string; provider: string; model: string; kind: "image" | "video" | "audio"; configured: boolean; estimateUsd: number; source: string };
@@ -28,11 +29,11 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
   const campaign = campaigns.find(item => item.id === campaignId);
   const campaignContext = presenterMode && campaignId && postId ? { campaignId, contentItemId: postId } : {};
   const [lab, setLab] = useState<Lab | null>(null), [model, setModel] = useState<Model["id"]>(initialModel || (presenterMode ? "infinitetalk" : "flux"));
-  const [prompt, setPrompt] = useState(presenterMode ? "Friendly, natural delivery. Preserve the presenter’s appearance and background. Match lip movements to the voice recording." : ""), [quote, setQuote] = useState<Quote | null>(null);
+  const [prompt, setPrompt] = useState(presenterMode || initialModel === "infinitetalk" || initialModel === "kling" ? DEFAULT_PRESENTER_DIRECTION : ""), [quote, setQuote] = useState<Quote | null>(null);
   const [image, setImage] = useState<PhotoInput | null>(null), [audio, setAudio] = useState<{ id: string; name: string } | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [acknowledge, setAcknowledge] = useState(false);
   const [voiceMode, setVoiceMode] = useState<"text" | "upload">("text");
-  const [script, setScript] = useState((initialPost?.caption || initialPost?.headline || "").slice(0,600));
+  const [script, setScript] = useState(presenterSpeechText(initialPost?.caption || initialPost?.headline || ""));
   const [voiceId, setVoiceId] = useState<keyof typeof labVoices|"">("");
   const [accentSpeaker,setAccentSpeaker]=useState("");
   const [voiceAccent,setVoiceAccent] = useState<keyof typeof labAccents>("original");
@@ -50,7 +51,20 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
   const [compare, setCompare] = useState<string[]>([]);
   const requestId = useRef("");
   const pending = useRef(false);
+  const promptByKind = useRef({ image: "", video: DEFAULT_PRESENTER_DIRECTION });
+  function chooseModel(next: Model["id"]) {
+    const previousKind = model === "flux" ? "image" : "video";
+    const nextKind = next === "flux" ? "image" : "video";
+    promptByKind.current[previousKind] = prompt;
+    setPrompt(nextKind === "video" && promptByKind.current.video.trim().length < 10 ? DEFAULT_PRESENTER_DIRECTION : promptByKind.current[nextKind]);
+    setModel(next); invalidate(); setMessage("");
+  }
   const invalidate = () => { setQuote(null); setAcknowledge(false); requestId.current = ""; };
+  function resetPreparedProduct() {
+    setProductReviewed(false); setHoldingJobId("");
+    setImage(current => current?.needsReview ? presenterSource : current);
+    invalidate();
+  }
   const reload = async () => { const data = await request("/api/ai-lab"); setLab(data); return data as Lab; };
   useEffect(() => { reload().catch(error => setMessage(error.message)); }, []);
   useEffect(() => {
@@ -98,6 +112,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
       if (!sent.ok) throw new Error("Upload did not finish. Choose the file again.");
       await request("/api/ai-lab/upload", { action: "complete", organizationId: lab.organizationId, assetId: ticket.assetId });
       (kind === "image" ? setImage : kind === "product" ? setProduct : setAudio)({ id: ticket.assetId, name: file.name });
+      if (kind === "product") resetPreparedProduct();
       if (kind === "image") {setPresenterSource({id:ticket.assetId,name:file.name});setProductReviewed(false);setGallerySelection(null);}
       setMessage("Photo or recording ready. No paid image or video generation has started.");
       return true;
@@ -142,7 +157,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
     setBusy(true); setMessage("Writing a presenter script from your campaign post…");
     try {
       const result = await request("/api/video/presenter/script", { organizationId: lab.organizationId, campaignId, contentItemId: postId, seconds: scriptSeconds });
-      setScript(result.script); setAudio(null); setVoiceJobId(""); invalidate();
+      setScript(presenterSpeechText(result.script)); setAudio(null); setVoiceJobId(""); invalidate();
       setMessage("Script ready. Review or edit the words, then get the voice cost estimate. No voice or video has started.");
     } catch (error) { setMessage((error as Error).message); }
     finally { setBusy(false); }
@@ -156,13 +171,13 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
         <h2>{presenterMode ? "1. Choose a campaign post" : "1. Choose your test"}</h2>
         {(presenterMode || model === "infinitetalk" || model === "kling") && <>
           <label htmlFor="ad-campaign">Campaign</label><select id="ad-campaign" value={campaignId} disabled={busy || active} onChange={e => { setCampaignId(e.target.value); setPostId(""); setScript(""); setAudio(null); invalidate(); }}><option value="">Choose campaign</option>{campaigns.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select>
-          <label htmlFor="ad-post">Campaign post</label><select id="ad-post" value={postId} disabled={busy || active || !campaign} onChange={e => { setPostId(e.target.value); const post = campaign?.items.find(item => item.id === e.target.value); setScript((post?.caption || post?.headline || "").slice(0,600)); setAudio(null); invalidate(); }}><option value="">Choose post</option>{campaign?.items.map(item => <option value={item.id} key={item.id}>{item.headline || "Untitled post"}</option>)}</select>
+          <label htmlFor="ad-post">Campaign post</label><select id="ad-post" value={postId} disabled={busy || active || !campaign} onChange={e => { setPostId(e.target.value); const post = campaign?.items.find(item => item.id === e.target.value); setScript(presenterSpeechText(post?.caption || post?.headline || "")); setAudio(null); invalidate(); }}><option value="">Choose post</option>{campaign?.items.map(item => <option value={item.id} key={item.id}>{item.headline || "Untitled post"}</option>)}</select>
           <p className={styles.hint}>Review the filled script before generating. The video length follows your audio. This workflow animates the presenter photo; use the product option below to prepare a holding pose first. Product details need your review.</p>
         </>}
-        <div className={styles.models} hidden={presenterMode}>{(lab?.models || []).filter(item => item.kind !== "audio" && item.id !== "holding").map(item => <button key={item.id} type="button" className={`${styles.model} ${item.id === model ? styles.selected : ""}`} aria-pressed={item.id === model} disabled={busy} onClick={() => { setModel(item.id); setPrompt(""); invalidate(); setMessage(""); }}><strong>{item.kind === "image" ? "Image ad" : item.id === "infinitetalk" ? "Talking presenter" : item.name}</strong><span>{item.provider} · {item.name}</span><small>{item.configured ? "Ready to test" : "Account setup needed"}</small></button>)}</div>
+        <div className={styles.models} hidden={presenterMode}>{(lab?.models || []).filter(item => item.kind !== "audio" && item.id !== "holding").map(item => <button key={item.id} type="button" className={`${styles.model} ${item.id === model ? styles.selected : ""}`} aria-pressed={item.id === model} disabled={busy} onClick={() => chooseModel(item.id)}><strong>{item.kind === "image" ? "Image ad" : item.id === "infinitetalk" ? "Talking presenter" : item.name}</strong><span>{item.provider} · {item.name}</span><small>{item.configured ? "Ready to test" : "Account setup needed"}</small></button>)}</div>
         {!lab && !message && <p>Loading your workspace…</p>}
         {selected && !selected.configured && <div className={styles.setup}><strong>Connect this provider first</strong><p>Your administrator needs to add this provider’s API key and enable private sample storage. A website subscription alone does not connect the API.</p><details><summary>Administrator setup</summary><p>Add <code>{model === "flux" ? "BFL_API_KEY" : "WAVESPEED_API_KEY"}</code> and <code>BLOB_READ_WRITE_TOKEN</code> in the hosting settings. Never paste keys into this page or a prompt.</p></details></div>}
-        {presenterMode && <><label htmlFor="presenter-engine">Presenter video model</label><select id="presenter-engine" value={model} disabled={busy || active} onChange={e=>{setModel(e.target.value as Model["id"]);invalidate();}}>{(lab?.models || []).filter(item=>item.kind === "video").map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>{model === "kling" && <p>Kling Avatar comparison · published video estimate $0.75 for 15 seconds, voice extra. The live estimate uses your recording length. Quality and guitar accuracy need review; this animates one prepared photo and does not combine separate presenter and guitar references.</p>}</>}
+        {presenterMode && <><label htmlFor="presenter-engine">Presenter video model</label><select id="presenter-engine" value={model} disabled={busy || active} onChange={e=>chooseModel(e.target.value as Model["id"])}>{(lab?.models || []).filter(item=>item.kind === "video").map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>{model === "kling" && <p>Kling Avatar comparison · published video estimate $0.75 for 15 seconds, voice extra. The live estimate uses your recording length. Quality and guitar accuracy need review; this animates one prepared photo and does not combine separate presenter and guitar references.</p>}</>}
         {(model === "infinitetalk" || model === "kling") && <div className={styles.uploads}>
           <h2>2. Choose your presenter and voice</h2>
           <p>Choose a presenter photo you have permission to use. Type a script for an AI voice, or upload your own recording.</p>
@@ -174,11 +189,11 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
           {besideProduct && <p>Use an original presenter portrait. Your product photo stays separate from AI generation. When the talking clip is ready, click “Create video beside my exact product” below to combine them automatically, with the original voice.</p>}
           {(holdProduct || besideProduct) && <div className={styles.setup}>
             {holdProduct && <><p>Use the original presenter portrait and a clear photo of the exact guitar. For another attempt, choose the original portrait instead of the earlier prepared product photo.</p>
-            <label htmlFor="holding-pose">Product scale and pose</label><select id="holding-pose" value={holdingPose} disabled={busy || active} onChange={e=>{setHoldingPose(e.target.value as "guitar"|"guitar-standing-strum"|"reference");setProductReviewed(false);invalidate();}}><option value="guitar">Full-size adult guitar · seated, across the lap</option><option value="guitar-standing-strum">Full-size adult guitar · standing, strumming pose</option><option value="reference">Other product · match reference scale</option></select>
+            <label htmlFor="holding-pose">Product scale and pose</label><select id="holding-pose" value={holdingPose} disabled={busy || active} onChange={e=>{setHoldingPose(e.target.value as "guitar"|"guitar-standing-strum"|"reference");resetPreparedProduct();}}><option value="guitar">Full-size adult guitar · seated, across the lap</option><option value="guitar-standing-strum">Full-size adult guitar · standing, strumming pose</option><option value="reference">Other product · match reference scale</option></select>
             {presenterSource && <p className={styles.hint}>Original presenter reference: {presenterSource.name}</p>}
             {!presenterSource && image?.needsReview && <p className={styles.hint}>Choose an original presenter portrait above before preparing a new holding photo.</p>}
             </>}<label>Guitar or product photo<input aria-label="Guitar or product photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || active || !selected?.configured} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file,"product");}}/><small>{product?.name || "Upload the exact product · up to 10 MB"}</small></label>
-            {!!lab?.inputs?.length && <><label htmlFor="saved-product">Or choose a saved product photo</label><select id="saved-product" value={product?.id || ""} disabled={busy || active} onChange={e=>{setProduct(lab.inputs?.find(item=>item.id===e.target.value)||null);invalidate();}}><option value="">Choose saved photo</option>{lab.inputs.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></>}
+            {!!lab?.inputs?.length && <><label htmlFor="saved-product">Or choose a saved product photo</label><select id="saved-product" value={product?.id || ""} disabled={busy || active} onChange={e=>{setProduct(lab.inputs?.find(item=>item.id===e.target.value)||null);resetPreparedProduct();}}><option value="">Choose saved photo</option>{lab.inputs.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></>}
             {holdProduct && <><button type="button" disabled={busy || active || !selected?.configured || (!presenterSource && (!image || image.needsReview)) || !product || (presenterSource?.id || image?.id)===product.id || (presenterMode && (!campaignId || !postId))} onClick={()=>estimate("holding")}>Prepare presenter holding product</button>
             <p className={styles.hint}>Get an image-edit estimate first. Voice and video are priced separately. Check the product shape, details, hands and face before continuing. This creates a still holding or strumming pose. Presenter animation may not reproduce realistic strumming and does not generate guitar music.</p></>}
           </div>}
