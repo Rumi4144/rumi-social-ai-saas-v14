@@ -20,14 +20,14 @@ async function request(path: string, body?: object) {
   return result;
 }
 type CampaignOption = { id: string; title: string; items: { id: string; headline: string | null; caption: string | null }[] };
-export default function TestLab({ workspaceName, presenterMode = false, campaigns = [], initialCampaignId = "", initialContentItemId = "" }: { workspaceName: string; presenterMode?: boolean; campaigns?: CampaignOption[]; initialCampaignId?: string; initialContentItemId?: string }) {
+export default function TestLab({ workspaceName, presenterMode = false, campaigns = [], initialCampaignId = "", initialContentItemId = "", initialModel }: { initialModel?: "flux"|"infinitetalk"|"kling"; workspaceName: string; presenterMode?: boolean; campaigns?: CampaignOption[]; initialCampaignId?: string; initialContentItemId?: string }) {
   const initialCampaign = campaigns.find(item => item.id === initialCampaignId);
   const initialPost = initialCampaign?.items.find(item => item.id === initialContentItemId);
   const [campaignId, setCampaignId] = useState(initialCampaign?.id || "");
   const [postId, setPostId] = useState(initialPost?.id || "");
   const campaign = campaigns.find(item => item.id === campaignId);
   const campaignContext = presenterMode && campaignId && postId ? { campaignId, contentItemId: postId } : {};
-  const [lab, setLab] = useState<Lab | null>(null), [model, setModel] = useState<Model["id"]>(presenterMode ? "infinitetalk" : "flux");
+  const [lab, setLab] = useState<Lab | null>(null), [model, setModel] = useState<Model["id"]>(initialModel || (presenterMode ? "infinitetalk" : "flux"));
   const [prompt, setPrompt] = useState(presenterMode ? "Friendly, natural delivery. Preserve the presenter’s appearance and background. Match lip movements to the voice recording." : ""), [quote, setQuote] = useState<Quote | null>(null);
   const [image, setImage] = useState<PhotoInput | null>(null), [audio, setAudio] = useState<{ id: string; name: string } | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [acknowledge, setAcknowledge] = useState(false);
@@ -149,6 +149,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
   }
   return <div className={styles.lab}>
     <header className={styles.header}><div><span className={styles.eyebrow}>YOUR CREATIVE WORKBENCH</span><h1>{presenterMode ? "Presenter ads" : "AI Test Lab"}</h1><p>{presenterMode ? `Create a talking-presenter ad for ${workspaceName} with the lower-cost WaveSpeed workflow.` : `Try a small sample. Compare the results. Find what works for ${workspaceName}.`}</p></div><span className={styles.badge}>{presenterMode ? "Lower-cost default" : "Experimental"}</span></header>
+    <p><a href="/ai-test-lab/options">Explore all AI options · images, videos, presenters and voices</a></p>
     <div className={styles.notice}>{presenterMode ? "Create your voice first, then approve the video estimate. Finished videos are saved to the chosen campaign post for review. Nothing publishes automatically." : "Tests stay separate from your campaigns. Each generation uses the provider’s paid balance. Nothing publishes automatically."}</div>
     <div className={styles.grid}>
       <section className={styles.panel} aria-label="Create a test sample">
