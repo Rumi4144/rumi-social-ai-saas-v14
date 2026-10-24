@@ -1,4 +1,5 @@
 export const labModels = {
+  kling: { name: "Kling Avatar Standard", provider: "WaveSpeedAI", model: "kwaivgi/kling-v1-ai-avatar-standard", kind: "video", estimateUsd: 0.75, source: "https://wavespeed.ai/models/kwaivgi/kling-v1-ai-avatar-standard" },
   holding: { name: "Presenter holding a product", provider: "WaveSpeedAI · FLUX", model: "wavespeed-ai/flux-2-klein-4b/edit", kind: "image", estimateUsd: 0.012, source: "https://wavespeed.ai/docs/docs-api/wavespeed-ai/flux-2-klein-4b-edit" },
   flux: { name: "FLUX image", provider: "Black Forest Labs", model: "flux-3-image-klein", kind: "image", estimateUsd: 0.009, source: "https://docs.bfl.ai/flux_3/flux3_image_klein" },
   infinitetalk: { name: "InfiniteTalk Fast", provider: "WaveSpeedAI", model: "wavespeed-ai/infinitetalk-fast", kind: "video", estimateUsd: 0.225, source: "https://wavespeed.ai/models/wavespeed-ai/infinitetalk-fast" },

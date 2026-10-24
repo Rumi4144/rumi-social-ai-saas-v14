@@ -1,4 +1,4 @@
-import { labCost, labVoices, labVoiceStyles, labAccentVoice, type LabInput } from "./catalog";
+import { labModels, labCost, labVoices, labVoiceStyles, labAccentVoice, type LabInput } from "./catalog";
 
 export function speechInputs(input: LabInput) {
   if (!input.voiceId || !(input.voiceId in labVoices) || input.prompt.length > 600) throw new Error("Choose a voice and a script up to 600 characters.");
@@ -42,7 +42,7 @@ export async function labQuote(input: LabInput, media?: LabMedia) {
   if (input.model === "flux") return 0.009;
   if (input.model !== "speech" && !media) throw new Error("Choose a presenter photo and a voice recording.");
   const response = await json("https://api.wavespeed.ai/api/v3/model/price", process.env.WAVESPEED_API_KEY!, {
-    model_id: input.model === "holding" ? "wavespeed-ai/flux-2-klein-4b/edit" : input.model === "speech" ? "minimax/speech-02-hd" : "wavespeed-ai/infinitetalk-fast",
+    model_id: labModels[input.model].model,
     inputs: input.model === "holding" ? holdingInputs(input, media) : input.model === "speech" ? speechInputs(input) : { image: media!.image, audio: media!.audio, prompt: input.prompt },
   });
   if (response.data?.currency !== "USD") throw new Error("Could not confirm the test price in USD.");
@@ -60,7 +60,7 @@ Mobile readability guidance: If the requested image includes advertising text, d
     return { taskId: result.id, pollingUrl: bflPollingUrl(result.polling_url) };
   }
   if (input.model !== "speech" && !media) throw new Error("Choose a presenter photo and a voice recording.");
-  const response = await json(`https://api.wavespeed.ai/api/v3/${input.model === "holding" ? "wavespeed-ai/flux-2-klein-4b/edit" : input.model === "speech" ? "minimax/speech-02-hd" : "wavespeed-ai/infinitetalk-fast"}`, process.env.WAVESPEED_API_KEY!,
+  const response = await json(`https://api.wavespeed.ai/api/v3/${labModels[input.model].model}`, process.env.WAVESPEED_API_KEY!,
     input.model === "holding" ? holdingInputs(input, media) : input.model === "speech" ? speechInputs(input) : { image: media!.image, audio: media!.audio, prompt: input.prompt });
   const taskId = response.data?.id;
   if (typeof taskId !== "string" || !/^[a-zA-Z0-9_-]{1,150}$/.test(taskId)) throw new LabProviderError(false);

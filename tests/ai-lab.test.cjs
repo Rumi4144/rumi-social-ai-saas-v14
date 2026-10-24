@@ -213,3 +213,17 @@ test('customer dashboard excludes provider jobs while platform admin retains acc
  if(isSuperAdmin)assert.equal(filter.type,undefined);else assert.deepEqual(Array.from(filter.type.notIn),['AI_LAB','AI_LAB_QUOTE']);
  }
 });
+
+test('Kling Avatar uses the same exact inputs for live pricing and submission without replacing voice or product',async()=>{
+ const calls=[];const adapter=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>url.includes('/model/price')?{code:200,data:{currency:'USD',discounted_price:.75}}:{code:200,data:{id:'kling-task'}}};}});
+ const input={model:'kling',prompt:'Preserve identity and natural speech.'},media={image:'https://provider.test/person.jpg',audio:'https://provider.test/voice.mp3'};
+ assert.equal(await adapter.labQuote(input,media),.75);assert.equal((await adapter.labSubmit(input,media)).taskId,'kling-task');assert.equal(calls[0].body.model_id,'kwaivgi/kling-v1-ai-avatar-standard');assert.equal(calls[1].url,'https://api.wavespeed.ai/api/v3/kwaivgi/kling-v1-ai-avatar-standard');assert.deepEqual(calls[0].body.inputs,calls[1].body);assert.equal(calls[1].body.audio,media.audio);assert.equal(calls[1].body.image,media.image);assert.equal(calls.length,2);
+});
+
+test('Kling quotes require tenant-owned image and audio and preserve exact-product layout selection',async()=>{
+ const f=fixture();const input={model:'kling',prompt:'Friendly natural delivery.',imageAssetId:'image',audioAssetId:'audio',productAssetId:'product',productLayout:'beside'};
+ assert.equal((await f.post({action:'quote',input})).status,422);
+ f.state.assets=['image','audio','product'].map(id=>({id,organizationId:'own',kind:'ai_lab_input',status:'ready',createdAt:new Date(),metadata:{kind:id==='audio'?'audio':'image'},url:`https://provider.test/${id}`}));
+ const quote=await f.post({action:'quote',input});assert.equal(quote.status,200);assert.equal(f.state.jobs.get(quote.body.quoteId).payload.model,'kling');assert.equal(f.state.jobs.get(quote.body.quoteId).payload.productLayout,'beside');
+ f.state.assets[1].organizationId='other';assert.equal((await f.post(f.generate(quote.body.quoteId))).status,500);assert.equal(f.state.calls,0);
+});
