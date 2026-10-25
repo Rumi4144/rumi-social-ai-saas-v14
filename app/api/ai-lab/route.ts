@@ -52,7 +52,15 @@ export async function POST(req: Request) {
     const ctx = await tenantContext();
     if (!labCanRun(ctx.role, ctx.isSuperAdmin)) throw new Error("FORBIDDEN");
     const parsed = schema.safeParse(await req.json());
-    if (!parsed.success) return NextResponse.json({ error: "Choose a model and describe one sample." }, { status: 400 });
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const field = issue?.path.join(".");
+      const error = field === "input.model" ? "This video model is not supported by the current deployment. Refresh the page and choose an available model."
+        : field === "input.prompt" ? "Add sample instructions between 10 and 2,000 characters before getting an estimate."
+        : field === "input" && issue.code === "custom" ? issue.message
+        : "Some sample settings are missing or invalid. Check your model, instructions and reference photos. No sample was started.";
+      return NextResponse.json({ error }, { status: 400 });
+    }
     const p = parsed.data;
     if (p.organizationId !== ctx.organizationId) return NextResponse.json({ error: "Your workspace changed. Reload the test lab." }, { status: 409 });
     if (p.action === "refresh") {

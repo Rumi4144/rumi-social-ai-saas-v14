@@ -133,7 +133,7 @@ fixture.models.push({id:'kling',name:'Kling Avatar Standard',provider:'WaveSpeed
  assert.equal(calls.filter(c=>c.action==='generate').length,beforeSettings);await locked.close();
  // Veo sends both originals directly, with no speech or holding-photo generation.
  const veo=await browser.newPage({viewport:{width:390,height:844}});await veo.goto(base);
- await veo.getByRole('button',{name:/^Veo 3.1 Fast/}).click();const veoBefore=calls.filter(c=>c.action==='generate').length;
+ await veo.getByLabel('Video or image model',{exact:true}).selectOption('veo');assert.equal(await veo.getByLabel('Video or image model',{exact:true}).inputValue(),'veo');const veoBefore=calls.filter(c=>c.action==='generate').length;
  assert.equal(await veo.getByLabel('Selected AI voice preview',{exact:true}).count(),0);
  await veo.getByLabel('Saved original presenter',{exact:true}).selectOption('presenter-photo');
  await veo.getByLabel('Saved original product',{exact:true}).selectOption('presenter-photo');assert.equal(await veo.getByRole('button',{name:'Get cost estimate',exact:true}).isDisabled(),true);
