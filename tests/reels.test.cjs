@@ -308,3 +308,22 @@ test('closing-only or missing-media reels cannot be exported or saved as finishe
  for(const scene of [{src:'',kind:'image',seconds:4},{src:'/photo',kind:'image',seconds:0},{src:'/photo',kind:'image',seconds:NaN}])assert.throws(()=>assertReelHasMedia({scenes:[scene]}),/Add a photo or clip/);
  assert.doesNotThrow(()=>assertReelHasMedia({scenes:[{src:'/photo',kind:'image',seconds:4}]}));
 });
+
+test('saved video download preserves attachment intent for inline, private and Runway clips',async()=>{
+ let asset={id:'clip',organizationId:'own',url:'data:video/mp4;base64,unused',metadata:null};
+ class NextResponse extends Response {static redirect(url){return new Response(null,{status:307,headers:{Location:String(url)}});}}
+ const api=load('app/api/video/media/[id]/route.ts',{
+  'next/server':{NextResponse},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'own'})},
+  '@/lib/prisma':{prisma:{mediaAsset:{findFirst:async q=>{assert.equal(q.where.organizationId,'own');return asset;}}}},
+  '@/lib/video/reuse':{resolveVideoAsset:async a=>a},'@/lib/video/clips':{decodeClip:()=>({contentType:'video/mp4',bytes:Buffer.from('saved-video')})},
+  '@/lib/reels/storage':{privateReelPath:()=>false},
+  '@/lib/video/private-response':{privateVideoResponse:async(req,pathname,type,filename)=>{assert.equal(new URL(req.url).searchParams.get('download'),'1');return new Response('saved-video',{headers:{'Content-Disposition':`attachment; filename="${filename}"`}});}}
+ });
+ const request=()=>api.GET(new Request('https://app.test/api/video/media/clip?download=1'),{params:Promise.resolve({id:'clip'})});
+ let response=await request();assert.match(response.headers.get('Content-Disposition'),/^attachment;/);assert.equal(await response.text(),'saved-video');
+ response=await api.GET(new Request('https://app.test/api/video/media/clip'),{params:Promise.resolve({id:'clip'})});assert.match(response.headers.get('Content-Disposition'),/^inline;/);
+ asset={...asset,url:'https://blob.test/video',metadata:{pathname:'ai-lab/own/clip.mp4'}};
+ response=await request();assert.match(response.headers.get('Content-Disposition'),/^attachment;/);
+ asset={...asset,metadata:{pathname:'runway/own/clip.mp4'}};
+ response=await request();assert.equal(new URL(response.headers.get('Location')).searchParams.get('download'),'1');
+});

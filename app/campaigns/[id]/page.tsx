@@ -214,7 +214,7 @@ export default async function Campaign({
               {videoAsset && <div style={{ marginBottom: 20 }}>
                 <video controls playsInline preload="metadata" src={`/api/video/media/${videoAsset.id}`} style={{ width: "100%", maxHeight: 600 }} />
                 <UseCampaignVideo assetId={videoAsset.id} contentItemId={item.id} selected={item.mediaUrl === `/api/video/media/${videoAsset.id}`} />
-                <a href={`/api/video/media/${videoAsset.id}`} target="_blank" rel="noopener noreferrer">Open / download video draft</a>
+                <p><a href={`/api/video/media/${videoAsset.id}`} target="_blank" rel="noopener noreferrer">Watch video</a>{" · "}<a href={`/api/video/media/${videoAsset.id}?download=1`} download>Download video</a></p>
                 <p>Review this clip, then select it for Facebook publishing or YouTube upload. Download it for other platforms.</p>
               </div>}
               {photoNeedsReview && <p role="status">Check this photo before publishing: its source has not been verified against the named product. Use “Choose photo from website” below to select the exact item.</p>}
