@@ -60,6 +60,19 @@ fixture.models.push({id:'kling',name:'Kling Avatar Standard',provider:'WaveSpeed
  assert.equal(calls.filter(c=>c.action==='generate').length,reusePaid);
  await selectedAudio.evaluate(el=>el.dispatchEvent(new Event('error')));await reuse.getByRole('button',{name:'Reload saved voice preview',exact:true}).waitFor();
  await reuse.getByRole('button',{name:'Reload saved voice preview',exact:true}).click();await reuse.waitForFunction(()=>document.querySelector('audio[aria-label="Selected AI voice preview"]')?.duration===2);
+ // A rejected oversized upload must never consume a ticket, buy media, or discard a valid presenter/voice.
+ const beforeOversizeUploads=uploads.length;
+ await reuse.getByLabel('Presenter photo',{exact:true}).setInputFiles({name:'large-presenter.jpg',mimeType:'image/jpeg',buffer:Buffer.alloc(10_000_001)});
+ await reuse.getByText(/The presenter photo .*large-presenter.*Choose a file under 10 MB/).waitFor();
+ assert.equal(await reuse.getByLabel('Or choose a saved presenter photo',{exact:true}).inputValue(),'presenter-photo');
+ assert.equal(await selectedAudio.getAttribute('src'),'/voice-second.wav');assert.equal(await reuse.getByRole('button',{name:'Continue to video',exact:true}).isEnabled(),true);
+ await reuse.getByRole('button',{name:/^Upload a recording/}).click();
+ await reuse.getByLabel('Voice recording',{exact:true}).setInputFiles({name:'large-voice.wav',mimeType:'audio/wav',buffer:Buffer.alloc(10_000_001)});
+ await reuse.getByText(/The voice recording .*large-voice.*Choose a file under 10 MB/).waitFor();assert.equal(await reuse.getByRole('button',{name:'Get cost estimate',exact:true}).isDisabled(),true);
+ assert.equal(uploads.length,beforeOversizeUploads);assert.equal(calls.filter(c=>c.action==='generate').length,reusePaid);
+ await reuse.getByRole('button',{name:'Use this voice for video',exact:true}).first().click();
+ await reuse.waitForFunction(()=>document.querySelector('audio[aria-label="Selected AI voice preview"]')?.duration===2);
+ assert.equal(await reuse.getByRole('button',{name:'Continue to video',exact:true}).isEnabled(),true);
  assert.equal(calls.filter(c=>c.action==='generate').length,reusePaid);fixture.jobs=fixture.jobs.filter(j=>j.id!=='voice-second');calls.pop();await reuse.close();
  assert.equal(await page.getByLabel('AI voice',{exact:true}).locator('option').count(),8);await page.getByLabel('Accent',{exact:true}).selectOption('british');assert.equal(await page.getByLabel('Selected AI voice preview',{exact:true}).count(),0);assert.equal(await page.getByLabel('Accent',{exact:true}).locator('option[value="australian"]').isDisabled(),true);
  await page.getByLabel('Speaking style',{exact:true}).selectOption('happy');await page.getByLabel('Speaking pace',{exact:true}).selectOption('0.95');assert.equal(await page.getByLabel('Selected AI voice preview',{exact:true}).count(),0);assert.equal(calls.filter(c=>c.action==='generate').length,2);await page.getByRole('button',{name:'Get voice cost estimate',exact:true}).click();assert.equal(calls.at(-1).input.voiceAccent,'british');assert.equal(calls.at(-1).input.voiceEmotion,'happy');assert.equal(calls.at(-1).input.voiceSpeed,.95);

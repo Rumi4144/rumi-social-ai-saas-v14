@@ -117,7 +117,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
     if (!lab) return;
     invalidate(); setBusy(true); setMessage(`Uploading ${kind === "image" ? "presenter photo" : kind === "product" ? "product photo" : "voice recording"}…`);
     try {
-      if (file.size > 10_000_000) throw new Error("Choose a file under 10 MB.");
+      if (file.size > 10_000_000) throw new Error(`The ${kind === "image" ? "presenter photo" : kind === "product" ? "product photo" : "voice recording"} “${file.name}” is ${(file.size / 1_000_000).toFixed(1)} MB. Choose a file under 10 MB. Your existing selections have been kept.`);
       const extension = file.name.split(".").pop()?.toLowerCase();
       const type = file.type || ({ mp3: "audio/mpeg", wav: "audio/wav", m4a: "audio/mp4", ogg: "audio/ogg" } as Record<string,string>)[extension || ""];
       const ticket = await request("/api/ai-lab/upload", { action: "prepare", organizationId: lab.organizationId, filename: file.name.replace(/[^\w .()-]/g, "_"), size: file.size, contentType: type });
