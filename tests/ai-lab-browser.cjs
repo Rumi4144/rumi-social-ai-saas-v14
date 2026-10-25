@@ -117,6 +117,19 @@ fixture.models.push({id:'kling',name:'Kling Avatar Standard',provider:'WaveSpeed
  await simple.waitForFunction(()=>!document.querySelector('#lab-approve-video'));
  assert.equal(calls.filter(c=>c.action==='generate').length,beforeVideo+1);
  assert.equal(calls.filter(c=>c.action==='generate').at(-1).acknowledge,true);await simple.close();
+ // An outstanding sample blocks spending, but must not trap the user in the rejected layout.
+ const locked=await browser.newPage();const beforeSettings=calls.filter(c=>c.action==='generate').length;
+ await locked.route('**/api/ai-lab',route=>route.fulfill({json:{...fixture,jobs:[{id:'pending-check',status:'uncertain',kind:'video',model:'infinitetalk',prompt:'Earlier sample',estimateUsd:.2,createdAt:new Date().toISOString(),url:null}]}}));
+ await locked.goto(base+'/default');await locked.getByLabel('Presenter video model',{exact:true}).selectOption('kling');
+ await locked.getByLabel('Or choose a saved presenter photo',{exact:true}).selectOption('presenter-photo');
+ await locked.getByLabel('Have the presenter hold a guitar or product',{exact:true}).check();
+ await locked.getByLabel('Presenter beside my exact product photo · keep the guitar unchanged',{exact:true}).check();
+ assert.equal(await locked.getByLabel('Have the presenter hold a guitar or product',{exact:true}).isChecked(),false);
+ await locked.getByLabel('Or choose a saved product photo',{exact:true}).selectOption('guitar-photo');
+ await locked.getByLabel('Presenter video model',{exact:true}).selectOption('infinitetalk');
+ assert.equal(await locked.getByLabel('Or choose a saved presenter photo',{exact:true}).inputValue(),'presenter-photo');
+ assert.equal(await locked.getByRole('button',{name:'Get cost estimate',exact:true}).isDisabled(),true);
+ assert.equal(calls.filter(c=>c.action==='generate').length,beforeSettings);await locked.close();
  const disconnected=await browser.newPage();await disconnected.route('**/api/ai-lab',route=>route.fulfill({json:{...fixture,models:fixture.models.map(m=>({...m,configured:false}))}}));await disconnected.goto(base);await disconnected.getByText('Connect this provider first',{exact:true}).waitFor();assert.equal(await disconnected.getByRole('button',{name:'Get cost estimate',exact:true}).isDisabled(),true);await disconnected.close();assert.deepEqual(errors,[]);
  console.log('PASS: real lab UI, explicit paid approval, one generation, safe history refresh, comparison selection, text-to-speech cost approval and preview without automatic video generation, script-change invalidation, video upload controls, missing setup, desktop and mobile without overflow. No paid calls.');
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{await browser?.close();server?.close();});
