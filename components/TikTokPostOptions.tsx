@@ -18,7 +18,7 @@ export default function TikTokPostOptions({connectionId,contentItemId,assetId,di
   try{validateTikTokOptions(parsed.data,info.creator,info.post.duration);onChange(parsed.data);}catch{onChange(null);}
  },[value,info,onChange]);
  const change=(update:Partial<Draft>)=>setValue(old=>({...old,...update,consent:false}));
- if(error)return <section aria-label="TikTok posting settings"><p role="alert">{error}</p><a href={sandbox?"/api/social/tiktok-test/connect":"/api/social/tiktok/connect"}>Reconnect TikTok for posting</a></section>;
+ if(error)return <section aria-label="TikTok posting settings"><p role="alert">{error}</p><p>Your post stays here. You can deselect TikTok and continue with another account, or download the video and upload it in TikTok.</p><a href={sandbox?"/settings/tiktok-test":"/settings"} target="_blank" rel="noopener noreferrer">Check TikTok setup in a new tab</a></section>;
  if(!info)return <p role="status">Checking TikTok posting options…</p>;
  const creator=info.creator;
  const tooLong=info.post.duration>creator.max_video_post_duration_sec;
