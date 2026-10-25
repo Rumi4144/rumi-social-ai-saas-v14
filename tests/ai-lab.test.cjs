@@ -234,3 +234,23 @@ test('price-limit errors show actual estimate, distinct from unavailable inputs 
  const missing=await f.post({action:'quote',input:{model:'kling',prompt:'Friendly natural delivery.',imageAssetId:'missing',audioAssetId:'missing'}});assert.equal(missing.body.code,'LAB_INPUT_UNAVAILABLE');assert.match(missing.body.error,/presenter photo and voice/);
  f.state.quoteCost=NaN;const invalid=await f.quote();assert.equal(invalid.body.code,'LAB_PRICE_UNAVAILABLE');assert.equal(f.state.calls,0);
 });
+
+test('Veo quotes and submits the identical original references with fixed short video and native audio',async()=>{
+ const calls=[];const provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>url.endsWith('/model/price')?{code:200,data:{currency:'USD',discounted_price:.80}}:{code:200,data:{id:'veo-one'}}};}});
+ const input={model:'veo',prompt:'Stand holding the reference product. Say: "Discover something special today."'},media={image:'https://provider.test/original-person.jpg',product:'https://provider.test/original-product.jpg'};
+ assert.equal(await provider.labQuote(input,media),.8);assert.equal((await provider.labSubmit(input,media)).taskId,'veo-one');
+ assert.deepEqual(calls[0].body.inputs,calls[1].body);assert.equal(calls[0].body.model_id,'google/veo3.1-fast/reference-to-video');assert.match(calls[1].url,/google\/veo3\.1-fast\/reference-to-video$/);
+ const body=calls[1].body;assert.deepEqual(Array.from(body.images),[media.image,media.product]);assert.equal(body.resolution,'720p');assert.equal(body.aspect_ratio,'9:16');assert.equal(body.generate_audio,true);assert.equal(body.audio,undefined);assert.match(body.prompt,/actual product/);assert.match(body.prompt,/Discover something special today/);
+});
+test('Veo rejects foreign, expired, prepared or missing references and rechecks before spending',async()=>{
+ const img=(id,extra={})=>({id,organizationId:'own',kind:'ai_lab_input',status:'ready',createdAt:new Date(),metadata:{kind:'image'},url:`https://provider.test/${id}.jpg`,...extra});
+ const input={model:'veo',prompt:'Stand holding the exact product and speak naturally.',imageAssetId:'person',productAssetId:'product'};
+ const f=fixture();f.state.quoteCost=.8;f.state.assets=[img('person'),img('product')];
+ for(const change of [{organizationId:'other'},{createdAt:new Date(Date.now()-7*86400000)},{metadata:{kind:'image',source:'generated_holding'}},{metadata:{kind:'audio'}}]){f.state.assets[1]=img('product',change);assert.equal((await f.post({action:'quote',input})).status,422);}
+ f.state.assets=[img('person',{metadata:{kind:'image',source:'generated_holding'}}),img('product')];assert.equal((await f.post({action:'quote',input})).status,422);
+ f.state.assets=[img('person'),img('product')];assert.equal((await f.post({action:'quote',input:{...input,productAssetId:'person'}})).status,422);
+ for(const extra of [{audioAssetId:'voice'},{productLayout:'beside'}])assert.equal((await f.post({action:'quote',input:{...input,...extra}})).status,400);
+ const quote=await f.post({action:'quote',input});assert.equal(quote.status,200);assert.equal(f.state.calls,0);
+ f.state.assets[1].organizationId='other';assert.equal((await f.post(f.generate(quote.body.quoteId))).status,500);assert.equal(f.state.calls,0);
+ f.state.assets[1].organizationId='own';assert.equal((await f.post(f.generate(quote.body.quoteId))).status,200);assert.equal(f.state.calls,1);
+});

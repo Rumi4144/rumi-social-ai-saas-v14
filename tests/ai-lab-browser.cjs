@@ -3,6 +3,7 @@ const {chromium}=require('playwright'), esbuild=require('esbuild'), fs=require('
 const repo=path.resolve(__dirname,'..'), out=fs.mkdtempSync(path.join(os.tmpdir(),'ai-lab-browser-'));
 let server,browser;const calls=[],uploads=[];
 const fixture={inputs:[{id:'presenter-photo',name:'Presenter reference'},{id:'guitar-photo',name:'Exact guitar reference'}],organizationId:'mind',dailyLimitUsd:2,models:[{id:'flux',name:'FLUX image',provider:'Black Forest Labs',model:'flux-3-image-klein',kind:'image',configured:true,estimateUsd:.009,source:'https://docs.bfl.ai/flux_3/flux3_image_klein'},{id:'infinitetalk',name:'InfiniteTalk Fast',provider:'WaveSpeedAI',model:'wavespeed-ai/infinitetalk-fast',kind:'video',configured:true,estimateUsd:.225,source:'https://wavespeed.ai/models/wavespeed-ai/infinitetalk-fast'}],jobs:[]};
+fixture.models.push({id:"veo",name:"Veo 3.1 Fast · product references",provider:"WaveSpeedAI / Google",model:"google/veo3.1-fast/reference-to-video",kind:"video",configured:true,estimateUsd:.8,source:"https://wavespeed.ai/docs/docs-api/google/google-veo3.1-fast-reference-to-video"});
 fixture.models.push({id:'kling',name:'Kling Avatar Standard',provider:'WaveSpeedAI',model:'kwaivgi/kling-v1-ai-avatar-standard',kind:'video',configured:true,estimateUsd:.75,source:'https://wavespeed.ai/models/kwaivgi/kling-v1-ai-avatar-standard'});
 (async()=>{
  fs.writeFileSync(path.join(out,'entry.tsx'),`import React from 'react';import {createRoot} from 'react-dom/client';import TestLab from ${JSON.stringify(repo+'/app/ai-test-lab/TestLab')};import ${JSON.stringify(repo+'/app/globals.css')};createRoot(document.getElementById('root')!).render(<TestLab workspaceName="Master Mind" presenterMode={window.location.pathname === "/default"} campaigns={[{id:"campaign",title:"Calm campaign",items:[{id:"post",headline:"Make space for calm",caption:"Learn about self-hypnosis with Master Mind. Visit https://master-mind.us/service/stress?ref=ad."}]}]} initialCampaignId="campaign" initialContentItemId="post"/>);`);
@@ -130,6 +131,19 @@ fixture.models.push({id:'kling',name:'Kling Avatar Standard',provider:'WaveSpeed
  assert.equal(await locked.getByLabel('Or choose a saved presenter photo',{exact:true}).inputValue(),'presenter-photo');
  assert.equal(await locked.getByRole('button',{name:'Get cost estimate',exact:true}).isDisabled(),true);
  assert.equal(calls.filter(c=>c.action==='generate').length,beforeSettings);await locked.close();
+ // Veo sends both originals directly, with no speech or holding-photo generation.
+ const veo=await browser.newPage({viewport:{width:390,height:844}});await veo.goto(base);
+ await veo.getByRole('button',{name:/^Veo 3.1 Fast/}).click();const veoBefore=calls.filter(c=>c.action==='generate').length;
+ assert.equal(await veo.getByLabel('Selected AI voice preview',{exact:true}).count(),0);
+ await veo.getByLabel('Saved original presenter',{exact:true}).selectOption('presenter-photo');
+ await veo.getByLabel('Saved original product',{exact:true}).selectOption('presenter-photo');assert.equal(await veo.getByRole('button',{name:'Get cost estimate',exact:true}).isDisabled(),true);
+ await veo.getByLabel('Saved original product',{exact:true}).selectOption('guitar-photo');
+ await veo.getByLabel('Delivery and setting',{exact:true}).fill('Stand holding this product. Say: "Discover something special. Take a closer look today."');
+ await veo.getByRole('button',{name:'Get cost estimate',exact:true}).click();await veo.getByRole('button',{name:/^Approve .* and create video$/}).waitFor();
+ assert.equal(calls.at(-1).input.model,'veo');assert.equal(calls.at(-1).input.imageAssetId,'presenter-photo');assert.equal(calls.at(-1).input.productAssetId,'guitar-photo');assert.equal(calls.at(-1).input.audioAssetId,undefined);assert.equal(calls.filter(c=>c.action==='generate').length,veoBefore);
+ assert.ok(await veo.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await veo.getByLabel('Saved original product',{exact:true}).selectOption('');assert.equal(await veo.getByRole('button',{name:/^Approve .* and create video$/}).count(),0);
+ await veo.getByLabel('Saved original product',{exact:true}).selectOption('guitar-photo');await veo.getByRole('button',{name:'Get cost estimate',exact:true}).click();await veo.getByRole('button',{name:/^Approve .* and create video$/}).click();assert.equal(calls.filter(c=>c.action==='generate').length,veoBefore+1);await veo.close();
  const disconnected=await browser.newPage();await disconnected.route('**/api/ai-lab',route=>route.fulfill({json:{...fixture,models:fixture.models.map(m=>({...m,configured:false}))}}));await disconnected.goto(base);await disconnected.getByText('Connect this provider first',{exact:true}).waitFor();assert.equal(await disconnected.getByRole('button',{name:'Get cost estimate',exact:true}).isDisabled(),true);await disconnected.close();assert.deepEqual(errors,[]);
  console.log('PASS: real lab UI, explicit paid approval, one generation, safe history refresh, comparison selection, text-to-speech cost approval and preview without automatic video generation, script-change invalidation, video upload controls, missing setup, desktop and mobile without overflow. No paid calls.');
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{await browser?.close();server?.close();});

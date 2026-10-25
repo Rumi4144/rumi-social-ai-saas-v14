@@ -1,4 +1,5 @@
 export const labModels = {
+  veo: { name: "Veo 3.1 Fast · product references", provider: "WaveSpeedAI / Google", model: "google/veo3.1-fast/reference-to-video", kind: "video", estimateUsd: 0.80, source: "https://wavespeed.ai/docs/docs-api/google/google-veo3.1-fast-reference-to-video" },
   kling: { name: "Kling Avatar Standard", provider: "WaveSpeedAI", model: "kwaivgi/kling-v1-ai-avatar-standard", kind: "video", estimateUsd: 0.75, source: "https://wavespeed.ai/models/kwaivgi/kling-v1-ai-avatar-standard" },
   holding: { name: "Presenter holding a product", provider: "WaveSpeedAI · FLUX", model: "wavespeed-ai/flux-2-klein-4b/edit", kind: "image", estimateUsd: 0.012, source: "https://wavespeed.ai/docs/docs-api/wavespeed-ai/flux-2-klein-4b-edit" },
   flux: { name: "FLUX image", provider: "Black Forest Labs", model: "flux-3-image-klein", kind: "image", estimateUsd: 0.009, source: "https://docs.bfl.ai/flux_3/flux3_image_klein" },

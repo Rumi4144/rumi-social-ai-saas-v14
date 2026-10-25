@@ -18,6 +18,11 @@ export function holdingInputs(input: LabInput, media?: LabMedia) {
 
 }
 
+export function veoInputs(input: LabInput, media?: LabMedia) {
+  if (!media?.image || !media.product || media.image === media.product) throw new Error("Choose separate original presenter and product photos.");
+  return { images: [media.image, media.product], prompt: `Create one 8-second vertical product-presenter video. Reference image 1 supplies the presenter identity. Reference image 2 supplies the actual product. Show that presenter naturally holding and presenting that product. Preserve the product's shape, proportions, color, branding and visible hardware. Frame the entire product and both hands clearly. Use anatomically natural hands and believable product scale. Do not substitute another product. Follow the supplied dialogue and delivery instructions: ${input.prompt}`, aspect_ratio: "9:16", resolution: "720p", generate_audio: true, negative_prompt: "different product, changed logo, distorted product, miniature product, malformed hands, extra fingers, missing fingers, subtitles, added text" };
+}
+
 export class LabProviderError extends Error {
   constructor(public definitive: boolean) { super("Provider request failed"); }
 }
@@ -43,7 +48,7 @@ export async function labQuote(input: LabInput, media?: LabMedia) {
   if (input.model !== "speech" && !media) throw new Error("Choose a presenter photo and a voice recording.");
   const response = await json("https://api.wavespeed.ai/api/v3/model/price", process.env.WAVESPEED_API_KEY!, {
     model_id: labModels[input.model].model,
-    inputs: input.model === "holding" ? holdingInputs(input, media) : input.model === "speech" ? speechInputs(input) : { image: media!.image, audio: media!.audio, prompt: input.prompt },
+    inputs: input.model === "veo" ? veoInputs(input, media) : input.model === "holding" ? holdingInputs(input, media) : input.model === "speech" ? speechInputs(input) : { image: media!.image, audio: media!.audio, prompt: input.prompt },
   });
   if (response.data?.currency !== "USD") throw new Error("Could not confirm the test price in USD.");
   return labCost(response.data?.discounted_price);
@@ -61,7 +66,7 @@ Mobile readability guidance: If the requested image includes advertising text, d
   }
   if (input.model !== "speech" && !media) throw new Error("Choose a presenter photo and a voice recording.");
   const response = await json(`https://api.wavespeed.ai/api/v3/${labModels[input.model].model}`, process.env.WAVESPEED_API_KEY!,
-    input.model === "holding" ? holdingInputs(input, media) : input.model === "speech" ? speechInputs(input) : { image: media!.image, audio: media!.audio, prompt: input.prompt });
+    input.model === "veo" ? veoInputs(input, media) : input.model === "holding" ? holdingInputs(input, media) : input.model === "speech" ? speechInputs(input) : { image: media!.image, audio: media!.audio, prompt: input.prompt });
   const taskId = response.data?.id;
   if (typeof taskId !== "string" || !/^[a-zA-Z0-9_-]{1,150}$/.test(taskId)) throw new LabProviderError(false);
   return { taskId };

@@ -55,3 +55,11 @@ If submission cannot be confirmed, reconcile it manually in the provider account
 - `npm run typecheck` and `npm run build`.
 
 These checks make no paid provider calls. Real provider credentials, upload CORS behavior, account access, output quality and final billing require a separately initiated live sample after configuration.
+
+## Veo reference comparison
+
+`/ai-test-lab?model=veo` offers a separate administrator-only Veo 3.1 Fast reference-to-video test through the existing `WAVESPEED_API_KEY`. The fixed request is one 8-second, 720p, 9:16 video with native generated audio. The original presenter and product image URLs are sent together as `images`, in that order. Prepared holding-photo inputs are rejected, and both original inputs are checked for workspace ownership, readiness, type and six-day age before pricing and again before submission. There is no speech synthesis purchase or reuse of the saved voice in this route.
+
+The published reference estimate is $0.80; the existing pricing endpoint must return a fresh USD quote for these exact inputs. All existing $1 per-sample, daily allowance, active-task, explicit approval, quote expiry and duplicate-request protections apply. There is no paid fallback or automatic regeneration. Generated output uses the existing private MP4 saving, playback and download path. Product geometry, branding, hands, identity, holding action and spoken delivery require actual output review; passing local tests does not establish live availability, output quality or billed cost.
+
+Provider reference: https://wavespeed.ai/docs/docs-api/google/google-veo3.1-fast-reference-to-video
