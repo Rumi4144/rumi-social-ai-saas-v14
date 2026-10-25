@@ -83,6 +83,27 @@ fixture.models.push({id:'kling',name:'Kling Avatar Standard',provider:'WaveSpeed
  await defaultPage.getByLabel('Presenter video model',{exact:true}).selectOption('kling');assert.equal(await defaultPage.getByLabel('Or choose a saved presenter photo',{exact:true}).inputValue(),'presenter-photo');await videoEstimate.click();assert.equal(calls.at(-1).input.model,'kling');assert.equal(calls.at(-1).input.imageAssetId,'presenter-photo');assert.ok(calls.at(-1).input.audioAssetId);assert.equal(calls.at(-1).input.productLayout,'beside');assert.equal(calls.filter(c=>c.action==='generate').length,4);
  await defaultPage.getByLabel('Presenter beside my exact product photo · keep the guitar unchanged',{exact:true}).uncheck();await defaultPage.getByLabel('Have the presenter hold a guitar or product',{exact:true}).check();await defaultPage.getByLabel('Or choose a saved presenter photo',{exact:true}).selectOption('holding-sample');await defaultPage.getByLabel('I checked the product details, hands and presenter and approve this photo for the video.',{exact:true}).check();await defaultPage.getByLabel('Or choose a saved product photo',{exact:true}).selectOption('presenter-photo');assert.equal(await defaultPage.getByRole('img',{name:'Prepared presenter holding product',exact:true}).count(),0);assert.equal(await defaultPage.getByLabel('Or choose a saved presenter photo',{exact:true}).inputValue(),'');assert.equal(await videoEstimate.isDisabled(),true);assert.equal(calls.filter(c=>c.action==='generate').length,4);
  await defaultPage.setViewportSize({width:390,height:844});assert.ok(await defaultPage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await defaultPage.screenshot({path:path.join(repo,'qa-ai-lab/product-presenter-mobile.png'),fullPage:true});await defaultPage.close();
+ // The saved voice panel contains the next step and explicit priced video approval.
+ const simple=await browser.newPage({viewport:{width:390,height:844}});await simple.goto(base);
+ await simple.getByRole('button',{name:'Use this voice for video',exact:true}).first().click();
+ await simple.getByLabel('Or choose a saved presenter photo',{exact:true}).selectOption('presenter-photo');
+ const beforeVideo=calls.filter(c=>c.action==='generate').length;
+ const next=simple.getByRole('button',{name:'Continue to video',exact:true});assert.equal(await next.isEnabled(),true);
+ const audioPanel=simple.getByLabel('Selected AI voice preview',{exact:true}).locator('..');assert.equal(await audioPanel.getByRole('button',{name:'Continue to video',exact:true}).count(),1);
+ await next.click();const approval=simple.getByRole('button',{name:'Approve $0.009 and create video',exact:true});await approval.waitFor();
+ assert.equal(calls.filter(c=>c.action==='generate').length,beforeVideo);
+ assert.equal(await audioPanel.getByRole('button',{name:'Approve $0.009 and create video',exact:true}).count(),1);
+ assert.equal(await simple.getByRole('button',{name:'Generate one sample',exact:true}).count(),0);
+ assert.equal(await simple.getByText('Costs and test limits',{exact:true}).evaluate(el=>el.parentElement.open),false);
+ await simple.getByLabel('Spoken script',{exact:true}).fill('Edited words require a new voice and a new approval.');assert.equal(await approval.count(),0);
+ assert.equal(calls.filter(c=>c.action==='generate').length,beforeVideo);
+ await simple.getByRole('button',{name:'Use this voice for video',exact:true}).first().click();await next.click();await approval.waitFor();
+ await simple.screenshot({path:path.join(repo,'qa-ai-lab/simple-video-approval-mobile.png'),fullPage:true});
+ assert.ok(await simple.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await approval.click();await simple.getByRole('button',{name:'Refresh history',exact:true}).waitFor({state:'visible'});
+ await simple.waitForFunction(()=>!document.querySelector('#lab-approve-video'));
+ assert.equal(calls.filter(c=>c.action==='generate').length,beforeVideo+1);
+ assert.equal(calls.filter(c=>c.action==='generate').at(-1).acknowledge,true);await simple.close();
  const disconnected=await browser.newPage();await disconnected.route('**/api/ai-lab',route=>route.fulfill({json:{...fixture,models:fixture.models.map(m=>({...m,configured:false}))}}));await disconnected.goto(base);await disconnected.getByText('Connect this provider first',{exact:true}).waitFor();assert.equal(await disconnected.getByRole('button',{name:'Get cost estimate',exact:true}).isDisabled(),true);await disconnected.close();assert.deepEqual(errors,[]);
  console.log('PASS: real lab UI, explicit paid approval, one generation, safe history refresh, comparison selection, text-to-speech cost approval and preview without automatic video generation, script-change invalidation, video upload controls, missing setup, desktop and mobile without overflow. No paid calls.');
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{await browser?.close();server?.close();});
