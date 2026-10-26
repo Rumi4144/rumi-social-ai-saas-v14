@@ -52,7 +52,7 @@ function fixture(){
   '@/lib/publishing/google-business':{googleBusinessPost:()=>{throw Error('Unexpected Google');}},
   'next/server':{NextResponse:{json:(value,init)=>Response.json(value,init)}},
  };
- function load(file){if(mocks['@/'+file.replace(/\.ts$/, '')])return mocks['@/'+file.replace(/\.ts$/, '')];if(cache.has(file))return cache.get(file);const module={exports:{}};cache.set(file,module.exports);const code=ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'..',file),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+ function load(file){if(mocks['@/'+file.replace(/\.ts$/, '')])return mocks['@/'+file.replace(/\.ts$/, '')];if(cache.has(file))return cache.get(file);const module={exports:{}};cache.set(file,module.exports);const code=ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'..',file),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
   vm.runInNewContext(code,{module,exports:module.exports,Buffer,URL,URLSearchParams,AbortSignal,Response,Date:Clock,Error,console,process:{env},fetch:fetchMock,require:name=>mocks[name]||(name.startsWith('@/')?load(name.slice(2)+'.ts'):name.startsWith('.')?load(path.join(path.dirname(file),name)+'.ts'):require(name))});return module.exports;
  }
  const security=load('lib/security/crypto.ts'),client=load('lib/x/connection.ts'),prep=load('lib/x/publishing.ts');publisher=load('lib/publishing/x.ts');
@@ -89,3 +89,17 @@ test('real schedule route saves an approved X snapshot and cron publishes it',as
 test('real immediate route publishes only the approved account and records its receipt',async()=>{const f=fixture();const response=await f.route('now',{contentItemId:'post',socialConnectionId:'conn'});assert.equal(response.status,200);assert.equal((await response.json()).externalPostId,'555');assert.equal(f.item.status,'published');assert.equal(f.posts().length,1);});
 test('legacy permission, viewer role, and long caption fail before scheduling writes',async()=>{for(const change of[f=>f.connection.status='linked',f=>f.ctx.role='viewer',f=>f.item.caption='x'.repeat(281)]){const f=fixture();change(f);const response=await f.route('schedule',{contentItemId:'post',socialConnectionIds:['conn'],scheduledFor:new Date(Date.now()+60000).toISOString()});assert.ok(response.status>=400);assert.equal(f.tables.publishJob.size,0);assert.equal(f.calls.length,0);}});
 test('stale interrupted X worker recovers a receipt without resending',async()=>{const f=fixture();await f.queue();await f.publish();const job=f.tables.publishJob.get('publish');job.updatedAt=new Date(Date.now()-1200000);f.advance(1200000);const result=await f.load('lib/publishing/process-due-job.ts').processDuePublishJob();assert.equal(result.status,'published');assert.equal(f.posts().length,1);});
+
+test('X preparation failures explicitly confirm no submission and hide unexpected internals',async()=>{
+ for(const route of ['now','schedule'])for(const unexpected of [false,true]){
+  const f=fixture();
+  if(unexpected)f.prep.prepareXPost=async()=>{throw new TypeError('(0 , f.parseTweet) is not a function');};
+  else f.item.caption='a'.repeat(281);
+  const response=await f.route(route,{contentItemId:'post',socialConnectionId:'conn',socialConnectionIds:['conn'],scheduledFor:new Date(Date.now()+60000).toISOString()});
+  assert.equal(response.status,400);
+  const body=await response.json();assert.equal(body.submitted,false);
+  assert.match(body.error,unexpected?/Rumi could not prepare/:/281/);
+  assert.ok(!body.error.includes('parseTweet'));
+  assert.equal(f.tables.publishJob.size,0);assert.equal(f.tables.job.size,0);assert.equal(f.calls.length,0);
+ }
+});

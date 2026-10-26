@@ -1,5 +1,5 @@
 import { TikTokOptions } from "@/lib/tiktok/options";
-import { prepareXPost, type XPost } from "@/lib/x/publishing";
+import { prepareXPost, XPublishError, type XPost } from "@/lib/x/publishing";
 import { prepareTikTokSettings } from "@/lib/tiktok/prepare";
 import { googleBusinessPost } from "@/lib/publishing/google-business";
 import { campaignVideoId } from "@/lib/publishing/facebook-video";
@@ -81,7 +81,7 @@ export async function POST(req: Request) {
     const xPosts = new Map<string, XPost>();
     for (const connection of xSelected) {
       try { xPosts.set(connection.id, await prepareXPost(ctx.organizationId, item, connection)); }
-      catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Review the X post settings." }, { status: 400 }); }
+      catch (error) { return NextResponse.json({ submitted: false, error: error instanceof XPublishError ? error.message : "Rumi could not prepare this post for X. Please try again." }, { status: 400 }); }
     }
     const jobs = [];
 

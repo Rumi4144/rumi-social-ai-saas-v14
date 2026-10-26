@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import PostDeliveryStatus from "@/components/PostDeliveryStatus";
 
 export default function PublishingActions({
   contentItemId,
@@ -12,6 +13,7 @@ export default function PublishingActions({
   destination?: string;
 }) {
   const isYouTube = destination.startsWith("YouTube");
+  const isX = destination.startsWith("X ·");
   const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("public");
   const [certified,setCertified]=useState(false),[madeForKids,setMadeForKids]=useState(false),[synthetic,setSynthetic]=useState(true);
   const youtube = isYouTube ? { certified, privacy, madeForKids, containsSyntheticMedia: synthetic } : undefined;
@@ -19,6 +21,8 @@ export default function PublishingActions({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
+  const [postUrl, setPostUrl] = useState("");
+  const [watchDelivery, setWatchDelivery] = useState(false);
 
   async function publishNow() {
     if (busy || completed) return;
@@ -32,7 +36,7 @@ export default function PublishingActions({
     }
 
     setBusy(true);
-    setMessage("");
+    setMessage(isX ? "Sending your post to X…" : "Publishing…");
 
     try {
       const res = await fetch("/api/publishing/now", {
@@ -50,11 +54,13 @@ export default function PublishingActions({
 
       if (!res.ok) {
         throw new Error(
-          data.error || "Publishing failed."
+          `${data.submitted === false ? "Not sent to X. " : ""}${typeof data.error === "string" ? data.error : "Publishing failed. Check publishing history before trying again."}`
         );
       }
 
-      setMessage(data.pending ? data.message || "The platform is processing this post. Check publishing history." : "Published successfully.");
+      setMessage(data.pending ? (isX ? "Delivery status updates below." : data.message || "The platform is processing this post. Check publishing history.") : isX ? "Posted to X." : "Published successfully.");
+      if (isX && !data.pending && /^\d+$/.test(data.externalPostId || "")) setPostUrl(`https://x.com/i/status/${data.externalPostId}`);
+      setWatchDelivery(isX && Boolean(data.pending));
       setCompleted(true);
     } catch (error) {
       setMessage(
@@ -83,7 +89,7 @@ export default function PublishingActions({
     }
 
     setBusy(true);
-    setMessage("");
+    setMessage("Scheduling your post…");
 
     try {
       const res = await fetch("/api/publishing/schedule", {
@@ -102,13 +108,12 @@ export default function PublishingActions({
 
       if (!res.ok) {
         throw new Error(
-          typeof data.error === "string"
-            ? data.error
-            : "Scheduling failed."
+          `${data.submitted === false ? "Not scheduled. " : ""}${typeof data.error === "string" ? data.error : "Scheduling failed."}`
         );
       }
 
-      setMessage("Scheduled successfully.");
+      setMessage(`Schedule saved for ${date.toLocaleString()}.${isX ? " Delivery status updates below." : ""}`);
+      setWatchDelivery(isX);
       setCompleted(true);
     } catch (error) {
       setMessage(
@@ -123,7 +128,7 @@ export default function PublishingActions({
 
   return (
     <div style={{ marginTop: "16px" }}>
-      {destination.startsWith("X ·") && <p>X will receive the approved text and photo or reel shown above. X may charge your developer balance for publishing.</p>}
+      {isX && <p>X will receive the approved text and photo or reel shown above. X may charge your developer balance for publishing.</p>}
       {isYouTube && <div><p>Uses this post’s selected video, headline and caption.</p><label>Visibility <select disabled={busy || completed} value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label><input type="checkbox" disabled={busy || completed} checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> Made for kids</label><label><input type="checkbox" disabled={busy || completed} checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Realistic altered or synthetic content</label><label><input type="checkbox" disabled={busy || completed} checked={certified} onChange={e=>setCertified(e.target.checked)} /> I authorize the upload with the selected visibility, have rights to this video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
       <button
         type="button"
@@ -154,6 +159,8 @@ export default function PublishingActions({
       </div>
 
       <p role="status" aria-live="polite" style={{ marginTop: "10px", minHeight: "3em" }}>{message}</p>
+      {postUrl && <p><a href={postUrl} target="_blank" rel="noreferrer">View X post</a></p>}
+      {watchDelivery && <PostDeliveryStatus contentItemId={contentItemId} />}
     </div>
   );
 }

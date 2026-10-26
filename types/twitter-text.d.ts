@@ -1,3 +1,6 @@
 declare module "twitter-text" {
-  export function parseTweet(text: string): { valid: boolean; weightedLength: number };
+  const twitterText: {
+    parseTweet(text: string): { valid: boolean; weightedLength: number };
+  };
+  export default twitterText;
 }

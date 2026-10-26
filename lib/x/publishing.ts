@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { parseTweet } from "twitter-text";
+import twitterText from "twitter-text";
 import type { SocialConnection } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/security/crypto";
@@ -14,7 +14,7 @@ export class XPublishError extends Error { constructor(message: string, public c
 export class XBusy extends Error {}
 
 export function xCaption(text: string, hasMedia: boolean) {
-  const result = parseTweet(text);
+  const result = twitterText.parseTweet(text);
   if (!text && hasMedia) return text;
   if (!result.valid) throw new XPublishError(result.weightedLength > 280 ? `X allows 280 characters. This caption counts as ${result.weightedLength}. Shorten it and approve the post again.` : "Add valid text or a photo/video before posting to X.");
   return text;
