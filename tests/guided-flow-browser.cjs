@@ -1,60 +1,302 @@
 // Real React screens and browser storage; all service responses are isolated fixtures.
 // No live generation, credit purchase, account connection or publishing request.
-const {chromium}=require('playwright'),esbuild=require('esbuild'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),http=require('node:http'),assert=require('node:assert/strict');
-const repo=path.resolve(__dirname,'..'),out=fs.mkdtempSync(path.join(os.tmpdir(),'rumi-guided-'));
-let browser,server,tenant='mind',credits=2000,failVideo=false,configured=true;
-const campaigns=[],videos=[],scripts=[],unexpected=[],jobs=[]; let uploads=0;
-const product={id:'guitar-a',name:'Actual cedar guitar',description:'Cedar top and natural finish.',imageUrl:'/product.svg'};
-const posts=[{id:'post-a',headline:'Our collection',caption:'Explore our collection today.'}];
-const photo='<svg xmlns="http://www.w3.org/2000/svg" width="240" height="320"><rect width="240" height="320" fill="#eee"/><ellipse cx="120" cy="210" rx="65" ry="80" fill="#b58c55"/><rect x="110" y="25" width="20" height="180" fill="#614520"/></svg>';
-const json=(res,data,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
-async function body(req){const chunks=[];for await(const chunk of req)chunks.push(chunk);return Buffer.concat(chunks);}
-(async()=>{
- fs.writeFileSync(path.join(out,'entry.tsx'),`import React from 'react';import {createRoot} from 'react-dom/client';import Create from ${JSON.stringify(repo+'/app/create/page')};import PresenterStudio from ${JSON.stringify(repo+'/app/studio/presenters/PresenterStudio')};import ${JSON.stringify(repo+'/app/globals.css')};const scope=new URLSearchParams(location.search).get('scope')||'mind';createRoot(document.getElementById('root')!).render(location.pathname==='/presenter'?<PresenterStudio campaigns={[{id:'demo',title:'Demo campaign'}]} initialCampaignId={new URLSearchParams(location.search).get('campaignId')||''} initialContentItemId={new URLSearchParams(location.search).get('postId')||''} organizationId={scope} draftScope={'user:'+scope}/>:<Create/>);`);
- await esbuild.build({entryPoints:[path.join(out,'entry.tsx')],bundle:true,outfile:path.join(out,'app.js'),nodePaths:[repo+'/node_modules'],jsx:'automatic',tsconfig:path.join(repo,'tsconfig.json'),define:{'process.env.NODE_ENV':'"production"'}});
- server=http.createServer(async(req,res)=>{
-  const url=new URL(req.url,'http://local');
-  if(['/app.js','/app.css'].includes(url.pathname)){res.setHeader('Content-Type',url.pathname.endsWith('css')?'text/css':'text/javascript');return res.end(fs.readFileSync(path.join(out,url.pathname.slice(1))));}
-  if(url.pathname.startsWith('/presenters/')){res.setHeader('Content-Type','image/svg+xml');return res.end(fs.readFileSync(path.join(repo,'public',url.pathname)));}
-  if(url.pathname==='/api/campaigns/brief-suggestions')return json(res,{organizationId:tenant,draftScope:'user:'+tenant+':brand',brandName:tenant==='mind'?'Master Mind':'Other business',website:'https://example.com',suggestions:[]});
-  if(url.pathname==='/api/reels/library'){assert.equal(url.searchParams.get('organizationId'),tenant);assert.equal(url.searchParams.get('setup'),'1');return json(res,{brandName:'Master Mind',sources:[{id:'paid',src:'/api/reels/media?assetId=paid',thumbnail:'/product.svg',kind:'image',label:'Saved garden',campaignTitle:'Past campaign'}],hasMore:false});}
-  if(url.pathname==='/product.svg'||url.pathname==='/api/reels/media'){res.setHeader('Content-Type','image/svg+xml');return res.end(photo);}
-  if(url.pathname==='/api/campaigns/upload-photo'){const data=(await body(req)).toString();assert.match(data,/name="permission"/);assert.match(data,/name="organizationId"/);uploads++;return json(res,{id:'uploaded',label:'Uploaded garden',src:'/product.svg'});}
-  if(url.pathname==='/api/campaigns/create-everything'){campaigns.push(JSON.parse(await body(req)));return json(res,{campaignId:'new',jobId:'job'},202);}
-  if(url.pathname==='/api/campaigns/process')return json(res,{status:'succeeded'});
-  if(url.pathname==='/api/jobs')return json(res,{jobs:[{type:'CREATE_EVERYTHING',status:'succeeded',payload:{campaignId:'new'}}]});
-  if(url.pathname==='/api/video/presenter/products')return json(res,{products:[product,{...product,id:'website-b',name:'Second guitar',websiteOnly:true},{...product,id:'website-c',name:'Third guitar',websiteOnly:true}]});
-  if(url.pathname==='/api/video/presenter/script'){const data=JSON.parse(await body(req));scripts.push(data);return json(res,{script:'Discover this cedar guitar. Explore the photos and details on our website today.',seconds:data.seconds});}
-  if(url.pathname==='/api/video/presenter'){
-   if(req.method==='POST'){const data=JSON.parse(await body(req));videos.push(data);if(failVideo)return json(res,{error:'Connection interrupted. Check the same request again.'},503);const job={id:data.requestId,status:'succeeded',progress:100,cost:760,videoUrl:'/api/video/file?jobId='+data.requestId,campaignId:data.campaignId,contentItemId:data.contentItemId};jobs.push(job);return json(res,{job},202);}
-   if(url.searchParams.has('jobId'))return json(res,{job:jobs.find(job=>job.id===url.searchParams.get('jobId'))});
-   return json(res,{configured,credits,jobs,products:url.searchParams.has('campaignId')?[product]:[],posts:url.searchParams.has('campaignId')?posts:[]});
-  }
-  if(url.pathname==='/api/video/file'){res.setHeader('Content-Type','video/mp4');if(url.searchParams.has('download')){res.setHeader('Content-Disposition','attachment; filename="presenter.mp4"');res.end('fixture-video');}else{res.statusCode=204;res.end();}return;}
-  if(url.pathname.startsWith('/api/')){unexpected.push(url.pathname);return json(res,{error:'Unexpected API'},500);}
-  res.setHeader('Content-Type','text/html');res.end(url.pathname==='/campaigns/new'?'<h1>Campaign opened</h1>':url.pathname==='/billing'?'<h1>Billing</h1><a href="/presenter">Return to presenter</a>':'<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"></head><body class="public-page"><main id="root"></main><script src="/app.js"></script></body></html>');
- });await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const chrome='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH}:fs.existsSync(chrome)?{executablePath:chrome}:{})});
- const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];page.on('pageerror',error=>errors.push(error.message));const base='http://127.0.0.1:'+server.address().port;
- const next=()=>page.getByRole('button',{name:'Continue',exact:true}).click();const back=()=>page.getByRole('button',{name:'Back',exact:true}).click();
- const saved=()=>page.getByRole('status').filter({hasText:'Draft saved in this browser.'}).waitFor();
- const screenshot=async name=>{const folder=process.env.GUIDED_QA_DIR||path.join(out,'qa');fs.mkdirSync(folder,{recursive:true});await page.screenshot({path:path.join(folder,name+'.png'),fullPage:true});};
- await page.goto(base+'/create');await saved();assert.equal(await page.getByRole('button',{name:'Continue',exact:true}).isDisabled(),true);
- await page.getByLabel('What do you want to promote?',{exact:true}).fill('Relaxation and confidence for Master Mind');await next();
- await page.getByRole('button',{name:'Reuse saved photos',exact:true}).click();await page.getByRole('button',{name:'Choose from past campaign photos',exact:true}).click();await page.getByRole('button',{name:'Add to campaign',exact:true}).click();await page.getByRole('status').filter({hasText:'1 campaign photos selected'}).waitFor();await next();await page.getByRole('checkbox',{name:'Instagram',exact:true}).uncheck();await page.getByRole('button',{name:'15 Days',exact:true}).click();await next();
- await page.getByRole('heading',{name:'Step 4 of 4: Review & create'}).waitFor();await page.getByRole('img',{name:'Saved garden',exact:true}).waitFor();assert.equal(campaigns.length,0);await saved();await page.reload();await saved();await page.getByRole('heading',{name:'Step 4 of 4: Review & create'}).waitFor();await page.getByRole('img',{name:'Saved garden',exact:true}).waitFor();
- await back();await back();await page.getByRole('status').filter({hasText:'1 campaign photos selected'}).waitFor();await page.getByRole('button',{name:'Upload photos',exact:true}).click();await page.getByLabel('Photo file',{exact:true}).setInputFiles({name:'garden.png',mimeType:'image/png',buffer:Buffer.from('fixture bytes')});await page.getByRole('button',{name:'Add uploaded photo',exact:true}).click();assert.equal(uploads,0);await page.getByRole('checkbox',{name:'I have permission to use this photo for this business.',exact:true}).check();await page.getByRole('button',{name:'Add uploaded photo',exact:true}).click();await page.getByRole('status').filter({hasText:'2 campaign photos selected'}).waitFor();await next();await next();await saved();
- tenant='other';await page.reload();await saved();await page.getByRole('heading',{name:'Step 1 of 4: Your message'}).waitFor();assert.equal(await page.getByLabel('What do you want to promote?').inputValue(),'');tenant='mind';await page.reload();await saved();await page.getByRole('img',{name:'Uploaded garden',exact:true}).waitFor();await screenshot('campaign-review-desktop');await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await screenshot('campaign-review-mobile');await page.getByRole('button',{name:'Create campaign drafts · 1 credit',exact:true}).click();await page.getByRole('heading',{name:'Campaign opened'}).waitFor();assert.equal(campaigns.length,1);assert.deepEqual(campaigns[0].campaignPhotoIds,['paid','uploaded']);assert.equal(campaigns[0].organizationId,'mind');assert.equal(campaigns[0].dailyPlan.length,15);assert.ok(campaigns[0].dailyPlan.every(day=>JSON.stringify(day.platforms)===JSON.stringify(['facebook'])));await page.goto(base+'/create');await saved();await page.getByRole('link',{name:'Open created campaign',exact:true}).waitFor();assert.equal(campaigns.length,1);
- await page.setViewportSize({width:1280,height:900});await page.goto(base+'/presenter?campaignId=demo&postId=post-a');await saved();await page.getByLabel('Choose a product, service or campaign topic',{exact:true}).selectOption('guitar-a');assert.equal(await page.getByLabel('Product name',{exact:true}).inputValue(),product.name);assert.equal(await page.getByLabel('Product details from your catalog').inputValue(),product.description);
- await page.getByText('Suggest products or services for me',{exact:true}).click();await page.getByRole('button',{name:'Pick products or services for me',exact:true}).click();await page.getByRole('button',{name:'Pick again',exact:true}).waitFor();assert.equal(await page.locator('.presenter-choices article').count(),3);await page.getByLabel('Choose a product, service or campaign topic',{exact:true}).selectOption('guitar-a');await next();assert.equal(await page.getByRole('button',{name:'Continue',exact:true}).isDisabled(),true);await page.getByRole('button',{name:'Select Morgan',exact:true}).click();await page.getByRole('img',{name:'Presenter reference',exact:true}).waitFor();const presenter=await page.getByRole('img',{name:'Presenter reference',exact:true}).getAttribute('src');await next();await page.getByRole('button',{name:'Write a short script',exact:true}).click();await page.getByRole('button',{name:'Write a short script',exact:true}).waitFor();assert.equal(scripts[0].seconds,15);assert.equal(scripts[0].productName,product.name);await page.getByLabel('Spoken script').fill('This is my exact edited script for our real cedar guitar. Explore the details today.');await next();await page.getByText('760 Rumi credits',{exact:true}).waitFor();await page.getByRole('img',{name:'Product to use in your video',exact:true}).waitFor();assert.equal(videos.length,0);
- const consent=()=>page.getByLabel('I approve the 760 credit cost and have permission to use these photos.',{exact:true});const generate=()=>page.getByRole('button',{name:'Create video · 760 credits',exact:true});assert.equal(await generate().isDisabled(),true);await consent().check();await back();await page.getByLabel('Spoken script').fill('My final spoken words stay saved with the selected cedar guitar and Morgan.');await next();assert.equal(await consent().isChecked(),false);await saved();await page.reload();await saved();await page.getByText('760 Rumi credits',{exact:true}).waitFor();assert.equal(await page.getByRole('img',{name:'Presenter to use in your video',exact:true}).getAttribute('src'),presenter);assert.equal(await page.getByRole('img',{name:'Product to use in your video',exact:true}).getAttribute('src'),product.imageUrl);assert.equal(await consent().isChecked(),false);assert.equal(videos.length,0);await screenshot('presenter-review-desktop');await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await screenshot('presenter-review-mobile');
- credits=0;await page.reload();await saved();await page.getByRole('button',{name:'Save draft and open Billing',exact:true}).click();await page.getByRole('heading',{name:'Billing'}).waitFor();credits=2000;await page.getByRole('link',{name:'Return to presenter'}).click();await saved();await page.getByText('760 Rumi credits',{exact:true}).waitFor();assert.equal(await page.getByRole('img',{name:'Presenter to use in your video',exact:true}).getAttribute('src'),presenter);assert.equal(videos.length,0);
- await page.getByRole('button',{name:'Edit product',exact:true}).click();const original=await page.getByRole('img',{name:'Selected product reference',exact:true}).getAttribute('src');await page.getByLabel('Actual product photo',{exact:true}).setInputFiles({name:'bad.txt',mimeType:'text/plain',buffer:Buffer.from('invalid')});await page.getByRole('alert').filter({hasText:'previous selection is still saved'}).waitFor();assert.equal(await page.getByRole('img',{name:'Selected product reference',exact:true}).getAttribute('src'),original);const uploadBytes=process.env.GUIDED_PHOTO_FILE?fs.readFileSync(process.env.GUIDED_PHOTO_FILE):await require('sharp')({create:{width:2800,height:2100,channels:3,background:'#a97d49'}}).png().toBuffer();await page.getByLabel('Actual product photo',{exact:true}).setInputFiles({name:'large.png',mimeType:'image/png',buffer:uploadBytes});await page.waitForFunction(()=>document.querySelector('img[alt="Selected product reference"]').src.startsWith('data:image/jpeg'));const normalizedProduct=await page.getByRole('img',{name:'Selected product reference',exact:true}).getAttribute('src');assert.ok(normalizedProduct.length<1330000);const size=await page.getByRole('img',{name:'Selected product reference',exact:true}).evaluate(async img=>{await img.decode();return[img.naturalWidth,img.naturalHeight];});assert.deepEqual(size,process.env.GUIDED_PHOTO_FILE?[1200,1600]:[1600,1200]);await next();await next();await next();await saved();await page.reload();await saved();assert.equal(await page.getByRole('img',{name:'Product to use in your video',exact:true}).getAttribute('src'),normalizedProduct);
- await consent().check();await page.evaluate(()=>{window.originalPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(){throw Error('Storage is full.');};});await generate().click();await page.getByRole('alert').filter({hasText:'Storage is full'}).waitFor();assert.equal(videos.length,0);await page.evaluate(()=>{IDBObjectStore.prototype.put=window.originalPut;});
- failVideo=true;await consent().check();await generate().click();await page.getByRole('alert').filter({hasText:'Connection interrupted'}).waitFor();assert.equal(videos.length,1);await saved();await page.reload();await saved();await page.getByText('760 Rumi credits',{exact:true}).waitFor();failVideo=false;await consent().check();await generate().click();await page.getByRole('heading',{name:'Presenter draft',exact:true}).waitFor();assert.equal(videos.length,2);assert.equal(videos[0].requestId,videos[1].requestId);assert.equal(videos[1].characterImage,presenter);assert.equal(videos[1].productImage,normalizedProduct);assert.equal(videos[1].script,'My final spoken words stay saved with the selected cedar guitar and Morgan.');assert.equal(videos[1].duration,15);assert.equal(videos[1].provider,'runway');assert.equal(videos[1].contentItemId,'post-a');const download=page.waitForEvent('download');await page.getByRole('link',{name:'Download MP4',exact:true}).click();assert.equal((await download).suggestedFilename(),'presenter.mp4');await page.reload();await saved();await page.getByRole('heading',{name:'Presenter draft',exact:true}).waitFor();assert.equal(videos.length,2);
- assert.equal(await page.getByRole('link',{name:'Use in reel editor',exact:true}).getAttribute('href'),'/studio/reels?campaignId=demo&contentItemId=post-a');
- configured=false;await page.reload();await saved();await page.getByText('Runway and private video storage need connecting before generation.',{exact:true}).waitFor();assert.equal(await generate().isDisabled(),true);configured=true;
- await page.route(/\/api\/video\/presenter(?:\?.*)?$/,route=>route.fulfill({status:500,json:{error:'Presenter studio could not load. Try again.'}}));await page.reload();await saved();await page.getByRole('alert').filter({hasText:'Presenter studio could not load'}).waitFor();assert.equal(await generate().isDisabled(),true);await page.unroute(/\/api\/video\/presenter(?:\?.*)?$/);
- await page.goto(base+'/presenter?scope=other');await saved();await page.getByRole('heading',{name:'Step 1 of 4: Your product'}).waitFor();assert.equal(await page.getByLabel('Product name',{exact:true}).inputValue(),'');await page.getByLabel('Campaign',{exact:true}).selectOption('demo');await page.getByLabel('Choose a product, service or campaign topic',{exact:true}).selectOption('guitar-a');await next();await page.getByText('Create a new fictional presenter instead',{exact:true}).click();await page.getByLabel('Create a new presenter portrait · 16 additional credits',{exact:true}).check();await next();await page.getByLabel('Clip length',{exact:true}).selectOption('5');await next();await page.getByText('296 Rumi credits',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Create video · 296 credits',exact:true}).isDisabled(),true);assert.equal(videos.length,2);assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[]);
- console.log('PASS: guided campaign and presenter steps; Back/reload/Billing preserve references and script; drafts scoped to workspace; final cost consent; no automatic paid requests; same request ID on interrupted retry; MP4 download; mobile layout. All provider and publishing calls mocked.');
-})().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{await browser?.close();server?.close();});
+const { chromium } = require('playwright'), esbuild = require('esbuild'), fs = require('node:fs'), path = require('node:path'), os = require('node:os'), http = require('node:http'), assert = require('node:assert/strict');
+const repo = path.resolve(__dirname, '..'), out = fs.mkdtempSync(path.join(os.tmpdir(), 'rumi-guided-'));
+let browser, server, tenant = 'mind', credits = 2000, failVideo = false, configured = true;
+const campaigns = [], videos = [], scripts = [], unexpected = [], jobs = [];
+let uploads = 0;
+const product = { id: 'guitar-a', name: 'Actual cedar guitar', description: 'Cedar top and natural finish.', imageUrl: '/product.svg' };
+const posts = [{ id: 'post-a', headline: 'Our collection', caption: 'Explore our collection today.' }];
+const photo = '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="320"><rect width="240" height="320" fill="#eee"/><ellipse cx="120" cy="210" rx="65" ry="80" fill="#b58c55"/><rect x="110" y="25" width="20" height="180" fill="#614520"/></svg>';
+const json = (res, data, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
+async function body(req) { const chunks = []; for await (const chunk of req)
+    chunks.push(chunk); return Buffer.concat(chunks); }
+(async () => {
+    fs.writeFileSync(path.join(out, 'entry.tsx'), `import React from 'react';import {createRoot} from 'react-dom/client';import Create from ${JSON.stringify(repo + '/app/create/page')};import PresenterStudio from ${JSON.stringify(repo + '/app/studio/presenters/PresenterStudio')};import ${JSON.stringify(repo + '/app/globals.css')};const scope=new URLSearchParams(location.search).get('scope')||'mind';createRoot(document.getElementById('root')!).render(location.pathname==='/presenter'?<PresenterStudio campaigns={[{id:'demo',title:'Demo campaign'}]} initialCampaignId={new URLSearchParams(location.search).get('campaignId')||''} initialContentItemId={new URLSearchParams(location.search).get('postId')||''} organizationId={scope} draftScope={'user:'+scope}/>:<Create/>);`);
+    await esbuild.build({ entryPoints: [path.join(out, 'entry.tsx')], bundle: true, outfile: path.join(out, 'app.js'), nodePaths: [repo + '/node_modules'], jsx: 'automatic', tsconfig: path.join(repo, 'tsconfig.json'), define: { 'process.env.NODE_ENV': '"production"' } });
+    server = http.createServer(async (req, res) => {
+        const url = new URL(req.url, 'http://local');
+        if (['/app.js', '/app.css'].includes(url.pathname)) {
+            res.setHeader('Content-Type', url.pathname.endsWith('css') ? 'text/css' : 'text/javascript');
+            return res.end(fs.readFileSync(path.join(out, url.pathname.slice(1))));
+        }
+        if (url.pathname.startsWith('/presenters/')) {
+            res.setHeader('Content-Type', 'image/svg+xml');
+            return res.end(fs.readFileSync(path.join(repo, 'public', url.pathname)));
+        }
+        if (url.pathname === '/api/campaigns/brief-suggestions')
+            return json(res, { organizationId: tenant, draftScope: 'user:' + tenant + ':brand', brandName: tenant === 'mind' ? 'Master Mind' : 'Other business', website: 'https://example.com', suggestions: [] });
+        if (url.pathname === '/api/reels/library') {
+            assert.equal(url.searchParams.get('organizationId'), tenant);
+            assert.equal(url.searchParams.get('setup'), '1');
+            return json(res, { brandName: 'Master Mind', sources: [{ id: 'paid', src: '/api/reels/media?assetId=paid', thumbnail: '/product.svg', kind: 'image', label: 'Saved garden', campaignTitle: 'Past campaign' }], hasMore: false });
+        }
+        if (url.pathname === '/product.svg' || url.pathname === '/api/reels/media') {
+            res.setHeader('Content-Type', 'image/svg+xml');
+            return res.end(photo);
+        }
+        if (url.pathname === '/api/campaigns/upload-photo') {
+            const data = (await body(req)).toString();
+            assert.match(data, /name="permission"/);
+            assert.match(data, /name="organizationId"/);
+            uploads++;
+            return json(res, { id: 'uploaded', label: 'Uploaded garden', src: '/product.svg' });
+        }
+        if (url.pathname === '/api/campaigns/create-everything') {
+            campaigns.push(JSON.parse(await body(req)));
+            return json(res, { campaignId: 'new', jobId: 'job' }, 202);
+        }
+        if (url.pathname === '/api/campaigns/process')
+            return json(res, { status: 'succeeded' });
+        if (url.pathname === '/api/jobs')
+            return json(res, { jobs: [{ type: 'CREATE_EVERYTHING', status: 'succeeded', payload: { campaignId: 'new' } }] });
+        if (url.pathname === '/api/video/presenter/products')
+            return json(res, { products: [product, { ...product, id: 'website-b', name: 'Second guitar', websiteOnly: true }, { ...product, id: 'website-c', name: 'Third guitar', websiteOnly: true }] });
+        if (url.pathname === '/api/video/presenter/script') {
+            const data = JSON.parse(await body(req));
+            scripts.push(data);
+            return json(res, { script: 'Discover this cedar guitar. Explore the photos and details on our website today.', seconds: data.seconds });
+        }
+        if (url.pathname === '/api/video/presenter') {
+            if (req.method === 'POST') {
+                const data = JSON.parse(await body(req));
+                videos.push(data);
+                if (failVideo)
+                    return json(res, { error: 'Connection interrupted. Check the same request again.' }, 503);
+                const job = { id: data.requestId, status: 'succeeded', progress: 100, cost: 760, videoUrl: '/api/video/file?jobId=' + data.requestId, campaignId: data.campaignId, contentItemId: data.contentItemId };
+                jobs.push(job);
+                return json(res, { job }, 202);
+            }
+            if (url.searchParams.has('jobId'))
+                return json(res, { job: jobs.find(job => job.id === url.searchParams.get('jobId')) });
+            return json(res, { configured, credits, jobs, products: url.searchParams.has('campaignId') ? [product] : [], posts: url.searchParams.has('campaignId') ? posts : [] });
+        }
+        if (url.pathname === '/api/video/file') {
+            res.setHeader('Content-Type', 'video/mp4');
+            if (url.searchParams.has('download')) {
+                res.setHeader('Content-Disposition', 'attachment; filename="presenter.mp4"');
+                res.end('fixture-video');
+            }
+            else {
+                res.statusCode = 204;
+                res.end();
+            }
+            return;
+        }
+        if (url.pathname.startsWith('/api/')) {
+            unexpected.push(url.pathname);
+            return json(res, { error: 'Unexpected API' }, 500);
+        }
+        res.setHeader('Content-Type', 'text/html');
+        res.end(url.pathname === '/campaigns/new' ? '<h1>Campaign opened</h1>' : url.pathname === '/billing' ? '<h1>Billing</h1><a href="/presenter">Return to presenter</a>' : '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"></head><body class="public-page"><main id="root"></main><script src="/app.js"></script></body></html>');
+    });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } : fs.existsSync(chrome) ? { executablePath: chrome } : {}) });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } }), errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    const base = 'http://127.0.0.1:' + server.address().port;
+    const next = () => page.getByRole('button', { name: 'Continue', exact: true }).click();
+    const back = () => page.getByRole('button', { name: 'Back', exact: true }).click();
+    const saved = () => page.getByRole('status').filter({ hasText: 'Draft saved in this browser.' }).waitFor();
+    const screenshot = async (name) => { const folder = process.env.GUIDED_QA_DIR || path.join(out, 'qa'); fs.mkdirSync(folder, { recursive: true }); await page.screenshot({ path: path.join(folder, name + '.png'), fullPage: true }); };
+    await page.goto(base + '/create');
+    await saved();
+    assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).isDisabled(), true);
+    await page.getByLabel('What do you want to promote?', { exact: true }).fill('Relaxation and confidence for Master Mind');
+    await next();
+    await page.getByRole('button', { name: 'Reuse saved photos', exact: true }).click();
+    await page.getByRole('button', { name: 'Choose from past campaign photos', exact: true }).click();
+    await page.getByRole('button', { name: 'Add to campaign', exact: true }).click();
+    await page.getByRole('status').filter({ hasText: '1 campaign photos selected' }).waitFor();
+    await next();
+    await page.getByRole('checkbox', { name: 'Instagram', exact: true }).uncheck();
+    await page.getByRole('button', { name: '15 Days', exact: true }).click();
+    await next();
+    await page.getByRole('heading', { name: 'Step 4 of 4: Review & create' }).waitFor();
+    await page.getByRole('img', { name: 'Saved garden', exact: true }).waitFor();
+    assert.equal(campaigns.length, 0);
+    await saved();
+    await page.reload();
+    await saved();
+    await page.getByRole('heading', { name: 'Step 4 of 4: Review & create' }).waitFor();
+    await page.getByRole('img', { name: 'Saved garden', exact: true }).waitFor();
+    await back();
+    await back();
+    await page.getByRole('status').filter({ hasText: '1 campaign photos selected' }).waitFor();
+    await page.getByRole('button', { name: 'Upload photos', exact: true }).click();
+    await page.getByLabel('Photo file', { exact: true }).setInputFiles({ name: 'garden.png', mimeType: 'image/png', buffer: Buffer.from('fixture bytes') });
+    await page.getByRole('button', { name: 'Add uploaded photo', exact: true }).click();
+    assert.equal(uploads, 0);
+    await page.getByRole('checkbox', { name: 'I have permission to use this photo for this business.', exact: true }).check();
+    await page.getByRole('button', { name: 'Add uploaded photo', exact: true }).click();
+    await page.getByRole('status').filter({ hasText: '2 campaign photos selected' }).waitFor();
+    await next();
+    await next();
+    await saved();
+    tenant = 'other';
+    await page.reload();
+    await saved();
+    await page.getByRole('heading', { name: 'Step 1 of 4: Your message' }).waitFor();
+    assert.equal(await page.getByLabel('What do you want to promote?').inputValue(), '');
+    tenant = 'mind';
+    await page.reload();
+    await saved();
+    await page.getByRole('img', { name: 'Uploaded garden', exact: true }).waitFor();
+    await screenshot('campaign-review-desktop');
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await screenshot('campaign-review-mobile');
+    await page.getByRole('button', { name: 'Create campaign drafts · 1 credit', exact: true }).click();
+    await page.getByRole('heading', { name: 'Campaign opened' }).waitFor();
+    assert.equal(campaigns.length, 1);
+    assert.deepEqual(campaigns[0].campaignPhotoIds, ['paid', 'uploaded']);
+    assert.equal(campaigns[0].organizationId, 'mind');
+    assert.equal(campaigns[0].dailyPlan.length, 15);
+    assert.ok(campaigns[0].dailyPlan.every(day => JSON.stringify(day.platforms) === JSON.stringify(['facebook'])));
+    await page.goto(base + '/create');
+    await saved();
+    await page.getByRole('link', { name: 'Open created campaign', exact: true }).waitFor();
+    assert.equal(campaigns.length, 1);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(base + '/presenter?campaignId=demo&postId=post-a');
+    await saved();
+    await page.getByLabel('Choose a product, service or campaign topic', { exact: true }).selectOption('guitar-a');
+    assert.equal(await page.getByLabel('Product name', { exact: true }).inputValue(), product.name);
+    assert.equal(await page.getByLabel('Product details from your catalog').inputValue(), product.description);
+    await page.getByText('Suggest products or services for me', { exact: true }).click();
+    await page.getByRole('button', { name: 'Pick products or services for me', exact: true }).click();
+    await page.getByRole('button', { name: 'Pick again', exact: true }).waitFor();
+    assert.equal(await page.locator('.presenter-choices article').count(), 3);
+    await page.getByLabel('Choose a product, service or campaign topic', { exact: true }).selectOption('guitar-a');
+    await next();
+    assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).isDisabled(), true);
+    await page.getByRole('button', { name: 'Select Morgan', exact: true }).click();
+    await page.getByRole('img', { name: 'Presenter reference', exact: true }).waitFor();
+    const presenter = await page.getByRole('img', { name: 'Presenter reference', exact: true }).getAttribute('src');
+    await next();
+    await page.getByRole('button', { name: 'Write a short script', exact: true }).click();
+    await page.getByRole('button', { name: 'Write a short script', exact: true }).waitFor();
+    assert.equal(scripts[0].seconds, 15);
+    assert.equal(scripts[0].productName, product.name);
+    await page.getByLabel('Spoken script').fill('This is my exact edited script for our real cedar guitar. Explore the details today.');
+    await next();
+    await page.getByText('760 Rumi credits', { exact: true }).waitFor();
+    await page.getByRole('img', { name: 'Product to use in your video', exact: true }).waitFor();
+    assert.equal(videos.length, 0);
+    const consent = () => page.getByLabel('I approve the 760 credit cost and have permission to use these photos.', { exact: true });
+    const generate = () => page.getByRole('button', { name: 'Create video · 760 credits', exact: true });
+    assert.equal(await generate().isDisabled(), true);
+    await consent().check();
+    await back();
+    await page.getByLabel('Spoken script').fill('My final spoken words stay saved with the selected cedar guitar and Morgan.');
+    await next();
+    assert.equal(await consent().isChecked(), false);
+    await saved();
+    await page.reload();
+    await saved();
+    await page.getByText('760 Rumi credits', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('img', { name: 'Presenter to use in your video', exact: true }).getAttribute('src'), presenter);
+    assert.equal(await page.getByRole('img', { name: 'Product to use in your video', exact: true }).getAttribute('src'), product.imageUrl);
+    assert.equal(await consent().isChecked(), false);
+    assert.equal(videos.length, 0);
+    await screenshot('presenter-review-desktop');
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await screenshot('presenter-review-mobile');
+    credits = 0;
+    await page.reload();
+    await saved();
+    await page.getByRole('button', { name: 'Save draft and open Billing', exact: true }).click();
+    await page.getByRole('heading', { name: 'Billing' }).waitFor();
+    credits = 2000;
+    await page.getByRole('link', { name: 'Return to presenter' }).click();
+    await saved();
+    await page.getByText('760 Rumi credits', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('img', { name: 'Presenter to use in your video', exact: true }).getAttribute('src'), presenter);
+    assert.equal(videos.length, 0);
+    await page.getByRole('button', { name: 'Edit product', exact: true }).click();
+    const original = await page.getByRole('img', { name: 'Selected product reference', exact: true }).getAttribute('src');
+    await page.getByLabel('Actual product photo', { exact: true }).setInputFiles({ name: 'bad.txt', mimeType: 'text/plain', buffer: Buffer.from('invalid') });
+    await page.getByRole('alert').filter({ hasText: 'previous selection is still saved' }).waitFor();
+    assert.equal(await page.getByRole('img', { name: 'Selected product reference', exact: true }).getAttribute('src'), original);
+    const uploadBytes = process.env.GUIDED_PHOTO_FILE ? fs.readFileSync(process.env.GUIDED_PHOTO_FILE) : await require('sharp')({ create: { width: 2800, height: 2100, channels: 3, background: '#a97d49' } }).png().toBuffer();
+    await page.getByLabel('Actual product photo', { exact: true }).setInputFiles({ name: 'large.png', mimeType: 'image/png', buffer: uploadBytes });
+    await page.waitForFunction(() => document.querySelector('img[alt="Selected product reference"]').src.startsWith('data:image/jpeg'));
+    const normalizedProduct = await page.getByRole('img', { name: 'Selected product reference', exact: true }).getAttribute('src');
+    assert.ok(normalizedProduct.length < 1330000);
+    const size = await page.getByRole('img', { name: 'Selected product reference', exact: true }).evaluate(async (img) => { await img.decode(); return [img.naturalWidth, img.naturalHeight]; });
+    assert.deepEqual(size, process.env.GUIDED_PHOTO_FILE ? [1200, 1600] : [1600, 1200]);
+    await next();
+    await next();
+    await next();
+    await saved();
+    await page.reload();
+    await saved();
+    assert.equal(await page.getByRole('img', { name: 'Product to use in your video', exact: true }).getAttribute('src'), normalizedProduct);
+    await consent().check();
+    await page.evaluate(() => { window.originalPut = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function () { throw Error('Storage is full.'); }; });
+    await generate().click();
+    await page.getByRole('alert').filter({ hasText: 'Storage is full' }).waitFor();
+    assert.equal(videos.length, 0);
+    await page.evaluate(() => { IDBObjectStore.prototype.put = window.originalPut; });
+    failVideo = true;
+    await consent().check();
+    await generate().click();
+    await page.getByRole('alert').filter({ hasText: 'Connection interrupted' }).waitFor();
+    assert.equal(videos.length, 1);
+    await saved();
+    await page.reload();
+    await saved();
+    await page.getByText('760 Rumi credits', { exact: true }).waitFor();
+    failVideo = false;
+    await consent().check();
+    await generate().click();
+    await page.getByRole('heading', { name: 'Presenter draft', exact: true }).waitFor();
+    assert.equal(videos.length, 2);
+    assert.equal(videos[0].requestId, videos[1].requestId);
+    assert.equal(videos[1].characterImage, presenter);
+    assert.equal(videos[1].productImage, normalizedProduct);
+    assert.equal(videos[1].script, 'My final spoken words stay saved with the selected cedar guitar and Morgan.');
+    assert.equal(videos[1].duration, 15);
+    assert.equal(videos[1].provider, 'runway');
+    assert.equal(videos[1].contentItemId, 'post-a');
+    const download = page.waitForEvent('download');
+    await page.getByRole('link', { name: 'Download MP4', exact: true }).click();
+    assert.equal((await download).suggestedFilename(), 'presenter.mp4');
+    await page.reload();
+    await saved();
+    await page.getByRole('heading', { name: 'Presenter draft', exact: true }).waitFor();
+    assert.equal(videos.length, 2);
+    assert.equal(await page.getByRole('link', { name: 'Use in reel editor', exact: true }).getAttribute('href'), '/studio/reels?campaignId=demo&contentItemId=post-a');
+    configured = false;
+    await page.reload();
+    await saved();
+    await page.getByText('Runway and private video storage need connecting before generation.', { exact: true }).waitFor();
+    assert.equal(await generate().isDisabled(), true);
+    configured = true;
+    await page.route(/\/api\/video\/presenter(?:\?.*)?$/, route => route.fulfill({ status: 500, json: { error: 'Presenter studio could not load. Try again.' } }));
+    await page.reload();
+    await saved();
+    await page.getByRole('alert').filter({ hasText: 'Presenter studio could not load' }).waitFor();
+    assert.equal(await generate().isDisabled(), true);
+    await page.unroute(/\/api\/video\/presenter(?:\?.*)?$/);
+    await page.goto(base + '/presenter?scope=other');
+    await saved();
+    await page.getByRole('heading', { name: 'Step 1 of 4: Your product' }).waitFor();
+    assert.equal(await page.getByLabel('Product name', { exact: true }).inputValue(), '');
+    await page.getByLabel('Campaign', { exact: true }).selectOption('demo');
+    await page.getByLabel('Choose a product, service or campaign topic', { exact: true }).selectOption('guitar-a');
+    await next();
+    await page.getByText('Create a new fictional presenter instead', { exact: true }).click();
+    await page.getByLabel('Create a new presenter portrait · 16 additional credits', { exact: true }).check();
+    await next();
+    await page.getByLabel('Clip length', { exact: true }).selectOption('5');
+    await next();
+    await page.getByText('296 Rumi credits', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Create video · 296 credits', exact: true }).isDisabled(), true);
+    assert.equal(videos.length, 2);
+    assert.deepEqual(unexpected, []);
+    assert.deepEqual(errors, []);
+    console.log('PASS: guided campaign and presenter steps; Back/reload/Billing preserve references and script; drafts scoped to workspace; final cost consent; no automatic paid requests; same request ID on interrupted retry; MP4 download; mobile layout. All provider and publishing calls mocked.');
+})().catch(error => { console.error(error); console.error('::error::' + String(error.stack || error).slice(0, 6000).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); process.exitCode = 1; }).finally(async () => { await browser?.close(); server?.close(); });

@@ -41,6 +41,9 @@ jobs:
       - run: node --test tests/*.test.cjs
       - run: npm install --no-save --package-lock=false esbuild@0.28.2 playwright@1.62.1
       - run: npx playwright install --with-deps chromium
+      - run: node tests/guided-flow-browser.cjs
+        env:
+          GUIDED_QA_DIR: qa-guided-flow
       - run: node tests/reel-showcase-browser.cjs
         env:
           SHOWCASE_OUTPUT_DIR: qa-showcase
@@ -48,9 +51,6 @@ jobs:
       - run: node tests/creative-template-browser.cjs
       - run: node tests/tiktok-posting-browser.cjs
       - run: node tests/publishing-position-browser.cjs
-      - run: node tests/guided-flow-browser.cjs
-        env:
-          GUIDED_QA_DIR: qa-guided-flow
       - run: node tests/campaign-photo-browser.cjs
       - run: node tests/reels-browser.cjs
       - run: node tests/ai-lab-browser.cjs
