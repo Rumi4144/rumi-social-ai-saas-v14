@@ -51,6 +51,9 @@ export default function SchedulePostButton({
   const [queuedNow, setQueuedNow] = useState(false);
   const schedulePanelRef = useRef<HTMLDivElement>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [connectionsLoaded, setConnectionsLoaded] = useState(false);
+  const [connectionRefresh, setConnectionRefresh] = useState(0);
+  const firstConnectionLoad = useRef(true);
   const [selected, setSelected] = useState<string[]>([]);
   const [scheduledFor, setScheduledFor] = useState(()=>scheduleInputValue(initialScheduledFor,initialStatus));
   const [status, setStatus] = useState(initialStatus);
@@ -98,7 +101,8 @@ export default function SchedulePostButton({
   }, [contentItemId]);
 
   useEffect(() => {
-    if (!open || connections.length > 0) return;
+    if (!open) return;
+    const controller = new AbortController();
 
     async function loadConnections() {
       setLoading(true);
@@ -107,6 +111,7 @@ export default function SchedulePostButton({
       try {
         const res = await fetch("/api/social/connections", {
           cache: "no-store",
+          signal: controller.signal,
         });
 
         const data = await res.json();
@@ -121,24 +126,27 @@ export default function SchedulePostButton({
 
         const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "instagram", "youtube", "tiktok"] : ["facebook", "instagram", "google_business"]).includes(connection.provider.toLowerCase()));
 
+        if (controller.signal.aborted) return;
+        const selectOnlyAccount = firstConnectionLoad.current && list.length === 1;
+        firstConnectionLoad.current = false;
         setConnections(list);
-
-        if (list.length === 1) {
-          setSelected([list[0].id]);
-        }
+        setConnectionsLoaded(true);
+        setSelected(current => selectOnlyAccount ? [list[0].id] : current.filter(id => list.some(connection => connection.id === id)));
       } catch (error) {
+        if (controller.signal.aborted) return;
         setError(
           error instanceof Error
             ? error.message
             : "Could not load social accounts.",
         );
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
     loadConnections();
-  }, [open, connections.length]);
+    return () => controller.abort();
+  }, [open, isVideo, connectionRefresh]);
 
   const tikTokSelected=connections.find(connection=>connection.provider==="tiktok"&&selected.includes(connection.id));
   const youtubeSelected = connections.some(c => c.provider === "youtube" && selected.includes(c.id));
@@ -152,7 +160,7 @@ export default function SchedulePostButton({
   }
 
   async function schedule() {
-    if (busy || completed) return;
+    if (busy || completed || loading) return;
     if (!postNow && !scheduledFor) {
       setError("Choose a date and time.");
       return;
@@ -249,7 +257,7 @@ export default function SchedulePostButton({
           <div style={{ marginTop: 12 }}>
             {loading && <p>Loading connected accounts...</p>}
 
-            {!loading && connections.length === 0 && (
+            {!loading && connectionsLoaded && connections.length === 0 && (
               <p>No connected social accounts found.</p>
             )}
 
@@ -263,14 +271,22 @@ export default function SchedulePostButton({
               >
                 <input
                   type="checkbox"
-                  disabled={busy || completed}
+                  disabled={busy || completed || loading}
                   checked={selected.includes(connection.id)}
                   onChange={() => toggleConnection(connection.id)}
                 />{" "}
-                {connection.provider === "google_business" ? "Google Business Profile" : connection.provider}
+                {connection.provider === "google_business" ? "Google Business Profile" : connection.provider === "instagram" ? "Instagram" : connection.provider}
                 {connection.accountName ? ` · ${connection.accountName}` : ""}
               </label>
             ))}
+            {connectionsLoaded && !loading && !completed && !connections.some(connection => connection.provider.toLowerCase() === "instagram") && (
+              <div style={{ marginBottom: 12 }}>
+                <strong>Instagram</strong> · Not connected{" "}
+                <a href="/api/social/instagram/connect" target="_blank" rel="noopener noreferrer">Connect Instagram</a>
+                <p>Connect in the new tab, then return here and refresh accounts. Your reel stays open.</p>
+              </div>
+            )}
+            {!completed && <button type="button" disabled={busy || loading} onClick={() => setConnectionRefresh(value => value + 1)}>{loading ? "Loading accounts…" : "Refresh accounts"}</button>}
           </div>
 
           {tikTokSelected&&<TikTokPostOptions connectionId={tikTokSelected.id} contentItemId={contentItemId} assetId={videoAssetId} disabled={busy||completed} onChange={setTikTokOptions}/>}
@@ -292,7 +308,7 @@ export default function SchedulePostButton({
           <button
             type="button"
             onClick={schedule}
-            disabled={busy || completed || connections.length === 0 || (!!tikTokSelected && !tikTokOptions)}
+            disabled={busy || completed || loading || connections.length === 0 || (!!tikTokSelected && !tikTokOptions)}
           >
             {completed ? "✓ Submitted" : busy ? "Preparing your post…" : postNow ? "Approve and post now" : allowPostNow ? "Approve and schedule" : "Schedule Post"}
           </button>

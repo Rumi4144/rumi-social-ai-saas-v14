@@ -51,6 +51,7 @@ jobs:
       - run: node tests/creative-template-browser.cjs
       - run: node tests/tiktok-posting-browser.cjs
       - run: node tests/publishing-position-browser.cjs
+      - run: node tests/social-account-selection-browser.cjs
       - run: node tests/campaign-photo-browser.cjs
       - run: node tests/reels-browser.cjs
       - run: node tests/reels-browser.cjs
