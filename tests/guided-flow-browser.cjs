@@ -2,6 +2,7 @@
 // No live generation, credit purchase, account connection or publishing request.
 const { chromium } = require('playwright'), esbuild = require('esbuild'), fs = require('node:fs'), path = require('node:path'), os = require('node:os'), http = require('node:http'), assert = require('node:assert/strict');
 const repo = path.resolve(__dirname, '..'), out = fs.mkdtempSync(path.join(os.tmpdir(), 'rumi-guided-'));
+let debugPage; const checkpoints=[];
 let browser, server, tenant = 'mind', credits = 2000, failVideo = false, configured = true;
 const campaigns = [], videos = [], scripts = [], unexpected = [], jobs = [];
 let uploads = 0;
@@ -9,6 +10,12 @@ const product = { id: 'guitar-a', name: 'Actual cedar guitar', description: 'Ced
 const posts = [{ id: 'post-a', headline: 'Our collection', caption: 'Explore our collection today.' }];
 const photo = '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="320"><rect width="240" height="320" fill="#eee"/><ellipse cx="120" cy="210" rx="65" ry="80" fill="#b58c55"/><rect x="110" y="25" width="20" height="180" fill="#614520"/></svg>';
 const json = (res, data, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
+async function draftSnapshot(page) {
+ return page.evaluate(async()=>{
+  const rows=await new Promise((resolve,reject)=>{const request=indexedDB.open('rumi-workflow-drafts',1);request.onsuccess=()=>{const read=request.result.transaction('drafts').objectStore('drafts').getAll();read.onsuccess=()=>resolve(read.result.map(row=>({step:row.value.step,source:row.value.photoSource,photos:row.value.photos?.map(photo=>photo.label),brief:row.value.brief?.slice(0,50),date:row.value.campaignStartDate})));read.onerror=()=>reject(Error('Draft read failed'));};request.onerror=()=>reject(Error('Draft database failed'));});
+  return {rows,heading:[...document.querySelectorAll('h2')].map(el=>el.textContent),status:[...document.querySelectorAll('[role=status]')].map(el=>el.textContent)};
+ });
+}
 async function body(req) { const chunks = []; for await (const chunk of req)
     chunks.push(chunk); return Buffer.concat(chunks); }
 (async () => {
@@ -94,6 +101,7 @@ async function body(req) { const chunks = []; for await (const chunk of req)
     const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
     browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } : fs.existsSync(chrome) ? { executablePath: chrome } : {}) });
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } }), errors = [];
+    debugPage=page;
     if(process.env.GUIDED_SLOW_BROWSER) { const session=await page.context().newCDPSession(page); await session.send('Emulation.setCPUThrottlingRate',{rate:4}); }
     page.on('pageerror', error => errors.push(error.message));
     const base = 'http://127.0.0.1:' + server.address().port;
@@ -135,11 +143,13 @@ async function body(req) { const chunks = []; for await (const chunk of req)
     await next();
     await next();
     await saved();
+    checkpoints.push({stage:'before-workspace-switch',snapshot:await draftSnapshot(page)});
     tenant = 'other';
     await page.reload();
     await saved();
     await page.getByRole('heading', { name: 'Step 1 of 4: Your message' }).waitFor();
     assert.equal(await page.getByLabel('What do you want to promote?').inputValue(), '');
+    checkpoints.push({stage:'other-workspace',snapshot:await draftSnapshot(page)});
     tenant = 'mind';
     await page.reload();
     await saved();
@@ -300,4 +310,4 @@ async function body(req) { const chunks = []; for await (const chunk of req)
     assert.deepEqual(unexpected, []);
     assert.deepEqual(errors, []);
     console.log('PASS: guided campaign and presenter steps; Back/reload/Billing preserve references and script; drafts scoped to workspace; final cost consent; no automatic paid requests; same request ID on interrupted retry; MP4 download; mobile layout. All provider and publishing calls mocked.');
-})().catch(error => { console.error(error); console.error('::error::' + String(error.stack || error).slice(0, 6000).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); process.exitCode = 1; }).finally(async () => { await browser?.close(); server?.close(); });
+})().catch(async error => { if(debugPage) checkpoints.push({stage:'failure',snapshot:await draftSnapshot(debugPage).catch(()=>null)}); console.error(error); console.error('::error::' + (String(error.stack || error)+JSON.stringify(checkpoints)).slice(0, 9000).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); process.exitCode = 1; }).finally(async () => { await browser?.close(); server?.close(); });
