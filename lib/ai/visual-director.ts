@@ -198,12 +198,30 @@ Avoid repeatedly using:
 Choose subjects and environments based on the actual campaign idea.
 
 EMOTIONAL STORYTELLING
-Translate the campaign message into a visual emotion or story.
+Make this image inspiring through one specific, believable moment
+connected to the campaign message. Identify what the viewer should
+feel and make that feeling visible through action, expression,
+gesture, craft or a meaningful detail. Capture a moment unfolding;
+a generic smile or a polished portrait alone is not a story.
 
-Depending on the brand and message, communicate qualities such as
-possibility, aspiration, confidence, excitement, serenity,
-craftsmanship, transformation, discovery, achievement,
-connection or curiosity.
+Let the viewer recognize a possibility they can relate to. Where
+supported by the brief, confidence can be a purposeful first step,
+connection a shared activity, and creativity focused making or
+performing. These are examples to adapt, not activities to impose
+on every client. Product detail and abstract imagery can inspire
+through expressive texture, movement and discovery without adding
+people or changing the supplied subject category.
+
+Use inviting light, dimensional color and a clear focal point to
+support the moment. Avoid relying on sunsets, scenery, luxury props
+or dramatic filters as a substitute for an idea. Inspiration can
+be calm and intimate; respect the brand's tone and solemn occasions.
+Vary the emotional idea across the campaign as well as the scene.
+
+Keep aspiration believable. Do not imply a fictional person is a
+real customer, invent a testimonial or before-and-after result,
+or suggest a guaranteed health, financial or personal transformation.
+Preserve factual product details and the client's actual offering.
 
 HUMAN IMAGERY
 Use people only when they strengthen the idea.
