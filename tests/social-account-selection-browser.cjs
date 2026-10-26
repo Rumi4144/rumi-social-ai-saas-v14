@@ -16,7 +16,7 @@ let browser, server;
   const facebook = {id:'facebook', provider:'facebook', accountName:'Test Page'};
   const instagram = {id:'instagram', provider:'instagram', accountName:'rumiguitars1'};
   let accounts = [facebook], fail = false, delay = 0;
-  const writes = [], unexpected = [], errors = [];
+  const writes = [], unexpected = [], errors = []; let deliveries = [];
   server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://local');
     if (['/app.js','/app.css'].includes(url.pathname)) {
@@ -24,7 +24,7 @@ let browser, server;
       return res.end(fs.readFileSync(path.join(out, url.pathname.slice(1))));
     }
     res.setHeader('Content-Type','application/json');
-    if (url.pathname === '/api/publishing/status') return res.end(JSON.stringify({jobs:[]}));
+    if (url.pathname === '/api/publishing/status') return res.end(JSON.stringify({jobs:deliveries}));
     if (url.pathname === '/api/social/connections') {
       res.statusCode = fail ? 500 : 200;
       const body = JSON.stringify(fail ? {error:'Test account loading failed'} : {connections:accounts});
@@ -105,8 +105,33 @@ let browser, server;
   await page.getByRole('button', {name:'Refresh accounts', exact:true}).click();
   await ig.waitFor();
   assert.equal(await ig.isChecked(), false);
+  // X needs an explicit permission upgrade. Refreshing must preserve the reel and never post it.
+  const x = {id:'x',provider:'x',accountName:'RumiGuitars1',status:'linked'};
+  for (const pathname of ['/photo','/']) {
+    accounts = [x]; deliveries = []; await page.goto(base+pathname);
+    const enable = page.getByRole('link',{name:'Enable X posting',exact:true});
+    await enable.waitFor();
+    assert.equal(await enable.getAttribute('href'),'/settings/x');
+    assert.equal(await enable.getAttribute('target'),'_blank');
+    const xBox = page.getByRole('checkbox',{name:/X \(Twitter\)/});
+    assert.equal(await xBox.isDisabled(),true);
+    assert.equal(await xBox.isChecked(),false);
+    await page.getByLabel('Reel caption').fill('Preserve my approved guitar.');
+    accounts = [{...x,status:'connected'}];
+    await page.getByRole('button',{name:'Refresh accounts',exact:true}).click();
+    await page.waitForFunction(()=>!Array.from(document.querySelectorAll('a')).some(a=>a.textContent==='Enable X posting'));
+    assert.equal(await xBox.isDisabled(),false);assert.equal(await xBox.isChecked(),false);
+    assert.equal(await page.getByLabel('Reel caption').inputValue(),'Preserve my approved guitar.');
+    await xBox.check();
+    const before = writes.length;
+    deliveries = [{id:'delivery',platform:'x',status:'published',scheduledFor:new Date().toISOString(),publishedAt:new Date().toISOString(),externalPostId:'123456',socialConnection:{accountName:'RumiGuitars1'}}];
+    await page.getByRole('button',{name:'Approve and post now',exact:true}).click();
+    const receipt = page.getByRole('link',{name:'View X post',exact:true});await receipt.waitFor();
+    assert.equal(await receipt.getAttribute('href'),'https://x.com/i/status/123456');
+    assert.equal(writes.length,before+1);assert.deepEqual(writes.at(-1).socialConnectionIds,['x']);
+  }
   const evidence = process.env.SOCIAL_ACCOUNT_QA_DIR;
-  if (evidence) {fs.mkdirSync(evidence, {recursive:true}); await page.screenshot({path:path.join(evidence, 'instagram-selection.png'), fullPage:true});}
+  if (evidence) {fs.mkdirSync(evidence, {recursive:true}); await page.screenshot({path:path.join(evidence, 'account-selection.png'), fullPage:true});}
   assert.deepEqual(unexpected, []); assert.deepEqual(errors, []);
-  console.log('PASS: Instagram connect in a new tab, refresh without losing caption/time/selections, explicit account choice, removed-account cleanup, retry after failures, and Instagram-only submission. All endpoints were local fixtures.');
+  console.log('PASS: Instagram connect in a new tab, refresh without losing caption/time/selections, explicit account choice, removed-account cleanup, retry after failures, and Instagram-only submission. X permission upgrade, explicit photo/video selection and published receipt links also passed. All endpoints were local fixtures.');
 })().catch(error => {console.error(error); process.exitCode=1;}).finally(async () => {await browser?.close(); server?.close();});

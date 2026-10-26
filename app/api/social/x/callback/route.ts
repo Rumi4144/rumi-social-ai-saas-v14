@@ -29,14 +29,13 @@ export async function GET(req: Request) {
     grant = await exchangeXCode(code, session.verifier, credentials);
     const account = await xAccount(grant.accessToken);
     const id = xId("account", `${ctx.organizationId}:${account.id}`);
-    const data = { accountName: account.username, externalId: account.id, status: "linked", encryptedToken: encryptSecret(JSON.stringify(grant)) };
-    // "linked" deliberately excludes X from publication until a publisher is available.
+    const data = { accountName: account.username, externalId: account.id, status: "connected", encryptedToken: encryptSecret(JSON.stringify(grant)) };
     await prisma.$transaction(async tx => {
       const claim = await tx.job.deleteMany({ where: { id: session.id, organizationId: ctx.organizationId, type: X_OAUTH_TYPE, status: "exchanging" } });
       if (!claim.count) throw new Error("X_SESSION");
       await tx.socialConnection.upsert({ where: { id }, create: { id, organizationId: ctx.organizationId, provider: "x", ...data }, update: data });
     }, { isolationLevel: "Serializable" });
-    return finish("status=linked");
+    return finish("status=connected");
   } catch (error) {
     if (grant && credentials) await revokeXGrant(grant, credentials);
     const reason = error instanceof XConnectionError ? error.reason : error instanceof Error && error.message === "X_SESSION" ? "session" : "connection";

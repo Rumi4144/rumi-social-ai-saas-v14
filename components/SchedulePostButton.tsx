@@ -10,6 +10,7 @@ type Connection = {
   provider: string;
   accountName: string | null;
   externalId: string | null;
+  status?: string;
 };
 
 export function scheduleInputValue(value:string|null|undefined,status:string):string {
@@ -124,14 +125,15 @@ export default function SchedulePostButton({
           );
         }
 
-        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "instagram", "youtube", "tiktok"] : ["facebook", "instagram", "google_business"]).includes(connection.provider.toLowerCase()));
+        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "instagram", "youtube", "tiktok", "x"] : ["facebook", "instagram", "google_business", "x"]).includes(connection.provider.toLowerCase()));
 
         if (controller.signal.aborted) return;
-        const selectOnlyAccount = firstConnectionLoad.current && list.length === 1;
+        const ready = list.filter(connection => connection.provider !== "x" || connection.status === "connected");
+        const selectOnlyAccount = firstConnectionLoad.current && ready.length === 1;
         firstConnectionLoad.current = false;
         setConnections(list);
         setConnectionsLoaded(true);
-        setSelected(current => selectOnlyAccount ? [list[0].id] : current.filter(id => list.some(connection => connection.id === id)));
+        setSelected(current => selectOnlyAccount ? [ready[0].id] : current.filter(id => ready.some(connection => connection.id === id)));
       } catch (error) {
         if (controller.signal.aborted) return;
         setError(
@@ -271,12 +273,13 @@ export default function SchedulePostButton({
               >
                 <input
                   type="checkbox"
-                  disabled={busy || completed || loading}
+                  disabled={busy || completed || loading || (connection.provider === "x" && connection.status !== "connected")}
                   checked={selected.includes(connection.id)}
                   onChange={() => toggleConnection(connection.id)}
                 />{" "}
-                {connection.provider === "google_business" ? "Google Business Profile" : connection.provider === "instagram" ? "Instagram" : connection.provider}
+                {connection.provider === "google_business" ? "Google Business Profile" : connection.provider === "instagram" ? "Instagram" : connection.provider === "x" ? "X (Twitter)" : connection.provider}
                 {connection.accountName ? ` · ${connection.accountName}` : ""}
+                {connection.provider === "x" && connection.status !== "connected" && <> · <a href="/settings/x" target="_blank" rel="noopener noreferrer">Enable X posting</a></>}
               </label>
             ))}
             {connectionsLoaded && !loading && !completed && !connections.some(connection => connection.provider.toLowerCase() === "instagram") && (
@@ -287,6 +290,8 @@ export default function SchedulePostButton({
               </div>
             )}
             {!completed && <button type="button" disabled={busy || loading} onClick={() => setConnectionRefresh(value => value + 1)}>{loading ? "Loading accounts…" : "Refresh accounts"}</button>}
+            {connections.some(connection => connection.provider === "x" && connection.status !== "connected") && <p>Enable X posting in the new tab, then return here and refresh accounts. Your post stays open.</p>}
+            {connections.some(connection => connection.provider === "x" && selected.includes(connection.id)) && <p>X will receive this approved caption and photo or reel. X may charge your developer balance for publishing.</p>}
           </div>
 
           {tikTokSelected&&<TikTokPostOptions connectionId={tikTokSelected.id} contentItemId={contentItemId} assetId={videoAssetId} disabled={busy||completed} onChange={setTikTokOptions}/>}

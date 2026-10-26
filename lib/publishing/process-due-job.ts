@@ -3,6 +3,8 @@ import { publishToProvider } from "@/lib/publishing/providers";
 import { requiresVideo } from "@/lib/campaign/content-plan";
 
 export async function processDuePublishJob() {
+  // A terminated X worker resumes its durable upload/receipt, never a second public write.
+  await prisma.publishJob.updateMany({ where: { platform: "x", status: "publishing", updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) } }, data: { status: "retry", scheduledFor: new Date(), attempts: 0 } });
   const job = await prisma.publishJob.findFirst({
     where: {
       status: { in: ["scheduled", "retry"] },
@@ -112,7 +114,7 @@ export async function processDuePublishJob() {
       },
     });
 
-    if (item.mediaUrl?.includes("/api/video/media/")) await prisma.contentItem.update({ where: { id: item.id }, data: { status: "published" } });
+    if (job.platform === "x" || item.mediaUrl?.includes("/api/video/media/")) await prisma.contentItem.update({ where: { id: item.id }, data: { status: "published" } });
 
     return {
       status: "published" as const,

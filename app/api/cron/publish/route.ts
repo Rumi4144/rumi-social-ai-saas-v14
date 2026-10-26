@@ -22,6 +22,7 @@ export async function GET(req: Request) {
   }
 
   const results = [];
+  const startedAt = Date.now();
 
   for (let i = 0; i < 20; i++) {
     const result = await processDuePublishJob();
@@ -33,6 +34,8 @@ export async function GET(req: Request) {
     }
 
     results.push(result);
+    // Media uploads may use most of the request budget. Leave the next job for the next run.
+    if (Date.now() - startedAt > 10000) break;
   }
 
   return NextResponse.json({

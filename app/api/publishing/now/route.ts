@@ -1,4 +1,5 @@
 import { TikTokOptions } from "@/lib/tiktok/options";
+import { prepareXPost, type XPost } from "@/lib/x/publishing";
 import { prepareTikTokSettings } from "@/lib/tiktok/prepare";
 import { googleBusinessPost } from "@/lib/publishing/google-business";
 import { campaignVideoId } from "@/lib/publishing/facebook-video";
@@ -79,7 +80,13 @@ export async function POST(req: Request) {
 
     if(connection.provider==="tiktok_sandbox")return NextResponse.json({error:"Use the separate TikTok test area."},{status:403});
 
-    if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube", "tiktok"].includes(connection.provider.toLowerCase())) return NextResponse.json({ error: "Choose a supported video account for publishing." }, { status: 400 });
+    if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube", "tiktok", "x"].includes(connection.provider.toLowerCase())) return NextResponse.json({ error: "Choose a supported video account for publishing." }, { status: 400 });
+
+    let xPost: XPost | undefined;
+    if (connection.provider === "x") {
+      try { xPost = await prepareXPost(ctx.organizationId, item, connection); }
+      catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Review the X post settings." }, { status: 400 }); }
+    }
 
     if (connection.provider === "youtube" && (!parsed.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
     if (connection.provider === "google_business") { try { googleBusinessPost(item.caption || item.headline || "", item.mediaUrl); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "This post is not supported by Google Business Profile." }, { status: 400 }); } }
@@ -110,6 +117,7 @@ export async function POST(req: Request) {
 
     if (connection.provider === "youtube") await tx.job.create({ data: { id: `youtube_settings_${job.id}`, organizationId: ctx.organizationId, type: "YOUTUBE_CAMPAIGN_SETTINGS", status: "ready", payload: { ...parsed.data.youtube!, connectionId: connection.id } } });
     if(connection.provider==="tiktok")await tx.job.create({data:{id:`tiktok_settings_${job.id}`,organizationId:ctx.organizationId,type:"TIKTOK_POST_SETTINGS",status:"ready",payload:tiktokSettings!}});
+    if (xPost) await tx.job.create({ data: { id: `x_settings_${job.id}`, organizationId: ctx.organizationId, type: "X_POST_SETTINGS", status: "ready", payload: xPost } });
     return job;
     });
 

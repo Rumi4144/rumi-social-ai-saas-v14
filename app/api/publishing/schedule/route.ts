@@ -1,4 +1,5 @@
 import { TikTokOptions } from "@/lib/tiktok/options";
+import { prepareXPost, type XPost } from "@/lib/x/publishing";
 import { prepareTikTokSettings } from "@/lib/tiktok/prepare";
 import { googleBusinessPost } from "@/lib/publishing/google-business";
 import { campaignVideoId } from "@/lib/publishing/facebook-video";
@@ -8,6 +9,8 @@ import { publishKey } from "@/lib/publishing/idempotency";
 import { z } from "zod";
 import { tenantContext } from "@/lib/auth/context";
 import { requiresVideo } from "@/lib/campaign/content-plan";
+
+export const maxDuration = 60;
 
 const S = z.object({
   tiktok:TikTokOptions.optional(),
@@ -73,6 +76,13 @@ export async function POST(req: Request) {
     if(tiktokSelected?.provider==="tiktok"){
       try{tiktokSettings=await prepareTikTokSettings(ctx.organizationId,item,tiktokSelected,p.data.tiktok);}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Review TikTok settings."},{status:400});}
     }
+    // Validate every selected X account before queuing any destination.
+    const xSelected = await prisma.socialConnection.findMany({ where: { id: { in: p.data.socialConnectionIds }, organizationId: ctx.organizationId, provider: "x" } });
+    const xPosts = new Map<string, XPost>();
+    for (const connection of xSelected) {
+      try { xPosts.set(connection.id, await prepareXPost(ctx.organizationId, item, connection)); }
+      catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Review the X post settings." }, { status: 400 }); }
+    }
     const jobs = [];
 
     for (const cid of p.data.socialConnectionIds) {
@@ -85,8 +95,8 @@ export async function POST(req: Request) {
       });
 
       if (!connection) continue;
-      if (!["facebook", "instagram", "youtube", "google_business", "tiktok"].includes(connection.provider.toLowerCase())) continue;
-      if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube", "tiktok"].includes(connection.provider.toLowerCase())) continue;
+      if (!["facebook", "instagram", "youtube", "google_business", "tiktok", "x"].includes(connection.provider.toLowerCase())) continue;
+      if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube", "tiktok", "x"].includes(connection.provider.toLowerCase())) continue;
 
       if(connection.provider==="tiktok"&&!tiktokSettings)continue;
       const key = publishKey(item.id, connection.id, p.data.scheduledFor);
@@ -108,6 +118,7 @@ export async function POST(req: Request) {
       });
       if (connection.provider === "youtube") await tx.job.upsert({ where: { id: `youtube_settings_${job.id}` }, update: {}, create: { id: `youtube_settings_${job.id}`, organizationId: ctx.organizationId, type: "YOUTUBE_CAMPAIGN_SETTINGS", status: "ready", payload: { ...p.data.youtube!, connectionId: connection.id } } });
       if(connection.provider==="tiktok")await tx.job.upsert({where:{id:`tiktok_settings_${job.id}`},update:{},create:{id:`tiktok_settings_${job.id}`,organizationId:ctx.organizationId,type:"TIKTOK_POST_SETTINGS",status:"ready",payload:tiktokSettings!}});
+      if (connection.provider === "x") await tx.job.upsert({ where: { id: `x_settings_${job.id}` }, update: {}, create: { id: `x_settings_${job.id}`, organizationId: ctx.organizationId, type: "X_POST_SETTINGS", status: "ready", payload: xPosts.get(connection.id)! } });
       return job;
       });
 

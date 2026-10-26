@@ -9,7 +9,7 @@ export async function GET() {
     const connections = await prisma.socialConnection.findMany({
       where: {
         organizationId: ctx.organizationId,
-        status: "connected",
+        OR: [{ status: "connected" }, { provider: "x", status: "linked" }],
         provider: { not: "tiktok_sandbox" },
       },
       select: {
@@ -17,6 +17,7 @@ export async function GET() {
         provider: true,
         accountName: true,
         externalId: true,
+        status: true,
       },
       orderBy: {
         provider: "asc",

@@ -9,12 +9,14 @@ export async function POST(req: Request) {
     const ctx = await tenantContext(); requireXWriter(ctx.role);
     if (!sameXOrigin(req)) return NextResponse.json({ error: "Disconnect from the Rumi settings page." }, { status: 403 });
     const id = String((await req.formData()).get("connectionId") || "");
-    const connection = await prisma.socialConnection.findFirst({ where: { id, organizationId: ctx.organizationId, provider: "x", status: "linked" } });
+    const connection = await prisma.socialConnection.findFirst({ where: { id, organizationId: ctx.organizationId, provider: "x", status: { in: ["linked", "connected"] } } });
     if (!connection) return NextResponse.redirect(new URL("/settings/x?reason=session", xOrigin()), 303);
     // Remove only the exact grant shown, leaving a concurrent reconnection untouched.
     const removed = await prisma.$transaction(async tx => {
       await tx.job.deleteMany({ where: { organizationId: ctx.organizationId, type: X_OAUTH_TYPE } });
-      return tx.socialConnection.deleteMany({ where: { id: connection.id, organizationId: ctx.organizationId, provider: "x", encryptedToken: connection.encryptedToken } });
+      const removed = await tx.socialConnection.deleteMany({ where: { id: connection.id, organizationId: ctx.organizationId, provider: "x", encryptedToken: connection.encryptedToken } });
+      if (removed.count) await tx.publishJob.updateMany({ where: { organizationId: ctx.organizationId, socialConnectionId: connection.id, platform: "x", status: { in: ["scheduled", "retry", "publishing"] } }, data: { status: "failed", lastError: "Cancelled when X was disconnected. Review and approve the post again to send it." } });
+      return removed;
     });
     if (!removed.count) return NextResponse.redirect(new URL("/settings/x?reason=session", xOrigin()), 303);
     let revoked = false;

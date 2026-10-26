@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     if (![clientId, clientSecret].every(value => value.length >= 8 && value.length <= 2048 && !/\s/.test(value))) return NextResponse.redirect(new URL("/settings/x?reason=credentials", xOrigin()), 303);
     const id = xId("app", ctx.organizationId), encryptedToken = encryptSecret(JSON.stringify({ clientId, clientSecret }));
     const saved = await prisma.$transaction(async tx => {
-      const linked = await tx.socialConnection.count({ where: { organizationId: ctx.organizationId, provider: "x", status: "linked" } });
+      const linked = await tx.socialConnection.count({ where: { organizationId: ctx.organizationId, provider: "x", status: { in: ["linked", "connected"] } } });
       if (linked) return false;
       await tx.socialConnection.upsert({ where: { id }, create: { id, organizationId: ctx.organizationId, provider: "x_app", status: "configured", encryptedToken }, update: { encryptedToken, status: "configured" } });
       await tx.job.deleteMany({ where: { organizationId: ctx.organizationId, type: X_OAUTH_TYPE } });

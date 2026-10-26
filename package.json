@@ -29,6 +29,7 @@
     "react-dom": "^19.0.0",
     "resend": "^6.29.0",
     "stripe": "^17.0.0",
+    "twitter-text": "^3.1.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

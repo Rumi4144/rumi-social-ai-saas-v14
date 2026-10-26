@@ -5,8 +5,8 @@ import { decryptSecret, encryptSecret } from "@/lib/security/crypto";
 export const X_COOKIE = "rumi_x_oauth";
 export const X_COOKIE_PATH = "/api/social/x";
 export const X_OAUTH_TYPE = "X_OAUTH";
-// Account linking only. Request publishing permissions when publishing is implemented.
-export const X_SCOPES = "tweet.read users.read offline.access";
+export const X_SCOPES = "tweet.read tweet.write users.read media.write offline.access";
+export function xCanPublish(scope: string) { return ["tweet.read", "tweet.write", "users.read", "media.write"].every(s => scope.split(" ").includes(s)); }
 export type XCredentials = { clientId: string; clientSecret: string };
 export type XGrant = { accessToken: string; refreshToken: string | null; expiresAt: number; scope: string; clientId: string };
 export type XSession = { userId: string; expiresAt: number; verifier: string; configVersion: string };
@@ -62,7 +62,7 @@ export async function exchangeXCode(code: string, verifier: string, credentials:
   const value = await response.json();
   if (typeof value.access_token !== "string" || !value.access_token || !Number.isFinite(value.expires_in) || value.expires_in <= 0 || String(value.token_type).toLowerCase() !== "bearer") throw new XConnectionError("connection");
   const scope = typeof value.scope === "string" ? value.scope : "";
-  if (!["users.read", "tweet.read"].every(s => scope.split(" ").includes(s))) throw new XConnectionError("permissions");
+  if (!xCanPublish(scope)) throw new XConnectionError("permissions");
   return { accessToken: value.access_token, refreshToken: typeof value.refresh_token === "string" ? value.refresh_token : null, expiresAt: Date.now() + value.expires_in * 1000, scope, clientId: credentials.clientId };
 }
 export async function xAccount(accessToken: string): Promise<{ id: string; username: string }> {

@@ -8,12 +8,12 @@ const crypto = require('node:crypto');
 
 const origin = 'https://rumisocialai.com';
 function fixture() {
-  const jobs = new Map(), connections = new Map(), jar = new Map(), calls = [], cache = new Map();
+  const publishes = new Map(), jobs = new Map(), connections = new Map(), jar = new Map(), calls = [], cache = new Map();
   const ctx = { userId: 'user', organizationId: 'org', role: 'owner', isSuperAdmin: false };
   const env = { NODE_ENV: 'production', NEXT_PUBLIC_APP_URL: origin, TOKEN_ENCRYPTION_KEY: 'test-encryption-key' };
   let accountStatus = 200, tokenStatus = 200, onAccount;
   function matches(row, where) {
-    return Object.entries(where).every(([key, value]) => value && typeof value === 'object' && 'lt' in value ? row[key] < value.lt : row[key] === value);
+    return Object.entries(where).every(([key, value]) => value && typeof value === 'object' && 'in' in value ? value.in.includes(row[key]) : value && typeof value === 'object' && 'lt' in value ? row[key] < value.lt : row[key] === value);
   }
   const model = map => ({
     findFirst: async ({ where }) => [...map.values()].find(row => matches(row, where)) || null,
@@ -24,7 +24,7 @@ function fixture() {
     updateMany: async ({ where, data }) => { let count = 0; for (const row of map.values()) if (matches(row, where)) { Object.assign(row, data); count++; } return { count }; },
     deleteMany: async ({ where }) => { let count = 0; for (const [id, row] of map) if (matches(row, where)) { map.delete(id); count++; } return { count }; },
   });
-  const prisma = { job: model(jobs), socialConnection: model(connections), $transaction: async run => run(prisma) };
+  const prisma = { publishJob: model(publishes), job: model(jobs), socialConnection: model(connections), $transaction: async run => run(prisma) };
   const reply = response => {
     response.savedCookies = new Map();
     response.cookies = { set: (name, value, options) => response.savedCookies.set(name, { value, options }) };
@@ -34,7 +34,7 @@ function fixture() {
     calls.push({ url, options });
     assert.equal(options.redirect, 'error');
     assert.equal(options.cache, 'no-store');
-    if (url.endsWith('/token')) return Response.json(tokenStatus === 200 ? { access_token: 'private-access', refresh_token: 'private-refresh', expires_in: 7200, token_type: 'bearer', scope: 'tweet.read users.read offline.access' } : { error: 'private-provider-error' }, { status: tokenStatus });
+    if (url.endsWith('/token')) return Response.json(tokenStatus === 200 ? { access_token: 'private-access', refresh_token: 'private-refresh', expires_in: 7200, token_type: 'bearer', scope: 'tweet.read tweet.write users.read media.write offline.access' } : { error: 'private-provider-error' }, { status: tokenStatus });
     if (url.endsWith('/users/me')) { if (onAccount) await onAccount(); return Response.json(accountStatus === 200 ? { data: { id: '12345', username: 'RumiGuitars' } } : { error: 'private-provider-error' }, { status: accountStatus }); }
     if (url.endsWith('/revoke')) return Response.json({ revoked: true });
     throw new Error(`Unexpected URL: ${url}`);
@@ -65,7 +65,7 @@ function fixture() {
     return { response, url: new URL(response.headers.get('location')) };
   }
   const callback = (state, params = { code: 'provider-code' }) => routes.callback.GET(new Request(`${origin}/api/social/x/callback?${new URLSearchParams({ state, ...params })}`));
-  return { ctx, env, jobs, connections, calls, jar, client, security, routes, post, configure, start, callback, load,
+  return { publishes, ctx, env, jobs, connections, calls, jar, client, security, routes, post, configure, start, callback, load,
     setAccountStatus: value => accountStatus = value, setTokenStatus: value => tokenStatus = value, onAccount: action => onAccount = action };
 }
 const location = response => response.headers.get('location');
@@ -81,7 +81,7 @@ test('X setup, S256 authorization, encrypted account linking and disconnect use 
   assert.equal(url.origin + url.pathname, 'https://x.com/i/oauth2/authorize');
   assert.equal(url.searchParams.get('redirect_uri'), `${origin}/api/social/x/callback`);
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
-  assert.equal(url.searchParams.get('scope'), 'tweet.read users.read offline.access');
+  assert.equal(url.searchParams.get('scope'), 'tweet.read tweet.write users.read media.write offline.access');
   assert.ok(!url.toString().includes('private-client-secret'));
   const cookie = response.savedCookies.get(f.client.X_COOKIE);
   assert.equal(cookie.options.httpOnly, true); assert.equal(cookie.options.secure, true); assert.equal(cookie.options.sameSite, 'lax');
@@ -90,20 +90,24 @@ test('X setup, S256 authorization, encrypted account linking and disconnect use 
   assert.equal(crypto.createHash('sha256').update(session.verifier).digest('base64url'), url.searchParams.get('code_challenge'));
   assert.ok(!JSON.stringify(payload).includes(session.verifier));
   const completed = await f.callback(url.searchParams.get('state'));
-  assert.match(location(completed), /status=linked/);
+  assert.match(location(completed), /status=connected/);
   assert.equal(completed.headers.get('Cache-Control'), 'no-store');
   assert.equal(completed.headers.get('Referrer-Policy'), 'no-referrer');
   assert.equal(completed.savedCookies.get(f.client.X_COOKIE).options.maxAge, 0);
   assert.equal(f.jobs.size, 0);
   const account = linked(f)[0];
   assert.equal(account.accountName, 'RumiGuitars'); assert.equal(account.externalId, '12345');
-  assert.equal(account.status, 'linked'); // Publishing queries require "connected".
+  assert.equal(account.status, 'connected'); // New grants enable publishing; legacy linked accounts still need authorization.
   assert.ok(!account.encryptedToken.includes('private-access'));
   assert.equal(JSON.parse(f.security.decryptSecret(account.encryptedToken)).refreshToken, 'private-refresh');
   const tokenCall = f.calls.find(call => call.url.endsWith('/token'));
   assert.equal(tokenCall.options.body.get('code_verifier'), session.verifier);
   assert.equal(tokenCall.options.headers.Authorization, 'Basic ' + Buffer.from('client-id-example:private-client-secret').toString('base64'));
+  f.publishes.set('queued', { id:'queued', organizationId:'org', socialConnectionId:account.id, platform:'x', status:'scheduled' });
+  f.publishes.set('foreign', { id:'foreign', organizationId:'other-org', socialConnectionId:account.id, platform:'x', status:'scheduled' });
   assert.match(location(await f.post('disconnect', { connectionId: account.id })), /status=disconnected/);
+  assert.equal(f.publishes.get('queued').status, 'failed');
+  assert.equal(f.publishes.get('foreign').status, 'scheduled');
   assert.equal(linked(f).length, 0);
   assert.equal(f.calls.filter(call => call.url.endsWith('/revoke')).length, 2);
   assert.equal(f.connections.size, 1); // App configuration retained for reconnecting.
@@ -148,7 +152,7 @@ test('X callback rejects another browser, user, workspace, viewer or expired sta
 test('X callback is single-use, including simultaneous requests', async () => {
   const f = fixture(), { url } = await f.start(), state = url.searchParams.get('state');
   const responses = await Promise.all([f.callback(state), f.callback(state)]);
-  assert.equal(responses.filter(response => location(response).includes('status=linked')).length, 1);
+  assert.equal(responses.filter(response => location(response).includes('status=connected')).length, 1);
   assert.equal(f.calls.filter(call => call.url.endsWith('/token')).length, 1);
   assert.match(location(await f.callback(state)), /reason=session/);
   assert.equal(linked(f).length, 1);
@@ -214,14 +218,14 @@ test('X configuration uses tenant-specific encrypted values; shared environment 
   assert.throws(() => f.client.xCallbackUrl(), /X_APP_URL/);
 });
 
-test('X settings renders usable setup fields, never echoes credentials, and makes publishing limitation explicit', async () => {
+test('X settings renders usable setup fields, never echoes credentials, and offers posting upgrade for legacy accounts', async () => {
   const f = fixture();
   const page = f.load('app/settings/x/page.tsx').default;
   const render = require('react-dom/server').renderToStaticMarkup;
   const first = render(await page({ searchParams: Promise.resolve({}) }));
   assert.match(first, /type="password"/); assert.match(first, /name="clientId"/);
   assert.match(first, /https:\/\/rumisocialai.com\/api\/social\/x\/callback/);
-  assert.match(first, /Publishing to X from Rumi is not available yet/);
+  assert.match(first, /publish approved text, photos and finished reels/);
   assert.ok(!first.includes('action="/api/social/x/connect"'));
   await f.configure();
   const configured = render(await page({ searchParams: Promise.resolve({ status: 'saved' }) }));
@@ -230,7 +234,7 @@ test('X settings renders usable setup fields, never echoes credentials, and make
   f.connections.set('foreign-account', { id: 'foreign-account', organizationId: 'other-org', provider: 'x', status: 'linked', accountName: 'PrivateOtherOrg' });
   f.connections.set('local-account', { id: 'local-account', organizationId: 'org', provider: 'x', status: 'linked', accountName: 'RumiGuitars' });
   const connected = render(await page({ searchParams: Promise.resolve({ status: 'linked' }) }));
-  assert.match(connected, /Linked as @RumiGuitars/); assert.ok(!connected.includes('PrivateOtherOrg'));
+  assert.match(connected, /Linked as @RumiGuitars/); assert.match(connected, /Enable X posting/); assert.ok(!connected.includes('PrivateOtherOrg'));
   assert.ok(!connected.includes('name="clientSecret"'));
   f.ctx.role = 'viewer';
   const viewer = render(await page({ searchParams: Promise.resolve({}) }));

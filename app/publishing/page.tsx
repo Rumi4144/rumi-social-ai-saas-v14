@@ -5,6 +5,7 @@ import YouTubeUpload from "./YouTubeUpload";
 
 export default async function Publishing() {
   const ctx = await tenantContext();
+  const xConnections = await prisma.socialConnection.findMany({ where: { organizationId: ctx.organizationId, provider: "x", status: { in: ["linked", "connected"] } } });
 
   const facebookConnection =
     await prisma.socialConnection.findFirst({
@@ -112,6 +113,12 @@ export default async function Publishing() {
       <section style={{ marginTop: "24px" }}><h2>Google Business Profile</h2><p>{googleConnection ? `Connected as ${googleConnection.accountName || "Business location"}` : "Connect your business location in Settings before publishing."}</p><p>Text and photo posts are supported. Google may review posts before displaying them.</p><a href="/settings/google-business">Manage Google connection</a></section>
 
       <section style={{ marginTop: "36px" }}>
+        <h2>X (Twitter)</h2>
+        {xConnections.map(account => <p key={account.id}>@{account.accountName} · {account.status === "connected" ? "Ready to post" : "Posting permission needed"}</p>)}
+        <a href="/settings/x">{xConnections.some(account => account.status === "linked") ? "Enable X posting" : xConnections.length ? "Manage X connection" : "Connect X"}</a>
+      </section>
+
+      <section style={{ marginTop: "36px" }}>
         <h2>Approved content</h2>
 
         {approvedItems.length === 0 ? (
@@ -153,13 +160,14 @@ export default async function Publishing() {
                       }}
                     />}
                     <p style={{ marginTop: "8px" }}>
-                      {item.mediaUrl.includes("/api/video/media/") ? "Video post · Facebook" : "Image post"}
+                      {item.mediaUrl.includes("/api/video/media/") ? "Video post" : "Image post"}
                     </p>
                   </div>
                 ) : (
                   <p>Text-only post</p>
                 )}
 
+                {xConnections.filter(account => account.status === "connected").map(account => <PublishingActions key={account.id} contentItemId={item.id} connectionId={account.id} destination={`X · @${account.accountName}`} />)}
                 {googleConnection && !item.mediaUrl?.includes("/api/video/media/") ? <PublishingActions contentItemId={item.id} connectionId={googleConnection.id} destination={`Google Business Profile · ${googleConnection.accountName || "Business location"}`} /> : null}
                 {facebookConnection ? (
                   <PublishingActions
@@ -198,7 +206,7 @@ export default async function Publishing() {
                   {job.platform === "youtube" && job.status === "published" ? "uploaded" : job.status}
                 </span>
                 <span>
-                  {job.platform === "youtube" && job.status === "published" && job.externalPostId ? <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(job.externalPostId)}`} target="_blank" rel="noreferrer">View video</a> : job.lastError || job.externalPostId || "—"}
+                  {job.platform === "x" && job.status === "published" && /^\d+$/.test(job.externalPostId || "") ? <a href={`https://x.com/i/status/${job.externalPostId}`} target="_blank" rel="noreferrer">View X post</a> : job.platform === "youtube" && job.status === "published" && job.externalPostId ? <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(job.externalPostId)}`} target="_blank" rel="noreferrer">View video</a> : job.lastError || job.externalPostId || "—"}
                 </span>
               </div>
             ))}

@@ -42,7 +42,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   });
 
   const googleConnection = await prisma.socialConnection.findFirst({ where: { organizationId: ctx.organizationId, provider: "google_business", status: "connected" } });
-  const xConnections = await prisma.socialConnection.findMany({ where: { organizationId: ctx.organizationId, provider: "x", status: "linked" }, select: { accountName: true } });
+  const xConnections = await prisma.socialConnection.findMany({ where: { organizationId: ctx.organizationId, provider: "x", status: { in: ["linked", "connected"] } }, select: { accountName: true, status: true } });
 
   return (
     <>
@@ -129,8 +129,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             ) : x === "X (Twitter)" ? (
               <>
                 <p>{xConnections.length ? `Linked: ${xConnections.map(account => `@${account.accountName}`).join(", ")}` : "Not connected"}</p>
-                <p>Account linking is available. Publishing to X is not available yet.</p>
-                <a className="button" href="/settings/x">{xConnections.length ? "Manage X connection" : "Connect X"}</a>
+                <p>{xConnections.some(account => account.status === "connected") ? "Publish approved text, photos and reels to X." : "Enable posting to send approved text, photos and reels to X."}</p>
+                <a className="button" href="/settings/x">{xConnections.some(account => account.status === "linked") ? "Enable X posting" : xConnections.length ? "Manage X connection" : "Connect X"}</a>
               </>
             ) : x === "TikTok" ? (
               <>

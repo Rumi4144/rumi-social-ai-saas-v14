@@ -26,16 +26,18 @@ export default function PrivacyPage() {
         integration.
       </p>
 
-      <h3>X (Twitter) account linking</h3>
+      <h3>X (Twitter) connection and publishing</h3>
       <p>
         When you connect X, we retrieve your X account ID and username and store
-        encrypted access and refresh tokens in your workspace. This connection
-        currently identifies your account; publishing to X is not yet available.
+        encrypted access and refresh tokens in your workspace. When you approve
+        a post for X, we send its caption and selected photo or video to X, now or
+        at your scheduled time. We retain the approved post settings, delivery
+        status and returned post ID in your workspace’s publishing history.
         We do not retrieve direct messages or use X data to train AI models.
       </p>
       <p>
         Disconnecting X in Settings removes the linked account information and
-        stored tokens and attempts to revoke those tokens with X. If X cannot
+        stored tokens, cancels queued X posts, and attempts to revoke those tokens with X. If X cannot
         confirm revocation, we show a link to its connected-app settings so you
         can remove access there. Workspace administrators may also supply X app
         credentials, which are encrypted and retained separately for reconnecting.
