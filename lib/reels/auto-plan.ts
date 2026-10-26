@@ -85,7 +85,7 @@ export function automaticReelPlan(input: { organizationId: string; campaignId: s
   const fragments = (post.caption || "").split(/(?<=[.!?])\s+|\n+/).map(value => concise(value)).filter(Boolean);
   const captions = [...new Set([concise(post.headline || ""), ...fragments].filter(Boolean))].slice(0, 4);
   if (unsafe.test(`${post.headline || ""} ${post.caption || ""} ${post.visualDirection || ""}`)) warnings.push("Potential claims or testimonials were omitted from reel captions. Review the saved post before publishing.");
-  const slots = saved ? saved.scenes : Array.from({ length: Math.max(1, captions.length) }, (_, index) => ({ headline: captions[index] || concise(brand.name), seconds: 4, direction: "" }));
+  const slots = Array.from({ length: 3 }, (_, index) => saved?.scenes[index] || { headline: captions[index] || "", seconds: 4, direction: "" });
   const topic = tokens(`${post.headline || ""} ${post.caption || ""}`);
   const headlineTopic = tokens(post.headline || "");
   const targetText = `${post.headline || ""} ${post.caption || ""}`;
@@ -120,14 +120,10 @@ export function automaticReelPlan(input: { organizationId: string; campaignId: s
     scenes.push({ id: sceneId, src: source.src, kind: "image", headline: concise(slot.headline) || concise(post.headline || "") || concise(brand.name), detail: "", seconds: slot.seconds, direction: holiday && post.occasion ? occasionVisualConcept(post.occasion).direction : slot.direction });
   }
   if (!scenes.length) warnings.push("No relevant ready photos are available for this post. Add or select photos before exporting.");
-  const closingSeconds = saved ? 0 : 3;
+  const closingSeconds = 3;
   if (scenes.length) {
-    const duration = scenes.reduce((total, scene) => total + scene.seconds, 0) + closingSeconds;
-    const target = Math.min(30, Math.max(15, duration));
-    if (duration !== target) {
-      const available = target - closingSeconds;
-      scenes.forEach((scene, index) => { scene.seconds = Math.floor(available / scenes.length) + (index < available % scenes.length ? 1 : 0); });
-    }
+    const available = 15 - closingSeconds;
+    scenes.forEach((scene, index) => { scene.seconds = Math.floor(available / scenes.length) + (index < available % scenes.length ? 1 : 0); });
   }
   const style = automaticReelStyle(brand, holiday);
   const project: ReelProject = { brand: brand.name, website: brand.website, logo: brand.logo, color: brand.color, accent: brand.accent, cta: concise(saved?.cta || "Explore more", 70) || "Explore more", style, ...(productSubject ? {productSubject} : {}), animation: style === "bold" ? "lively" : "gentle", closingSeconds, scenes };

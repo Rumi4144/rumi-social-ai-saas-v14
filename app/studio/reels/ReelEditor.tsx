@@ -12,7 +12,7 @@ import PhotoLibraryPicker from "./PhotoLibraryPicker";
 import SchedulePostButton from "@/components/SchedulePostButton";
 import { DEFAULT_MUSIC_VOLUME, musicSettings, prepareMusic, type MusicChoice } from "@/lib/reels/music";
 import styles from "./ReelEditor.module.css";
-import { appendScenes, mergeSources, restoreLibrary, uploadSelection, replaceScenePhoto, selectReelSource, hasRoomForReelSource } from "@/lib/reels/source-library";
+import { appendScenes, mergeSources, restoreLibrary, uploadSelection, replaceScenePhoto, selectReelSource, hasRoomForReelSource, selectThreeReelPhotos } from "@/lib/reels/source-library";
 import {reelDraftKey,selectedPostProject,matchingDraft,type ReelSource} from "@/lib/reels/post-context";
 import { reelOperationIsCurrent, autoPlanMatches, automaticMusic, type AutoReelPlan } from "@/lib/reels/automatic";
 type Source = ReelSource;
@@ -101,6 +101,9 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         setMusic(sound.music); setMusicStyle(sound.musicStyle); setMusicVolume(sound.musicVolume); setOriginalAudio(draft.originalAudio); setMusicFile(draft.musicFile); setVoiceFile(draft.voiceFile);
 
         setMessage("Your saved draft was restored.");
+      } else {
+        next = selectThreeReelPhotos(next, library, () => crypto.randomUUID());
+        if (next.scenes.some(scene => scene.kind === "image")) setMessage(`${next.scenes.length} available photo${next.scenes.length === 1 ? "" : "s"} selected automatically. Preview your reel or change the photos below.`);
       }
       setSavedReels(data.savedReels || []);setSources(library);setPosts(data.posts);setContentItemId(context.post.id);setProject(next);setOrganizationId(data.organizationId);setLoadingProject(false);
       if(!next.scenes.length)setMessage("This post has no ready matching photo or clip. Finish its photo in the campaign or upload media for this post.");
@@ -124,6 +127,12 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   function addSource(source: Source) {
     setProject(old => selectReelSource(old, source, () => crypto.randomUUID()));
     setPhotoMessage(project.scenes.length >= 6 && !project.scenes.some(scene => scene.src === source.src) ? "Photo selected in place of a repeat. Scene captions and timing were kept." : "Photo selected for your reel.");
+  }
+  function chooseThreePhotos() {
+    const next = selectThreeReelPhotos(project, sources, () => crypto.randomUUID());
+    if (next === project) { setPhotoMessage("Add matching photos to this post to select them automatically."); return; }
+    setProject(next);
+    setPhotoMessage(next.scenes.length === 3 ? "3 different photos selected. One scene per photo, with a 15-second reel." : `Only ${next.scenes.length} matching photo${next.scenes.length === 1 ? " is" : "s are"} available. Selected ${next.scenes.length} without repeating pictures.`);
   }
   function importFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -256,7 +265,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   // drafts. It must not depend on running the automatic planner in this visit.
   const reelBlockReason = loadingProject ? "Opening your reel…" : planning ? "Arranging your reel…" : loadingPhotos ? "Loading product photos…" : busy ? (rendering ? "Exporting your reel…" : "Finishing your current change…") : !project.scenes.length ? "Add a photo or clip to preview and export your reel." : "";
   const exportBlockReason = reelBlockReason || (!project.brand.trim() ? "Add your brand name under Closing screen to export." : "");
-  return <div className={styles.editor}><div className="eyebrow">{quick ? "AUTOMATIC REEL" : "REEL EDITOR"}</div>{embedded ? <h3>Create and post your reel</h3> : <h1>Make a finished reel.</h1>}{quick ? <p>Choose a campaign post. We arrange its saved photos, captions, music and branding into a reel. Review it, export it, then choose your accounts and posting time here. No subscription or AI credits needed.</p> : <><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p><p><a href="/studio/reels/quick">Create reel automatically</a></p></>}
+  return <div className={styles.editor}><div className="eyebrow">{quick ? "AUTOMATIC REEL" : "REEL EDITOR"}</div>{embedded ? <h3>Create and post your reel</h3> : <h1>Make a finished reel.</h1>}{quick ? <p>Choose a campaign post. We select up to 3 different saved photos and arrange a 15-second reel with captions, music and branding. Review it, export it, then choose your accounts and posting time here. No subscription or AI credits needed.</p> : <><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p><p><a href="/studio/reels/quick">Create reel automatically</a></p></>}
     {!embedded && <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingPhotos || loadingCampaigns} onChange={event => {setRequestedPostId("");setCampaignId(event.target.value);}}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>}
     {!organizationId && <p role="status">{loadingCampaigns ? "Loading your campaigns…" : loadingProject ? "Opening campaign…" : message}</p>}
     {!loadingCampaigns && !campaigns.length && <section className="card"><h2>No campaigns available in this workspace</h2><p>Open an existing campaign from the Campaigns page, or create a campaign first to use its photos and save your reel.</p><a href="/campaigns">Open Campaigns</a> · <a href="/create">Create a campaign</a></section>}
@@ -273,7 +282,8 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <label>Animation<select value={project.animation || "gentle"} onChange={event=>setProject({...project,animation:event.target.value as ReelAnimation})}>{REEL_ANIMATIONS.map(animation=><option key={animation.value} value={animation.value}>{animation.label}</option>)}</select></label>
         <p className={styles.hint}>{REEL_ANIMATIONS.find(animation=>animation.value===(project.animation || "gentle"))?.description} Applies to every scene automatically. No AI credits needed.</p>
         <h3>Photos and clips for this post</h3>
-        <p className={styles.hint}>Check the photos you want in your reel. Uncheck a photo to remove its scenes. You can also load product photos or upload your own.</p>
+        <button type="button" onClick={chooseThreePhotos} disabled={!sources.some(source => source.kind === "image")}>Automatically select 3 photos</button>
+        <p className={styles.hint}>New reels start with up to 3 different photos. Check the photos you want in your reel. Uncheck a photo to remove its scenes. You can also load product photos or upload your own.</p>
         <PhotoLibraryPicker key={`${campaignId}:${contentItemId}:library`} organizationId={organizationId} campaignId={campaignId} contentItemId={contentItemId} disabled={busy || previewing || loadingPhotos || !hasSelectionRoom} onPhoto={source=>{setSources(old=>mergeSources(old,[source]));addSource(source);}} />
         <button type="button" disabled={loadingPhotos} onClick={loadProductPhotos}>{loadingPhotos ? "Loading photos…" : "Load product photos"}</button>
         <details><summary>Choose a product page</summary><label>Product page address<input type="url" placeholder="https://your-website.com/product/…" value={productUrl} onChange={event => setProductUrl(event.target.value)} /></label><p className={styles.hint}>Use this brand’s website. Leave blank to find the product link in the selected post.</p></details>

@@ -45,10 +45,14 @@ test('duplicate photo variants never pad scenes; missing media and gaps stay exp
  assert.equal(plan([]).project.scenes.length,0);assert.match(plan([]).warnings.join(' '),/before exporting/);
  assert.equal(plan([asset('pending','Breathing',{status:'queued'}),asset('video','Breathing',{kind:'campaign_video'})]).sources.length,0);
 });
-test('saved four-scene plan retains concise text, shot assignment, and timing',()=>{
+test('automatic draft selects three photos from a saved plan and makes a fifteen-second reel',()=>{
  const visualDirection='Scene 1, 0–3 seconds: restless hands; text, "Notice your hands." Scene 2, 3–7 seconds: feet on floor; text, "Feel the floor." Scene 3, 7–11 seconds: breathing outdoors; text, "Notice your breath." Scene 4, 11–15 seconds: quiet window; text, "Stay curious." End card: "Explore more"';
  const result=plan([asset('hands','restless hands',{contentItemId:'post',metadata:{sceneId:'post-planned-1'}}),asset('feet','feet on floor'),asset('breath','breathing outdoors'),asset('window','quiet window')],{post:{...post,visualDirection}});
- assert.equal(result.project.scenes.length,4);assert.deepEqual(Array.from(result.project.scenes,s=>s.seconds),[3,4,4,4]);assert.equal(reelDuration(result.project),15);assert.equal(result.project.closingSeconds,0);assert.equal(result.project.scenes[0].headline,'Notice your hands.');assert.ok(result.project.scenes.every(s=>s.detail===''));assert.equal(result.sources[1].id,'feet');
+ assert.equal(result.project.scenes.length,3);assert.deepEqual(Array.from(result.project.scenes,s=>s.seconds),[4,4,4]);assert.equal(reelDuration(result.project),15);assert.equal(result.project.closingSeconds,3);assert.equal(result.project.scenes[0].headline,'Notice your hands.');assert.ok(result.project.scenes.every(s=>s.detail===''));assert.equal(result.sources[1].id,'feet');
+});
+test('even a short caption automatically selects three relevant photos when available',()=>{
+ const result=plan(['a','b','c','d'].map(id=>asset(id,'Breathing beside a window',{contentItemId:'post'})),{post:{...post,headline:'Breathing',caption:''}});
+ assert.equal(result.project.scenes.length,3);assert.equal(new Set(result.sources.map(s=>s.id)).size,3);assert.equal(reelDuration(result.project),15);
 });
 test('readable captions omit medical guarantees or invented testimonials without modifying source post',()=>{
  const risky={...post,headline:'Guaranteed cure for anxiety',caption:'Our clients said they were cured. Learn about breathing.'};

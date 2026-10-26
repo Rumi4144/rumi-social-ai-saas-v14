@@ -49,6 +49,30 @@ test('photo selection appends once and never removes a distinct photo when all s
  const fewer={...project,scenes:project.scenes.slice(1)};assert.equal(lib.hasRoomForReelSource(fewer),true);
  assert.equal(lib.selectReelSource(fewer,{id:'seventh',src:'/photo-7',kind:'image'},()=> '7').scenes.length,6);
 });
+test('automatic photo selection creates three distinct scenes from repeated selections and leaves the library untouched',()=>{
+ const lib=load('lib/reels/source-library.ts');
+ const sources=['a','b','c','d'].map(id=>({id,src:'/'+id,kind:'image'}));
+ const project={brand:'Rumi',cta:'Explore',closingSeconds:0,scenes:['a','a','b','b','a','b'].map((id,i)=>({id:'scene-'+i,src:'/'+id,kind:'image',headline:'Headline '+i,detail:'Caption '+i,seconds:2}))};
+ let serial=0;const result=lib.selectThreeReelPhotos(project,sources,()=> 'new-'+serial++);
+ assert.deepEqual(Array.from(result.scenes,s=>s.src),['/a','/b','/c']);assert.deepEqual(Array.from(result.scenes,s=>s.seconds),[4,4,4]);assert.equal(result.closingSeconds,3);
+ assert.equal(result.scenes[0].headline,'Headline 0');assert.equal(result.scenes[1].detail,'Caption 2');assert.equal(new Set(result.scenes.map(s=>s.id)).size,3);assert.equal(project.scenes.length,6);assert.equal(sources.length,4);
+});
+test('automatic selection uses fewer available photos without repeats, excludes clips and unverified new product photos',()=>{
+ const lib=load('lib/reels/source-library.ts');
+ const empty={scenes:[],closingSeconds:3,productSubject:'Exact Guitar'};
+ const sources=[{id:'wrong',src:'/wrong',kind:'image'},{id:'a',src:'/a',kind:'image',productVerified:true},{id:'duplicate',src:'/a',kind:'image',productVerified:true},{id:'b',src:'/b',kind:'image',productVerified:true},{id:'video',src:'/clip',kind:'video',productVerified:true}];
+ const result=lib.selectThreeReelPhotos(empty,sources,()=>Math.random().toString());
+ assert.deepEqual(Array.from(result.scenes,s=>s.src),['/a','/b']);assert.deepEqual(Array.from(result.scenes,s=>s.seconds),[6,6]);
+ assert.equal(lib.selectThreeReelPhotos(empty,[],()=> 'none'),empty);
+ const clip={...empty,scenes:[{id:'clip',src:'/clip',kind:'video',seconds:15,headline:'Presenter',detail:''}]};
+ assert.equal(lib.selectThreeReelPhotos(clip,[sources[4]],()=> 'none'),clip);
+});
+test('automatic selection recognizes two saved URLs or resized versions of the same picture',()=>{
+ const lib=load('lib/reels/source-library.ts');
+ const sources=['/api/reels/media?assetId=a','/api/reels/media?campaignId=old&assetId=a&thumbnail=1','https://photos.example/b.jpg?w=300','https://photos.example/b.jpg?w=1200','/third.jpg'].map((src,i)=>({id:String(i),src,kind:'image'}));
+ const result=lib.selectThreeReelPhotos({scenes:[],closingSeconds:3},sources,()=>Math.random().toString());
+ assert.deepEqual(Array.from(result.scenes,s=>s.src),[sources[0].src,sources[2].src,sources[4].src]);
+});
 test('library media proxy enforces brand scope and uses a smaller thumbnail without changing export resolution',async()=>{
  let size,missing=false,assetCalls=0;
  const pipeline={rotate(){return this;},resize(w,h){size=w;assert.equal(w,h);return this;},png(){return this;},async toBuffer(){return Buffer.from('photo');}};

@@ -29,6 +29,33 @@ export function selectReelSource(project: ReelProject, source: ReelSource, id: (
   return index < 0 ? project : replaceScenePhoto(project, project.scenes[index].id, source);
 }
 
+/** Choose up to three distinct photos from the already scoped, available library. */
+export function selectThreeReelPhotos(project: ReelProject, sources: ReelSource[], id: () => string): ReelProject {
+  const eligible = sources.filter(source => source.kind === "image" && (!project.productSubject || source.productVerified === true || source.src.startsWith("blob:") || project.scenes.some(scene => scene.src === source.src)));
+  const ordered = [...project.scenes.flatMap(scene => {
+    const source = eligible.find(item => item.src === scene.src);
+    return source ? [source] : [];
+  }), ...eligible];
+  const seen = new Set<string>();
+  const chosen = ordered.filter(source => {
+    let key = source.src;
+    try {
+      const url = new URL(source.src, "https://reel.invalid");
+      // A saved photo may have both a post URL and a library URL. Those are
+      // still one photo, even with different thumbnail or campaign parameters.
+      if (url.pathname === "/api/reels/media" && url.searchParams.has("assetId")) key = `asset:${url.searchParams.get("assetId")}`;
+      else { url.hash = ""; for (const name of ["width", "height", "w", "h", "fit", "quality", "q"]) url.searchParams.delete(name); url.searchParams.sort(); key = url.toString(); }
+    } catch {}
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  }).slice(0, 3);
+  if (!chosen.length) return project;
+  return { ...project, closingSeconds: 3, scenes: chosen.map((source, index) => {
+    const existing = project.scenes.find(scene => scene.src === source.src);
+    return { ...(existing || { id: id(), headline: "", detail: "" }), src: source.src, kind: "image", seconds: Math.floor(12 / chosen.length) + (index < 12 % chosen.length ? 1 : 0) };
+  }) };
+}
+
 export function mergeSources(...groups: ReelSource[][]): ReelSource[] {
   return [...new Map(groups.flat().map(source => [source.src, source])).values()];
 }

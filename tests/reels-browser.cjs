@@ -30,6 +30,10 @@ async function verifyPhotoSelection(page) {
  await page.getByRole('status').filter({hasText:'3 photos or clips selected · 6 of 6 scenes'}).waitFor();
  assert.deepEqual(await page.getByLabel('Supporting caption').allTextContents(),Array.from({length:6},(_,i)=>'Keep caption '+i));
  assert.deepEqual(await page.getByLabel('Scene length').evaluateAll(items=>items.map(item=>item.value)),['1','2','3','4','5','6']);
+ await page.getByRole('button',{name:'Automatically select 3 photos',exact:true}).click();
+ await page.getByRole('status').filter({hasText:'3 photos or clips selected · 3 of 6 scenes'}).waitFor();
+ await page.getByRole('heading',{name:'Preview · 15 seconds',exact:true}).waitFor();
+ assert.deepEqual(await page.getByLabel('Scene length').evaluateAll(items=>items.map(item=>item.value)),['4','4','4']);
  await photo('Post photo').uncheck();await photo('AI photo Scene 2').uncheck();
  await photo('Post photo').check();await photo('AI photo Scene 2').check();
  await page.getByRole('status').filter({hasText:'3 photos or clips selected · 3 of 6 scenes'}).waitFor();
@@ -45,7 +49,25 @@ async function verifyPhotoSelection(page) {
  await page.getByRole('status').filter({hasText:'6 photos or clips selected · 6 of 6 scenes'}).waitFor();
  await page.evaluate(async draft=>{const db=await new Promise(resolve=>{const r=indexedDB.open('social-reel-drafts',1);r.onsuccess=()=>resolve(r.result);});await new Promise((resolve,reject)=>{const tx=db.transaction('drafts','readwrite');tx.objectStore('drafts').put(draft,'org-a:demo:post-a');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();},original);
  await reopen();
- console.log('PASS: third photo selection with six repeated scenes, captions/timing preserved, three chosen photos saved/restored, deselection, and explained six-distinct-photo limit.');
+ console.log('PASS: third photo selection with six repeated scenes, captions/timing preserved, one-click automatic three-photo reel, choices saved/restored, deselection, and explained six-distinct-photo limit.');
+}
+async function verifyAutomaticPhotoDefault(browser, baseUrl) {
+ const page=await browser.newPage();
+ const data={organizationId:'org-a',campaign:{id:'demo',title:'Demo'},brand:{id:'guitars',name:'Rumi Guitars',color:'#132342',accent:'#dec184',website:'rumiguitars.com'},posts:[{id:'post-a',headline:'Explore our collection',caption:''}],sources:['a','b','c','d'].map(id=>({id,src:'/photo.svg?default='+id,kind:'image',contentItemId:'post-a',label:'Default '+id}))};
+ await page.route('**/api/reels/project*',route=>route.fulfill({json:new URL(route.request().url()).searchParams.has('campaignId')?data:{campaigns:[{id:'demo',title:'Demo'}]}}));
+ await page.goto(baseUrl);await page.getByLabel('Campaign',{exact:true}).selectOption('demo');
+ await page.getByText('Adjust photos, captions and branding',{exact:true}).click();
+ await page.getByRole('status').filter({hasText:'3 photos or clips selected · 3 of 6 scenes'}).waitFor();
+ await page.getByRole('heading',{name:'Preview · 15 seconds',exact:true}).waitFor();
+ for(const id of ['a','b','c'])assert.equal(await page.getByRole('checkbox',{name:'Use Default '+id+' in reel',exact:true}).isChecked(),true,'A fresh reel should select three different photos automatically');
+ assert.equal(await page.getByRole('checkbox',{name:'Use Default d in reel',exact:true}).isChecked(),false);
+ await page.getByRole('checkbox',{name:'Use Default b in reel',exact:true}).uncheck();
+ await page.getByRole('button',{name:'Save draft in this browser',exact:true}).click();await page.getByRole('status').filter({hasText:'Draft saved in this browser'}).waitFor();
+ await page.reload();await page.getByLabel('Campaign',{exact:true}).selectOption('demo');await page.getByRole('status').filter({hasText:'Your saved draft was restored'}).waitFor();
+ await page.getByText('Adjust photos, captions and branding',{exact:true}).click();
+ await page.getByRole('status').filter({hasText:'2 photos or clips selected · 2 of 6 scenes'}).waitFor();
+ assert.equal(await page.getByRole('checkbox',{name:'Use Default b in reel',exact:true}).isChecked(),false,'Saved manual choices must not be overwritten by automatic defaults');
+ await page.close();console.log('PASS: three photos selected automatically for a fresh reel; saved manual choices remain unchanged after reload.');
 }
 (async()=>{
  if (!previewOnly) { const fixture=spawnSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','color=c=blue:s=720x1280:r=30','-f','lavfi','-i','sine=frequency=600:sample_rate=44100','-t','2','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac',path.join(output,'clip.mp4')]);assert.equal(fixture.status,0,String(fixture.stderr)); }
@@ -98,6 +120,7 @@ async function verifyPhotoSelection(page) {
    await page.waitForFunction(()=>window.__audioTaps.every(tap=>tap.context.state==='closed'));
   }
   await verifyPhotoSelection(page);
+  await verifyAutomaticPhotoDefault(browser,'http://127.0.0.1:'+server.address().port);
   if (previewOnly) {
    // Exercise the actual browser encoder and player even where ffmpeg is not installed.
    await musicChoice.selectOption('classical');
