@@ -9,6 +9,7 @@ import { tenantContext } from "@/lib/auth/context";
 import { requiresVideo } from "@/lib/campaign/content-plan";
 import { publishKey } from "@/lib/publishing/idempotency";
 import { publishToProvider } from "@/lib/publishing/providers";
+import { approvedContentStatuses, reservedDeliveryStatuses, deliveryMessage } from "@/lib/publishing/eligibility";
 import { z } from "zod";
 
 export const maxDuration = 60;
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (item.status !== "approved") {
+    if (!approvedContentStatuses.includes(item.status)) {
       return NextResponse.json(
         { error: "Content must be approved before publishing." },
         { status: 409 }
@@ -79,6 +80,9 @@ export async function POST(req: Request) {
     }
 
     if(connection.provider==="tiktok_sandbox")return NextResponse.json({error:"Use the separate TikTok test area."},{status:403});
+
+    const existing = await prisma.publishJob.findFirst({ where: { organizationId: ctx.organizationId, contentItemId: item.id, socialConnectionId: connection.id, status: { in: reservedDeliveryStatuses } }, orderBy: { createdAt: "desc" } });
+    if (existing) return NextResponse.json({ ok: true, pending: existing.status !== "published", jobId: existing.id, externalPostId: existing.externalPostId, message: deliveryMessage(existing.status) }, { status: existing.status === "published" ? 200 : 202 });
 
     if (item.mediaUrl?.includes("/api/video/media/") && !["facebook", "instagram", "youtube", "tiktok", "x"].includes(connection.provider.toLowerCase())) return NextResponse.json({ error: "Choose a supported video account for publishing." }, { status: 400 });
 
@@ -146,7 +150,7 @@ export async function POST(req: Request) {
     if (result.pending) {
       const retryAt = new Date(Date.now() + 5 * 60 * 1000);
       await prisma.publishJob.update({ where: { id: job.id }, data: { status: "retry", scheduledFor: retryAt, lastError: result.error } });
-      await prisma.contentItem.update({ where: { id: item.id }, data: { status: "scheduled", scheduledFor: retryAt } });
+      await prisma.contentItem.update({ where: { id: item.id }, data: { status: item.status === "published" ? "published" : "scheduled", scheduledFor: retryAt } });
       return NextResponse.json({ ok: true, pending: true, jobId: job.id, message: result.error }, { status: 202 });
     }
 

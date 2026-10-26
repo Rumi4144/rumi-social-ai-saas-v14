@@ -91,14 +91,14 @@ test('TikTok signed media cannot be reused for another tenant, video, expired re
 
 for(const route of ['now','schedule'])test(`TikTok ${route} refuses missing consent before creating any publishing jobs`,async()=>{
  let writes=0,prepared=0;
- const prisma={contentItem:{findFirst:async()=>({id:'post',status:'approved',mediaUrl:'/api/video/media/clip',type:'reel_post'})},socialConnection:{findMany:async()=>[],findFirst:async q=>q.where.provider&&q.where.provider!=='tiktok'?null:connection},publishJob:{create:async()=>{writes++;}},$transaction:async()=>{writes++;}};
+ const prisma={contentItem:{findFirst:async()=>({id:'post',status:'approved',mediaUrl:'/api/video/media/clip',type:'reel_post'})},socialConnection:{findMany:async()=>[],findFirst:async q=>q.where.provider&&q.where.provider!=='tiktok'?null:connection},publishJob:{findFirst:async()=>null,create:async()=>{writes++;}},$transaction:async()=>{writes++;}};
  const api=load(`app/api/publishing/${route}/route.ts`,{'next/server':json,'@/lib/prisma':{prisma},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'own',role:'owner'})},'@/lib/tiktok/prepare':{prepareTikTokSettings:async(org,item,conn,raw)=>{prepared++;assert.equal(org,'own');assert.equal(conn.id,'connection');throw Error('Review TikTok privacy and consent.');}},'@/lib/publishing/facebook-video':{campaignVideoId:()=> 'clip'},'@/lib/publishing/google-business':{},'@/lib/publishing/providers':{}});
  const response=await api.POST({json:async()=>({contentItemId:'post',socialConnectionId:'connection',socialConnectionIds:['connection'],scheduledFor:'2027-01-01T12:00:00Z'})});assert.equal(response.status,400);assert.equal(writes,0);assert.equal(prepared,1);
 });
 
 test('TikTok scheduling stores the reviewed caption, privacy and exact asset with the queued job',async()=>{
  let saved,jobCount=0;
- const prisma={contentItem:{findFirst:async()=>({id:'post',status:'approved',mediaUrl:'/api/video/media/clip',type:'reel_post'}),update:async()=>({})},socialConnection:{findMany:async()=>[],findFirst:async q=>q.where.provider&&q.where.provider!=='tiktok'?null:connection},$transaction:async fn=>fn({publishJob:{upsert:async()=>{jobCount++;return {id:'publish'};}},job:{upsert:async q=>{saved=q.create;return q.create;}}})};
+ const prisma={contentItem:{findFirst:async()=>({id:'post',status:'approved',mediaUrl:'/api/video/media/clip',type:'reel_post'}),update:async()=>({})},socialConnection:{findMany:async()=>[],findFirst:async q=>q.where.provider&&q.where.provider!=='tiktok'?null:connection},publishJob:{findFirst:async()=>null},$transaction:async fn=>fn({publishJob:{upsert:async()=>{jobCount++;return {id:'publish'};}},job:{upsert:async q=>{saved=q.create;return q.create;}}})};
  const frozen={options,assetId:'clip',accountId:'creator'};
  const api=load('app/api/publishing/schedule/route.ts',{'next/server':json,'@/lib/prisma':{prisma},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'own',role:'owner'})},'@/lib/tiktok/prepare':{prepareTikTokSettings:async()=> frozen},'@/lib/publishing/facebook-video':{campaignVideoId:()=> 'clip'},'@/lib/publishing/google-business':{}});
  const response=await api.POST({json:async()=>({contentItemId:'post',socialConnectionIds:['connection'],scheduledFor:'2027-01-01T12:00:00Z',tiktok:options})});

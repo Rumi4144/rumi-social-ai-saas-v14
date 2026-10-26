@@ -11,12 +11,13 @@ const out = fs.mkdtempSync(path.join(os.tmpdir(), 'x-publishing-browser-'));
 let browser, server;
 
 (async () => {
-  fs.writeFileSync(path.join(out, 'entry.tsx'), `import React from 'react';import {createRoot} from 'react-dom/client';import Actions from ${JSON.stringify(repo + '/app/publishing/PublishingActions')};createRoot(document.getElementById('root')!).render(<Actions contentItemId="post" connectionId="x" destination="X · @Rumiguitars1"/>);`);
+  fs.writeFileSync(path.join(out, 'entry.tsx'), `import React from 'react';import {createRoot} from 'react-dom/client';import Actions from ${JSON.stringify(repo + '/app/publishing/PublishingActions')};import ${JSON.stringify(repo + '/app/globals.css')};createRoot(document.getElementById('root')!).render(location.pathname.startsWith('/youtube')?<article className="card" style={{maxWidth:430,margin:12}}><Actions contentItemId="post" connectionId="x" destination="X · @Rumiguitars1" existingDelivery={{status:'published',externalPostId:'123456'}}/><Actions contentItemId="post" connectionId="youtube" destination="YouTube · Rumi Guitars" existingDelivery={location.pathname.endsWith('/done')?{status:'published',externalPostId:'yt-video'}:undefined}/></article>:<Actions contentItemId="post" connectionId="x" destination="X · @Rumiguitars1"/>);`);
   await esbuild.build({ entryPoints: [path.join(out, 'entry.tsx')], bundle: true, outfile: path.join(out, 'app.js'), nodePaths: [repo + '/node_modules'], jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
   const writes = [], errors = [], unexpected = [];
   let code = 400, response = { submitted: false, error: 'Shorten this caption.' }, jobs = [], delay = 0;
   server = http.createServer(async (req, res) => {
     if (req.url === '/app.js') { res.setHeader('Content-Type', 'application/javascript'); return res.end(fs.readFileSync(path.join(out, 'app.js'))); }
+    if (req.url === '/app.css') { res.setHeader('Content-Type', 'text/css'); return res.end(fs.readFileSync(path.join(out, 'app.css'))); }
     res.setHeader('Content-Type', 'application/json');
     if (req.url.startsWith('/api/publishing/status?')) return res.end(JSON.stringify({ jobs }));
     if (['/api/publishing/now', '/api/publishing/schedule'].includes(req.url)) {
@@ -27,7 +28,7 @@ let browser, server;
     }
     if (req.url.startsWith('/api/')) { unexpected.push(req.url); res.statusCode = 500; return res.end('{}'); }
     res.setHeader('Content-Type', 'text/html');
-    res.end('<!doctype html><html><body><div id="root"></div><script src="/app.js"></script></body></html>');
+    res.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script src="/app.js"></script></body></html>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   browser = await chromium.launch(require('./browser-launch.cjs')());
@@ -88,8 +89,42 @@ let browser, server;
   assert.equal(writes.length, 6);
   assert.equal(writes.at(-1).route, '/api/publishing/schedule');
   assert.deepEqual(writes.at(-1).socialConnectionIds, ['x']);
+
+  // The already posted X delivery stays visible while the same reel is available on YouTube.
+  await page.setViewportSize({ width: 390, height: 1000 });
+  await page.goto(base + '/youtube');
+  assert.equal(await page.getByRole('button', { name: 'Publish to X · @Rumiguitars1' }).count(), 0);
+  assert.equal(await receipt.getAttribute('href'), 'https://x.com/i/status/123456');
+  const upload = page.getByRole('button', { name: 'Upload to YouTube · Rumi Guitars', exact: true });
+  const kids = page.getByLabel('Made for kids', { exact: true });
+  const synthetic = page.getByLabel('Realistic altered or synthetic content', { exact: true });
+  const consent = page.getByLabel(/I authorize the upload/);
+  assert.equal(await kids.isChecked(), false); assert.equal(await synthetic.isChecked(), true); assert.equal(await consent.isChecked(), false);
+  await upload.click();
+  await page.getByText('Confirm YouTube upload settings first.', { exact: true }).waitFor();
+  assert.equal(writes.length, 6, 'Missing consent must not submit a request');
+  const rows = await page.locator('label').evaluateAll(labels => labels.map(label => ({ top: label.getBoundingClientRect().top, bottom: label.getBoundingClientRect().bottom })));
+  for (let i = 1; i < rows.length; i++) assert.ok(rows[i].top >= rows[i - 1].bottom, 'Each YouTube setting must have its own non-overlapping row');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  if (process.env.PUBLISHING_QA_DIR) {
+    fs.mkdirSync(process.env.PUBLISHING_QA_DIR, { recursive: true });
+    await page.screenshot({ path: path.join(process.env.PUBLISHING_QA_DIR, 'youtube-settings-mobile.png'), fullPage: true });
+  }
+  await page.getByLabel('Visibility', { exact: true }).selectOption('unlisted');
+  await consent.check();
+  code = 200; response = { ok: true, externalPostId: 'yt-video' }; delay = 0;
+  await upload.click();
+  await page.getByText('Uploaded to YouTube.', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('link', { name: 'View YouTube video' }).getAttribute('href'), 'https://www.youtube.com/watch?v=yt-video');
+  assert.equal(writes.length, 7); assert.equal(writes.at(-1).socialConnectionId, 'youtube');
+  assert.deepEqual(writes.at(-1).youtube, { certified: true, privacy: 'unlisted', madeForKids: false, containsSyntheticMedia: true });
+  assert.equal(await upload.isDisabled(), true);
+  await page.goto(base + '/youtube/done');
+  assert.equal(await page.getByRole('button', { name: /Upload to YouTube/ }).count(), 0);
+  assert.equal(await page.getByRole('link', { name: 'View YouTube video' }).getAttribute('href'), 'https://www.youtube.com/watch?v=yt-video');
+  assert.equal(writes.length, 7, 'Refreshing completed deliveries must not post again');
   assert.deepEqual(errors, []); assert.deepEqual(unexpected, []);
-  console.log('PASS: X preflight failure, uncertain delivery, confirmed post link, pending-to-published polling without duplicates, and scheduled status. All requests used local fixtures.');
+  console.log('PASS: X delivery, receipts, scheduling and polling; YouTube after X, mobile settings, explicit consent, chosen settings and completed delivery protection. All requests used local fixtures.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   await browser?.close(); server?.close(); fs.rmSync(out, { recursive: true, force: true });
 });

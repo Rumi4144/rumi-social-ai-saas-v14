@@ -9,6 +9,7 @@ import { publishKey } from "@/lib/publishing/idempotency";
 import { z } from "zod";
 import { tenantContext } from "@/lib/auth/context";
 import { requiresVideo } from "@/lib/campaign/content-plan";
+import { approvedContentStatuses, reservedDeliveryStatuses, deliveryMessage } from "@/lib/publishing/eligibility";
 
 export const maxDuration = 60;
 
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Content not found" }, { status: 404 });
     }
 
-    if (item.status !== "approved") {
+    if (!approvedContentStatuses.includes(item.status)) {
       return NextResponse.json(
         { error: "Content must be approved before scheduling." },
         { status: 409 },
@@ -66,6 +67,9 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+
+    const existing = await prisma.publishJob.findFirst({ where: { organizationId: ctx.organizationId, contentItemId: item.id, socialConnectionId: { in: p.data.socialConnectionIds }, status: { in: reservedDeliveryStatuses } }, orderBy: { createdAt: "desc" } });
+    if (existing) return NextResponse.json({ error: `${deliveryMessage(existing.status)} Select only accounts that still need this post.` }, { status: 409 });
 
     const youtubeSelected = await prisma.socialConnection.findFirst({ where: { id: { in: p.data.socialConnectionIds }, organizationId: ctx.organizationId, provider: "youtube", status: "connected" } });
     if (youtubeSelected && (!p.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
@@ -137,7 +141,7 @@ export async function POST(req: Request) {
         id: item.id,
       },
       data: {
-        status: "scheduled",
+        status: item.status === "published" ? "published" : "scheduled",
         scheduledFor,
       },
     });

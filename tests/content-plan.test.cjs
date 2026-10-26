@@ -99,6 +99,7 @@ for(const route of ['schedule','now']) test(`${route} refuses unfinished reel an
   '@/lib/prisma':{prisma:{contentItem:{findFirst:async()=>({id:'draft',status:'approved',type,mediaUrl:null})},socialConnection:{findFirst:async()=>{throw Error('must not query provider');}}}},
   '@/lib/auth/context':{tenantContext:async()=>({organizationId:'master-mind'})},
   '@/lib/campaign/content-plan':plan,
+  '@/lib/publishing/eligibility':load('lib/publishing/eligibility.ts'),
   '@/lib/campaign/photo-matching':{verifyPhotoEvidence:()=>[]},'@/lib/x/publishing':{prepareXPost:()=>{throw Error('must not prepare X');}},'@/lib/publishing/google-business':{},'@/lib/publishing/idempotency':{},'@/lib/publishing/providers':{},
   '@/lib/publishing/facebook-video':{campaignVideoId:()=>null},
   '@/lib/tiktok/options':load('lib/tiktok/options.ts'),'@/lib/tiktok/prepare':{prepareTikTokSettings:()=>{throw Error('must not prepare TikTok');}},

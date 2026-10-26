@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 import PublishingActions from "./PublishingActions";
 import YouTubeUpload from "./YouTubeUpload";
+import { approvedContentStatuses, reservedDeliveryStatuses } from "@/lib/publishing/eligibility";
 
 export default async function Publishing() {
   const ctx = await tenantContext();
@@ -19,7 +20,7 @@ export default async function Publishing() {
   const approvedItems =
     await prisma.contentItem.findMany({
       where: {
-        status: "approved",
+        status: { in: approvedContentStatuses },
         campaign: {
           brand: {
             organizationId: ctx.organizationId,
@@ -34,6 +35,12 @@ export default async function Publishing() {
       },
       take: 50,
     });
+
+  const deliveries = await prisma.publishJob.findMany({ where: { organizationId: ctx.organizationId, contentItemId: { in: approvedItems.map(item => item.id) }, status: { in: reservedDeliveryStatuses } }, orderBy: { createdAt: "desc" } });
+  function existingDelivery(contentItemId: string, connectionId: string) {
+    const delivery = deliveries.find(job => job.contentItemId === contentItemId && job.socialConnectionId === connectionId);
+    return delivery ? { status: delivery.status, externalPostId: delivery.externalPostId } : undefined;
+  }
 
   const instagramConnection = await prisma.socialConnection.findFirst({
     where: { organizationId: ctx.organizationId, provider: "instagram", status: "connected" },
@@ -120,6 +127,7 @@ export default async function Publishing() {
 
       <section style={{ marginTop: "36px" }}>
         <h2>Approved content</h2>
+        <p>Send each approved post to the accounts you choose. Completed and scheduled deliveries stay visible for each account.</p>
 
         {approvedItems.length === 0 ? (
           <div className="card">
@@ -167,20 +175,22 @@ export default async function Publishing() {
                   <p>Text-only post</p>
                 )}
 
-                {xConnections.filter(account => account.status === "connected").map(account => <PublishingActions key={account.id} contentItemId={item.id} connectionId={account.id} destination={`X · @${account.accountName}`} />)}
-                {googleConnection && !item.mediaUrl?.includes("/api/video/media/") ? <PublishingActions contentItemId={item.id} connectionId={googleConnection.id} destination={`Google Business Profile · ${googleConnection.accountName || "Business location"}`} /> : null}
+                {xConnections.filter(account => account.status === "connected").map(account => <PublishingActions key={account.id} contentItemId={item.id} connectionId={account.id} destination={`X · @${account.accountName}`} existingDelivery={existingDelivery(item.id, account.id)} />)}
+                {googleConnection && !item.mediaUrl?.includes("/api/video/media/") ? <PublishingActions contentItemId={item.id} connectionId={googleConnection.id} destination={`Google Business Profile · ${googleConnection.accountName || "Business location"}`} existingDelivery={existingDelivery(item.id, googleConnection.id)} /> : null}
                 {facebookConnection ? (
                   <PublishingActions
                     contentItemId={item.id}
                     connectionId={facebookConnection.id}
+                    existingDelivery={existingDelivery(item.id, facebookConnection.id)}
                   />
                 ) : null}
-                {youtubeConnection && item.mediaUrl?.includes("/api/video/media/") ? <PublishingActions contentItemId={item.id} connectionId={youtubeConnection.id} destination={`YouTube · ${youtubeConnection.accountName || "YouTube"}`} /> : null}
+                {youtubeConnection && item.mediaUrl?.includes("/api/video/media/") ? <PublishingActions contentItemId={item.id} connectionId={youtubeConnection.id} destination={`YouTube · ${youtubeConnection.accountName || "YouTube"}`} existingDelivery={existingDelivery(item.id, youtubeConnection.id)} /> : null}
                 {instagramConnection && item.mediaUrl && !item.mediaUrl.includes("/api/video/media/") ? (
                   <PublishingActions
                     contentItemId={item.id}
                     connectionId={instagramConnection.id}
                     destination={`Instagram @${instagramConnection.accountName || "Instagram"}`}
+                    existingDelivery={existingDelivery(item.id, instagramConnection.id)}
                   />
                 ) : null}
               </div>

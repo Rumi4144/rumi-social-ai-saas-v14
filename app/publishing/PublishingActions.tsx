@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import PostDeliveryStatus from "@/components/PostDeliveryStatus";
+import { deliveryMessage, deliveryUrl, type ExistingDelivery } from "@/lib/publishing/eligibility";
 
 export default function PublishingActions({
   contentItemId,
   connectionId,
   destination = "Facebook Page",
+  existingDelivery,
 }: {
   contentItemId: string;
   connectionId: string;
   destination?: string;
+  existingDelivery?: ExistingDelivery;
 }) {
   const isYouTube = destination.startsWith("YouTube");
   const isX = destination.startsWith("X ·");
@@ -58,9 +61,9 @@ export default function PublishingActions({
         );
       }
 
-      setMessage(data.pending ? (isX ? "Delivery status updates below." : data.message || "The platform is processing this post. Check publishing history.") : isX ? "Posted to X." : "Published successfully.");
-      if (isX && !data.pending && /^\d+$/.test(data.externalPostId || "")) setPostUrl(`https://x.com/i/status/${data.externalPostId}`);
-      setWatchDelivery(isX && Boolean(data.pending));
+      setMessage(data.pending ? (isX ? "Delivery status updates below." : data.message || "The platform is processing this post. Check publishing history.") : isX ? "Posted to X." : isYouTube ? "Uploaded to YouTube." : "Published successfully.");
+      if (!data.pending) setPostUrl(deliveryUrl(isX ? "x" : isYouTube ? "youtube" : "", data.externalPostId) || "");
+      setWatchDelivery(Boolean(data.pending));
       setCompleted(true);
     } catch (error) {
       setMessage(
@@ -113,7 +116,7 @@ export default function PublishingActions({
       }
 
       setMessage(`Schedule saved for ${date.toLocaleString()}.${isX ? " Delivery status updates below." : ""}`);
-      setWatchDelivery(isX);
+      setWatchDelivery(true);
       setCompleted(true);
     } catch (error) {
       setMessage(
@@ -126,10 +129,21 @@ export default function PublishingActions({
     }
   }
 
+  if (existingDelivery) {
+    const url = existingDelivery.status === "published" ? deliveryUrl(isX ? "x" : isYouTube ? "youtube" : "", existingDelivery.externalPostId) : null;
+    return <div style={{ marginTop: 16 }}><p><strong>{destination}</strong>: {deliveryMessage(existingDelivery.status)}</p>{url && <p><a href={url} target="_blank" rel="noreferrer">{isYouTube ? "View YouTube video" : "View X post"}</a></p>}</div>;
+  }
+
   return (
     <div style={{ marginTop: "16px" }}>
       {isX && <p>X will receive the approved text and photo or reel shown above. X may charge your developer balance for publishing.</p>}
-      {isYouTube && <div><p>Uses this post’s selected video, headline and caption.</p><label>Visibility <select disabled={busy || completed} value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label><input type="checkbox" disabled={busy || completed} checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> Made for kids</label><label><input type="checkbox" disabled={busy || completed} checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Realistic altered or synthetic content</label><label><input type="checkbox" disabled={busy || completed} checked={certified} onChange={e=>setCertified(e.target.checked)} /> I authorize the upload with the selected visibility, have rights to this video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
+      {isYouTube && <div style={{ display: "grid", gap: 16, marginBottom: 16 }}>
+        <p>Uses this post’s selected video, headline and caption.</p>
+        <label style={{ display: "grid", gap: 8 }}>Visibility <select aria-label="Visibility" disabled={busy || completed} value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}><input style={{ flexShrink: 0, marginTop: 5 }} type="checkbox" disabled={busy || completed} checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /><span>Made for kids</span></label>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}><input style={{ flexShrink: 0, marginTop: 5 }} type="checkbox" disabled={busy || completed} checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /><span>Realistic altered or synthetic content</span></label>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}><input style={{ flexShrink: 0, marginTop: 5 }} type="checkbox" disabled={busy || completed} checked={certified} onChange={e=>setCertified(e.target.checked)} /><span>I authorize the upload with the selected visibility, have rights to this video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</span></label>
+      </div>}
       <button
         type="button"
         disabled={busy || completed}
@@ -159,7 +173,7 @@ export default function PublishingActions({
       </div>
 
       <p role="status" aria-live="polite" style={{ marginTop: "10px", minHeight: "3em" }}>{message}</p>
-      {postUrl && <p><a href={postUrl} target="_blank" rel="noreferrer">View X post</a></p>}
+      {postUrl && <p><a href={postUrl} target="_blank" rel="noreferrer">{isYouTube ? "View YouTube video" : "View X post"}</a></p>}
       {watchDelivery && <PostDeliveryStatus contentItemId={contentItemId} />}
     </div>
   );
