@@ -53,6 +53,9 @@ jobs:
       - run: node tests/publishing-position-browser.cjs
       - run: node tests/campaign-photo-browser.cjs
       - run: node tests/reels-browser.cjs
+      - run: node tests/reels-browser.cjs
+        env:
+          REEL_QUICK_BROWSER: "1"
       - run: node tests/ai-lab-browser.cjs
       - run: node tests/ai-options-browser.cjs
       - run: node tests/video-logo-browser.cjs

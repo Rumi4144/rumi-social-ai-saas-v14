@@ -27,20 +27,63 @@ function verify(file) {
   });
   await page.getByLabel('Campaign',{exact:true}).selectOption('demo');
   await page.getByLabel('Music style').first().waitFor();
+  assert.equal(await page.getByRole('button',{name:'Preview reel with sound',exact:true}).isEnabled(),true,'Existing campaign photos must be usable without running the planner');
+  await page.getByText('Adjust photos, captions and branding',{exact:true}).click();
+  await page.getByLabel('Supporting caption').fill('Manual edit before automatic planning');
+  assert.equal(await page.getByRole('button',{name:'Export finished reel',exact:true}).isEnabled(),true,'Manually edited scenes must be exportable');
+  await page.getByText('Adjust photos, captions and branding',{exact:true}).click();
   await page.getByLabel('Music style').first().selectOption('soft-acoustic');
   await page.getByRole('button',{name:'Create reel draft',exact:true}).click();
   await page.getByRole('status').filter({hasText:'Draft ready'}).waitFor();
+  assert.equal(await page.getByLabel('Music style').first().inputValue(),'soft-acoustic','Creating a draft must preserve the selected soft music');
+  // A saved automatic draft must remain usable after reopening the page.
+  // Previously the photos restored, but a transient planner flag disabled both actions.
+  await page.getByText('Adjust photos, captions and branding',{exact:true}).click();
+  await page.getByLabel('Supporting caption').fill('Saved guitar caption');
+  await page.getByLabel('Music style').first().selectOption('classical');
+  await page.getByRole('button',{name:'Save draft in this browser',exact:true}).click();
+  await page.getByRole('status').filter({hasText:'Draft saved in this browser'}).waitFor();
+  await page.reload();
+  await page.getByLabel('Campaign',{exact:true}).selectOption('demo');
+  await page.getByRole('status').filter({hasText:'Your saved draft was restored'}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Preview reel with sound',exact:true}).isEnabled(),true,'Restored automatic draft must be playable without creating it again');
+  assert.equal(await page.getByRole('button',{name:'Export finished reel',exact:true}).isEnabled(),true,'Restored automatic draft must be exportable');
+  assert.equal(await page.getByLabel('Music style').first().inputValue(),'classical');
+  await page.getByText('Adjust photos, captions and branding',{exact:true}).click();
+  assert.equal(await page.getByLabel('Supporting caption').inputValue(),'Saved guitar caption');
+  assert.equal(planCalls,1,'Restoring a draft must not request a replacement plan');
   const compactSound = page.locator('section').filter({has:page.getByRole('heading',{name:'Your automatic draft',exact:true})});
-  const musicChoice=compactSound.getByLabel('Music style').first(); assert.equal(await musicChoice.inputValue(),'soft-acoustic','Creating a draft must preserve the selected soft music');
+  const musicChoice=compactSound.getByLabel('Music style').first();
   await musicChoice.selectOption('ambient');
-  for (const choice of ['ambient','rain']) {
+  for (const choice of ['classical','ambient','rain']) {
    await musicChoice.selectOption(choice);
    await page.getByRole('button',{name:'Preview reel with sound',exact:true}).click();
    await page.waitForFunction(()=>window.__audioTaps.some(({context,analyser})=>{if(context.state!=='running')return false;const samples=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(samples);return samples.some(sample=>Math.abs(sample)>.0001);}));
    await page.getByRole('button',{name:'Stop preview',exact:true}).click();
    await page.waitForFunction(()=>window.__audioTaps.every(tap=>tap.context.state==='closed'));
   }
-  if (previewOnly) { assert.deepEqual(errors,[]);console.log('PASS: generated music and recorded rainfall are audible during reel preview, and stop closes all preview audio.');return; }
+  if (previewOnly) {
+   // Exercise the actual browser encoder and player even where ffmpeg is not installed.
+   await musicChoice.selectOption('classical');
+   await page.getByRole('button',{name:'Export finished reel',exact:true}).click();
+   await page.getByRole('link',{name:'Download finished reel'}).waitFor({timeout:45000});
+   const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('link',{name:'Download finished reel'}).click()]);
+   const file=path.join(output,download.suggestedFilename());await download.saveAs(file);assert.ok(fs.statSync(file).size>10000);
+   await page.locator('video[controls]').evaluate(async video=>{
+    const context=new AudioContext();await context.resume();context.createMediaElementSource(video).connect(context.destination);await video.play();
+   });
+   await page.waitForFunction(()=>window.__audioTaps.some(({context,analyser})=>{if(context.state!=='running')return false;const samples=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(samples);return samples.some(sample=>Math.abs(sample)>.0001);}));
+   await page.waitForFunction(()=>document.querySelector('video[controls]')?.ended);
+   const result=await page.locator('video[controls]').evaluate(video=>({width:video.videoWidth,height:video.videoHeight,duration:video.duration,frames:video.getVideoPlaybackQuality().totalVideoFrames}));
+   assert.equal(result.width,1080);assert.equal(result.height,1920);assert.ok(result.duration>=4.5 && result.duration<=6);assert.ok(result.frames>60,'Downloaded reel must contain moving video frames');
+   await page.getByLabel('Campaign post',{exact:true}).selectOption('post-b');
+   await page.getByRole('status').filter({hasText:'Add a photo or clip to preview and export'}).waitFor();
+   assert.equal(await page.getByRole('button',{name:'Preview reel with sound',exact:true}).isDisabled(),true,'An empty post must not preview the previous reel');
+   assert.equal(await page.getByRole('button',{name:'Export finished reel',exact:true}).isDisabled(),true);
+   assert.deepEqual(errors,[]);assert.deepEqual(mutations,[]);
+   console.log('PASS: existing and manually edited scenes, saved draft reload with captions/music retained, audible Spanish Romance/ambient/rain previews, stop cleanup, actual downloadable 1080x1920 export with audible sound and moving frames, and clear empty-post blocking. No paid or publishing requests. Export: '+file);
+   return;
+  }
   await musicChoice.selectOption('ambient');
   await page.getByRole('button',{name:'Export finished reel',exact:true}).click();
   await page.getByRole('link',{name:'Download finished reel'}).waitFor({timeout:45000});

@@ -20,7 +20,7 @@ type Post = { status?: string; id: string; headline: string | null; caption: str
 const empty: ReelProject = { brand: "", website: "", cta: "Explore more", color: "#132342", accent: "#dec184", style: "editorial", scenes: [], closingSeconds: 3 };
 
 export default function ReelEditor({ initialCampaignId, initialContentItemId, initialCampaigns, quick = false, embedded = false }: { embedded?: boolean; quick?: boolean; initialCampaignId: string; initialContentItemId: string; initialCampaigns?: { id: string; title: string }[] }) {
-  const [planning, setPlanning] = useState(false), [planned, setPlanned] = useState(false);
+  const [planning, setPlanning] = useState(false);
   const planController = useRef<AbortController | undefined>(undefined);
   const selection = useRef("");
   const selectionIdentity = useRef("");
@@ -75,7 +75,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   useEffect(() => { if (initialCampaigns === undefined) void refreshCampaigns(); return () => { planController.current?.abort(); controller.current?.abort(); photoController.current?.abort(); if (playTimer.current) clearInterval(playTimer.current); localUrls.current.forEach(URL.revokeObjectURL); }; }, []);
   useEffect(()=>{setCampaignId(initialCampaignId);setRequestedPostId(initialContentItemId);},[initialCampaignId,initialContentItemId]);
   useEffect(() => {
-    planController.current?.abort(); setPlanning(false); setPlanned(false); controller.current?.abort();
+    planController.current?.abort(); setPlanning(false); controller.current?.abort();
     photoController.current?.abort(); photoController.current = undefined; setLoadingPhotos(false); setPhotoMessage(""); setProductUrl("");
     if (!campaignId) { setOrganizationId(""); setLoadingProject(false); return; }
     let disposed = false; setLoadingProject(true); finishPreview(); setMessage(""); setCampaignScenePlan(null); setSavedReels([]); setProject(empty); setSources([]); setPosts([]); setOrganizationId(""); setContentItemId(""); setRendered(undefined); setSavedAsset(""); request.current=undefined;
@@ -161,7 +161,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     const key = selection.current;
     const active = new AbortController(); planController.current?.abort(); planController.current = active;
     const timeout = setTimeout(() => active.abort(), 30000);
-    setPlanning(true); setPlanned(false); finishPreview(); setRendered(undefined); setSavedAsset(""); request.current = undefined;
+    setPlanning(true); finishPreview(); setRendered(undefined); setSavedAsset(""); request.current = undefined;
     setMessage("Arranging your saved photos and captions…");
     try {
       const response = await fetch("/api/reels/auto-plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(context), signal: active.signal });
@@ -171,7 +171,6 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       if (!autoPlanMatches(data, context)) throw new Error("This draft belongs to a different post. Select your post and try again.");
       const plan = data as AutoReelPlan;
       setProject(previous=>({...plan.project,animation:previous.animation === "none" ? "none" : plan.project.animation})); setSources(plan.sources);
-      setPlanned(plan.project.scenes.length > 0);
       setMessage([...plan.warnings, plan.project.scenes.length ? "Draft ready. Preview the photos and captions, then export your finished reel." : "Add a matching saved photo to this post in the campaign, then try again."].join(" "));
     } catch (error) {
       if (planController.current === active && reelOperationIsCurrent(key, selection.current)) setMessage(active.signal.aborted ? "Draft creation stopped. Try again." : error instanceof Error ? error.message : "Could not create reel draft.");
@@ -250,6 +249,10 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     finally { setBusy(false); }
   }
   const readyAsset = !project.scenes.length ? undefined : savedAsset && rendered?.type === "video/mp4" ? savedAsset : !rendered && !rendering && !planning ? savedReels.find(asset => asset.contentItemId === contentItemId)?.id : undefined;
+  // Readiness belongs to the current reel, including restored and manually edited
+  // drafts. It must not depend on running the automatic planner in this visit.
+  const reelBlockReason = loadingProject ? "Opening your reel…" : planning ? "Arranging your reel…" : loadingPhotos ? "Loading product photos…" : busy ? (rendering ? "Exporting your reel…" : "Finishing your current change…") : !project.scenes.length ? "Add a photo or clip to preview and export your reel." : "";
+  const exportBlockReason = reelBlockReason || (!project.brand.trim() ? "Add your brand name under Closing screen to export." : "");
   return <div className={styles.editor}><div className="eyebrow">{quick ? "AUTOMATIC REEL" : "REEL EDITOR"}</div>{embedded ? <h3>Create and post your reel</h3> : <h1>Make a finished reel.</h1>}{quick ? <p>Choose a campaign post. We arrange its saved photos, captions, music and branding into a reel. Review it, export it, then choose your accounts and posting time here. No subscription or AI credits needed.</p> : <><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p><p><a href="/studio/reels/quick">Create reel automatically</a></p></>}
     {!embedded && <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingPhotos || loadingCampaigns} onChange={event => {setRequestedPostId("");setCampaignId(event.target.value);}}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>}
     {!organizationId && <p role="status">{loadingCampaigns ? "Loading your campaigns…" : loadingProject ? "Opening campaign…" : message}</p>}
@@ -260,7 +263,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       {quick && <><button type="button" disabled={busy || loadingProject || planning || !contentItemId} onClick={createAutomatically}>{planning ? "Creating draft…" : "Create reel draft"}</button>{planning && <button type="button" onClick={() => planController.current?.abort()}>Cancel draft creation</button>}<p>Uses only saved photos and existing captions. Review your media rights before export. Saving keeps the reel private until you choose to publish it.</p></>}
     </section>}
     {campaignId && organizationId && <div className={styles.layout}>
-      <section className="card">{quick && <><h2>Your automatic draft</h2><p>{planned ? `${project.scenes.length} scenes arranged with your brand’s closing screen.` : "Create a draft above to arrange the reel automatically."}</p><label>Reel design<select value={project.style} disabled={busy || previewing || planning} onChange={event=>setProject({...project,style:event.target.value as ReelStyle})}>{REEL_STYLES.map(style=><option key={style.value} value={style.value}>{style.label}</option>)}</select></label><h3>Sound</h3><MusicControls music={music} musicStyle={musicStyle} musicVolume={musicVolume} musicFile={musicFile} disabled={busy || previewing || planning} onMusic={setMusic} onStyle={setMusicStyle} onVolume={setMusicVolume} onFile={setMusicFile} /></>}<details open={quick ? undefined : true}><summary>{quick ? "Adjust photos, captions and branding" : "Your scenes"}</summary>{campaignScenePlan && <><p>The campaign’s scene timings and short on-screen text are available. Photos are placeholders until you choose matching media.</p><button type="button" disabled={busy || previewing || loadingPhotos || planning} onClick={()=>{setProject(campaignScenePlan);setRendered(undefined);setSavedAsset("");request.current=undefined;setMessage("Campaign scene plan applied. Review each photo or clip before export.");}}>Use campaign scene plan</button></>}<fieldset disabled={busy || previewing || loadingPhotos || planning} style={{ border: 0, padding: 0 }}>
+      <section className="card">{quick && <><h2>Your automatic draft</h2><p>{project.scenes.length ? `${project.scenes.length} scenes ready to preview. You can adjust them below or create a new automatic draft.` : "Create a draft above or add photos and clips below."}</p><label>Reel design<select value={project.style} disabled={busy || previewing || planning} onChange={event=>setProject({...project,style:event.target.value as ReelStyle})}>{REEL_STYLES.map(style=><option key={style.value} value={style.value}>{style.label}</option>)}</select></label><h3>Sound</h3><MusicControls music={music} musicStyle={musicStyle} musicVolume={musicVolume} musicFile={musicFile} disabled={busy || previewing || planning} onMusic={setMusic} onStyle={setMusicStyle} onVolume={setMusicVolume} onFile={setMusicFile} /></>}<details open={quick ? undefined : true}><summary>{quick ? "Adjust photos, captions and branding" : "Your scenes"}</summary>{campaignScenePlan && <><p>The campaign’s scene timings and short on-screen text are available. Photos are placeholders until you choose matching media.</p><button type="button" disabled={busy || previewing || loadingPhotos || planning} onClick={()=>{setProject(campaignScenePlan);setRendered(undefined);setSavedAsset("");request.current=undefined;setMessage("Campaign scene plan applied. Review each photo or clip before export.");}}>Use campaign scene plan</button></>}<fieldset disabled={busy || previewing || loadingPhotos || planning} style={{ border: 0, padding: 0 }}>
         <label>Visual style<select value={project.style} onChange={event => setProject({ ...project, style: event.target.value as ReelStyle })}>{REEL_STYLES.map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</select></label>
         <p className={styles.hint}>{REEL_STYLES.find(style => style.value === project.style)?.description}</p>
         {project.style === "showcase" && <label><input type="checkbox" checked={project.showcaseDetails === true} onChange={event=>setProject({...project,showcaseDetails:event.target.checked})}/> Include labeled close-ups from each scene’s photo. Keep this off for faces; video clips stay whole.</label>}
@@ -301,7 +304,8 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <button type="button" onClick={persist}>Save draft in this browser</button>
       </fieldset></details></section>
       <section className={`card ${styles.preview}`}><h2>Preview · {reelDuration(project)} seconds</h2><canvas ref={canvas} width={1080} height={1920} style={{ width: "100%", maxWidth: 350, background: project.color, borderRadius: 12 }} /><p>1080 × 1920 · vertical reel</p>
-        <button type="button" disabled={busy || planning || loadingProject || loadingPhotos || (quick && !planned) || !project.scenes.length} onClick={preview}>{previewing ? "Stop preview" : "Preview reel with sound"}</button> <button type="button" disabled={busy || planning || loadingProject || loadingPhotos || (quick && !planned) || !project.scenes.length || !project.brand.trim()} onClick={render}>Export finished reel</button>
+        <button type="button" disabled={!!reelBlockReason} onClick={preview}>{previewing ? "Stop preview" : "Preview reel with sound"}</button> <button type="button" disabled={!!exportBlockReason} onClick={render}>Export finished reel</button>
+        {exportBlockReason && <p role="status">{exportBlockReason}</p>}
         {rendering && <><progress max={100} value={progress} aria-label="Reel export progress" /><button type="button" onClick={() => controller.current?.abort()}>Cancel export</button></>}
         {downloadUrl && <div style={{ marginTop: 20 }}><video controls playsInline src={downloadUrl} style={{ width: "100%", maxWidth: 350 }} /><p><a href={downloadUrl} download={`finished-reel.${rendered?.type === "video/mp4" ? "mp4" : "webm"}`}>Download finished reel</a></p>
           <p>Save to: {posts.find(post => post.id === contentItemId)?.headline || "Selected post"}</p><button type="button" disabled={busy || !contentItemId || !!savedAsset} onClick={save}>{savedAsset ? "Reel saved" : "Save reel and continue to posting"}</button>
