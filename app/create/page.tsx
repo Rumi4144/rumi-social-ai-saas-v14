@@ -1,13 +1,18 @@
 "use client";
 
+import GuidedFlow from "@/components/GuidedFlow";
+import {useBrowserDraft} from "@/lib/workflow/browser-draft";
+import {campaignDraftSchema, type CampaignPhoto} from "@/lib/workflow/draft-schema";
 import CampaignSetupPhotos from "@/components/CampaignSetupPhotos";
 import { useEffect, useState } from "react";
 import { briefSuggestions, mixedTopicBrief, type BriefSuggestion } from "@/lib/campaign/brief-suggestions";
 import { CONTENT_TYPES, campaignDate, newYorkToday, buildQuantityContentPlan, applyCampaignTopics, contentTypeLabel, specialDayForDate, type ContentQuantities, type SpecialDay } from "@/lib/campaign/content-plan";
 
 export default function Create() {
+  const [step, setStep] = useState(0);
+  const [createdCampaign, setCreatedCampaign] = useState<string>();
   const [brief, setBrief] = useState("");
-  const [suggestionContext, setSuggestionContext] = useState<{organizationId:string;brandName:string;website?:string|null;source?:string;suggestions:BriefSuggestion[]}|null>(null);
+  const [suggestionContext, setSuggestionContext] = useState<{organizationId:string;draftScope:string;brandName:string;website?:string|null;source?:string;suggestions:BriefSuggestion[]}|null>(null);
   const [appliedTopics, setAppliedTopics] = useState<string[]>([]);
   const [mixTopics, setMixTopics] = useState(true);
   const [selectedTopics, setSelectedTopics] = useState<string[]|null>(null);
@@ -93,6 +98,12 @@ export default function Create() {
     return dailyPlatforms[day] ?? ["facebook", "instagram"];
   }
 
+  function changeDays(count: number) {
+    const selected = platformsForDay(1);
+    setDailyPlatforms(current => Object.fromEntries(Array.from({length: count}, (_, i) => [i + 1, current[i + 1] || [...selected]])));
+    setDays(count);
+  }
+
   function togglePlatform(day: number, platform: string) {
     setDailyPlatforms((current) => {
       const selected =
@@ -136,7 +147,8 @@ export default function Create() {
 
   const [photoSource, setPhotoSource] =
     useState<"website" | "ai" | "none" | "saved" | "upload">("none");
-  const [campaignPhotos,setCampaignPhotos] = useState<string[]>([]);
+  const [photos,setPhotos] = useState<CampaignPhoto[]>([]);
+  const campaignPhotos = photos.map(photo => photo.id);
   const [productUrl, setProductUrl] = useState("");
   const [productTitle, setProductTitle] = useState("");
   const [websiteImages, setWebsiteImages] = useState<string[]>([]);
@@ -144,6 +156,18 @@ export default function Create() {
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
+
+  const draftValue = {step, brief, goal, days, appliedTopics, mixTopics, selectedTopics, quantities, includeSpecialDays, excludedSpecialDays, customSpecialDays, campaignStartDate, dailyPlatforms, photoSource, photos, productUrl, productTitle, websiteImages, selectedImages, photoReceipt, createdCampaign};
+  const draft = useBrowserDraft(suggestionContext?.draftScope ? `campaign:${suggestionContext.draftScope}` : undefined, draftValue, campaignDraftSchema, saved => {
+    setStep(saved.step); setBrief(saved.brief); setGoal(saved.goal); setDays(saved.days); setAppliedTopics(saved.appliedTopics); setMixTopics(saved.mixTopics); setSelectedTopics(saved.selectedTopics); setQuantities(saved.quantities); setIncludeSpecialDays(saved.includeSpecialDays); setExcludedSpecialDays(saved.excludedSpecialDays); setCustomSpecialDays(saved.customSpecialDays); setCampaignStartDate(saved.campaignStartDate); setDailyPlatforms(saved.dailyPlatforms); setPhotoSource(saved.photoSource); setPhotos(saved.photos); setProductUrl(saved.productUrl); setProductTitle(saved.productTitle); setWebsiteImages(saved.websiteImages); setSelectedImages(saved.selectedImages); setPhotoReceipt(saved.photoReceipt); setCreatedCampaign(saved.createdCampaign);
+  });
+  const creditCost = photoSource === "ai" ? 3 : 1;
+  const blocker = !draft.ready ? suggestionsLoading ? "Loading your business…" : !suggestionContext?.draftScope ? "Your business could not load. Refresh this page to try again." : "Restoring your draft…"
+    : brief.trim().length < 10 ? "Describe what you want to promote in at least 10 characters."
+    : step >= 1 && photoSource === "website" && !selectedImages.length ? "Select at least one website photo, or choose Drafts only."
+    : step >= 1 && ["saved","upload"].includes(photoSource) && !photos.length ? "Add at least one photo, or choose Drafts only."
+    : step >= 2 && !validQuantities ? "Choose between 1 and 60 regular drafts."
+    : step >= 2 && !campaignStartDate ? "Choose a campaign start date." : undefined;
 
   async function findWebsitePhotos() {
     if (!suggestionContext?.organizationId || importing || busy) return;
@@ -207,7 +231,8 @@ export default function Create() {
   }
 
   async function go() {
-    if (brief.trim().length < 10 || busy || importing || !validQuantities || !campaignStartDate || (photoSource === "website" && selectedImages.length === 0) || (["saved","upload"].includes(photoSource) && !campaignPhotos.length)) return;
+    if (createdCampaign) {window.location.href = `/campaigns/${createdCampaign}`; return;}
+    if (!draft.ready || step !== 3 || blocker || brief.trim().length < 10 || busy || importing || !validQuantities || !campaignStartDate || (photoSource === "website" && selectedImages.length === 0) || (["saved","upload"].includes(photoSource) && !campaignPhotos.length)) return;
 
     setBusy(true);
     setStatus("Preparing campaign...");
@@ -267,6 +292,8 @@ export default function Create() {
         throw new Error("JOB_ID_MISSING");
       }
 
+      setCreatedCampaign(campaignId);
+      await draft.save({...draftValue, createdCampaign: campaignId}).catch(() => {});
       setStatus("Writing campaign...");
 
       for (let cycle = 0; cycle < 120; cycle++) {
@@ -410,13 +437,17 @@ export default function Create() {
 
   return (
     <>
-      <div className="eyebrow">CREATE EVERYTHING · V3</div>
+      <div className="eyebrow">CREATE A CAMPAIGN</div>
 
-      <h1>One brief. A complete campaign.</h1>
+      <h1>Plan your next campaign.</h1>
+      <p>Choose your content, review the plan and cost, then create your drafts.</p>
 
-      <div className="form">
-        <section aria-label="Campaign ideas" style={{marginBottom:20}}>
-          <h3>Need an idea? Choose a starting point.</h3>
+      <GuidedFlow steps={["Your message", "Your photos", "Your plan", "Review & create"]} step={step} onStep={setStep} busy={busy || importing} blocked={createdCampaign ? undefined : blocker} saved={draft.message} action={createdCampaign ? <a className="button" href={`/campaigns/${createdCampaign}`}>Open created campaign</a> : <button className="button" type="button" disabled={busy || importing || !!blocker} onClick={go}>{busy ? "Creating drafts…" : `Create campaign drafts · ${creditCost} ${creditCost === 1 ? "credit" : "credits"}`}</button>}>
+      <fieldset disabled={busy || !draft.ready} style={{border:0,padding:0,margin:0}}>
+      {suggestionContext && <p><strong>{suggestionContext.brandName}</strong>{suggestionContext.website && <> · {suggestionContext.website}</>}</p>}
+      <section hidden={step !== 0} aria-label="Your message">
+        <details aria-label="Campaign ideas" style={{marginBottom:20}}>
+          <summary>Need an idea? Choose a starting point.</summary>
           <p>{suggestionContext ? `Ideas for ${suggestionContext.brandName}.` : suggestionsLoading ? "Loading ideas for your workspace…" : "Choose general ideas, then add your business details."} Use several topics for variety, or turn off the mix for a single-topic campaign.</p>
           {suggestionContext?.website && <button type="button" disabled={busy || readingWebsite} onClick={readWebsiteTopics}>{readingWebsite ? "Reading website…" : "Find topics from my website"}</button>}
           {suggestionContext && !suggestionContext.website && <p>Add your website in <a href="/brand">Brand Brain</a> to find website topics.</p>}
@@ -432,7 +463,7 @@ export default function Create() {
             {appliedTopics.length > totalQuantity && <p>Your {totalQuantity} regular drafts will feature the first {totalQuantity} selected topics. Increase the number of drafts to include all {appliedTopics.length}.</p>}
             <p>You can edit the brief below. Editing it switches to your custom instructions. Choosing topics does not generate content or spend credits.</p>
           </>}
-        </section>
+        </details>
         <label htmlFor="campaign-brief">What do you want to promote?</label>
 
         <textarea
@@ -443,8 +474,12 @@ export default function Create() {
           placeholder="Describe the product, service, or topic you want this campaign to promote…"
         />
 
+        <label htmlFor="campaign-goal">Campaign goal</label>
+        <select id="campaign-goal" value={goal} onChange={e => setGoal(e.target.value)}><option value="launch">Product or service launch</option><option value="sales">Sales</option><option value="awareness">Awareness</option><option value="education">Education</option></select>
+      </section>
+      <section hidden={step !== 1} aria-label="Your photos">
         <div style={{ marginTop: 24, marginBottom: 24 }}>
-          <label>Campaign images</label>
+          <h3>Where should your photos come from?</h3>
 
           <div
             style={{
@@ -477,7 +512,7 @@ export default function Create() {
           </div>
 
 
-          {["saved","upload"].includes(photoSource) && suggestionContext && <CampaignSetupPhotos organizationId={suggestionContext.organizationId} mode={photoSource as "saved"|"upload"} disabled={busy} onChange={setCampaignPhotos} onBusy={setImporting}/>}
+          {["saved","upload"].includes(photoSource) && suggestionContext && <CampaignSetupPhotos organizationId={suggestionContext.organizationId} mode={photoSource as "saved"|"upload"} disabled={busy} photos={photos} onChange={setPhotos} onBusy={setImporting}/>}
           {photoSource === "website" && (
             <>
               <button type="button" disabled={busy || importing || !suggestionContext?.website} onClick={findWebsitePhotos}>{importing ? "Finding photos…" : "Find photos from my website"}</button>
@@ -625,15 +660,8 @@ export default function Create() {
           )}
         </div>
 
-        <label>Campaign goal</label>
-
-        <select value={goal} onChange={(e) => setGoal(e.target.value)}>
-          <option value="launch">Product or service launch</option>
-          <option value="sales">Sales</option>
-          <option value="awareness">Awareness</option>
-          <option value="education">Education</option>
-        </select>
-
+      </section>
+      <section hidden={step !== 2} aria-label="Your plan">
         <div style={{ marginTop: 22 }}>
           <label>Campaign duration</label>
 
@@ -650,7 +678,7 @@ export default function Create() {
               <button
                 key={option}
                 type="button"
-                onClick={() => setDays(option)}
+                onClick={() => changeDays(option)}
                 disabled={busy}
                 style={{
                   padding: "10px 16px",
@@ -677,7 +705,7 @@ export default function Create() {
                 onChange={(e) => {
                   const value = Number(e.target.value);
                   if (Number.isFinite(value)) {
-                    setDays(Math.min(30, Math.max(1, Math.floor(value))));
+                    changeDays(Math.min(30, Math.max(1, Math.floor(value))));
                   }
                 }}
                 style={{
@@ -707,8 +735,8 @@ export default function Create() {
           <p>Stories are vertical drafts for you to review and download. Automatic Story publishing is not available yet.</p>
           <p>Reels and presenter videos start as drafts. Review them, then use the reel editor or presenter studio to create the finished video before scheduling.</p>
         </section>
-        <section style={{marginTop:24}} aria-label="Extra holiday and special-day posts">
-          <h3>Extra holiday and special-day posts</h3>
+        <details aria-label="Extra holiday and special-day posts">
+          <summary>Extra holiday and special-day posts</summary>
           <label style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" style={{width:18,height:18,margin:0}} checked={includeSpecialDays} disabled={busy} onChange={e=>setIncludeSpecialDays(e.target.checked)}/> Add extra posts for selected occasions</label>
           <p>U.S. national holidays and wellness observances within your campaign dates are selected by default. Uncheck any you do not want. Extra posts are added alongside your regular content, with photos directed to match each occasion.</p>
           <details><summary>Included U.S. national holidays</summary><p>New Year's Day, Martin Luther King Jr. Day, Presidents Day, Memorial Day, Juneteenth, Independence Day, Labor Day, Columbus Day, Veterans Day, Thanksgiving and Christmas Day.</p><p>Posts use the holiday's actual calendar date. Wellness and kindness days are included separately when they fall within your campaign dates.</p></details>
@@ -721,12 +749,12 @@ export default function Create() {
             <button type="button" disabled={busy || !specialDate || !specialLabel.trim()} onClick={addSpecialDay}>Add special day</button>
           </>}
           <p><strong>{totalQuantity} regular drafts + {selectedSpecialDays.length} extra special-day drafts = {totalQuantity+selectedSpecialDays.length} planned posts.</strong></p>
-        </section>
+        </details>
         <div style={{ marginTop: 28, marginBottom: 28 }}>
           <h3 style={{ marginBottom: 6 }}>Campaign Schedule</h3>
 
           <p style={{ opacity: 0.65, marginTop: 0 }}>
-            Choose your start date, then select platforms for each scheduled day.
+            Choose the dates and intended platforms for your drafts. You will choose publishing times after reviewing the finished content.
           </p>
 
           <div style={{ marginTop: 18, marginBottom: 18 }}>
@@ -746,6 +774,9 @@ export default function Create() {
             </label>
           </div>
 
+          <h3>Platforms for this campaign</h3>
+          <div style={{display:"flex",flexWrap:"wrap",gap:16}}>{platforms.map(platform => <label key={platform}><input type="checkbox" checked={platformsForDay(1).includes(platform)} onChange={() => {const selected = platformsForDay(1).includes(platform) ? platformsForDay(1).filter(value => value !== platform) : [...platformsForDay(1),platform]; setDailyPlatforms(Object.fromEntries(Array.from({length:days},(_,i)=>[i+1,[...selected]])));}}/>{platform === "google_business" ? "Google Business Profile" : platform === "youtube" ? "YouTube" : platform === "tiktok" ? "TikTok" : platform === "linkedin" ? "LinkedIn" : platform.charAt(0).toUpperCase()+platform.slice(1)}</label>)}</div>
+          <details><summary>Customize platforms for individual days</summary>
           <div style={{ display: "grid", gap: 10 }}>
             {Array.from({ length: days }, (_, index) => {
               const day = index + 1;
@@ -932,48 +963,24 @@ export default function Create() {
               );
             })}
           </div>
+          </details>
         </div>
-        <div className="deliverables">
-          <b>Campaign Director will prepare</b>
-          <span>Strategy</span>
-          <span>Selected content mix</span>
-          <span>Carousel</span>
-          <span>Stories</span>
-          <span>Reel and presenter drafts</span>
-          <span>Voiceover</span>
-          <span>Calendar</span>
-          <span>Extra special-day drafts</span>
-        </div>
-
-        {photoSource === "website" && selectedImages.length === 0 && <p role="status">Choose “Find photos from my website,” import a product page and select photos, or switch to “Drafts only” to enable campaign creation.</p>}
-        <button
-          className="button createbig"
-          onClick={go}
-          disabled={
-            brief.trim().length < 10 ||
-            busy || importing || !validQuantities || !campaignStartDate ||
-            (["saved","upload"].includes(photoSource) && !campaignPhotos.length) || (photoSource === "website" &&
-              selectedImages.length === 0)
-          }
-        >
-          {busy
-  ? `✦ ${status || "Creating campaign..."}`
-  : "✦ Create campaign drafts"}
-        </button>
-
-        <span
-          style={{
-            color: "#dc2626",
-            fontWeight: 700,
-            marginLeft: 18,
-            display: "inline-block",
-          }}
-        >
-          Campaign Director will prepare a {days}-day campaign.
-        </span>
-
-        {status && <p className="status">{status}</p>}
-      </div>
+      </section>
+      <section hidden={step !== 3} aria-label="Review your campaign">
+        <h3>Your message</h3><p style={{whiteSpace:"pre-wrap"}}>{brief}</p><button type="button" disabled={busy} onClick={()=>setStep(0)}>Edit message</button>
+        <h3>Your photos</h3><p>{photoSource === "none" ? "Drafts only, without generated images" : photoSource === "ai" ? "Generate campaign photos with AI" : `${photoSource === "website" ? selectedImages.length : photos.length} selected photos`}</p>
+        <div style={{display:"flex",flexWrap:"wrap",gap:10}}>{(photoSource === "website" ? selectedImages.map(src=>({src,label:"Selected website photo"})) : ["saved","upload"].includes(photoSource) ? photos : []).map((photo,index)=><img key={index} src={photo.src} alt={photo.label} style={{width:90,height:100,objectFit:"contain"}}/>)}</div><button type="button" disabled={busy} onClick={()=>setStep(1)}>Edit photos</button>
+        <h3>Your {days}-day plan</h3><p>{totalQuantity} regular drafts and {selectedSpecialDays.length} special-day drafts, beginning {campaignStartDate}.</p>
+        <ul>{CONTENT_TYPES.filter(type=>quantities[type.value]>0).map(type=><li key={type.value}>{quantities[type.value]} {contentTypeLabel(type.value)} drafts</li>)}</ul>
+        <details><summary>View day-by-day plan</summary><div style={{display:"grid",gap:12}}>{quantityCalendar.map(day=><article style={{padding:"12px 0",borderBottom:"1px solid #d7e3dc"}} key={day.day}><strong>{formatCampaignDate(day.day)}</strong><p>{contentForDay(day.day)}</p>{selectedSpecialDays.filter(special=>special.date===day.date).map(special=><p key={specialKey(special)}>{special.label} · extra draft</p>)}<small>{day.platforms.join(" · ") || "No platforms selected"}</small></article>)}</div></details><button type="button" disabled={busy} onClick={()=>setStep(2)}>Edit plan</button>
+        <h3>Creation cost: {creditCost} Rumi {creditCost === 1 ? "credit" : "credits"}</h3>
+        <p>Includes the campaign copy and {photoSource === "ai" ? "AI campaign photos" : "your selected photo choices"}. Reels and presenter videos are plans at this stage; finished video generation is priced separately.</p>
+        <p>Review the generated drafts before scheduling. Creating this campaign does not publish any posts.</p>
+        {createdCampaign && <p>This campaign has already been created. <button type="button" onClick={()=>{setCreatedCampaign(undefined);setStep(0);setStatus("");}}>Start another campaign with these choices</button></p>}
+      </section>
+      </fieldset>
+      {status && <p className="status" role="status">{status}</p>}
+      </GuidedFlow>
     </>
   );
 }

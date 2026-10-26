@@ -48,10 +48,11 @@ jobs:
       - run: node tests/creative-template-browser.cjs
       - run: node tests/tiktok-posting-browser.cjs
       - run: node tests/publishing-position-browser.cjs
-      - run: node tests/campaign-setup-browser.cjs
+      - run: node tests/guided-flow-browser.cjs
+        env:
+          GUIDED_QA_DIR: qa-guided-flow
       - run: node tests/campaign-photo-browser.cjs
       - run: node tests/reels-browser.cjs
-      - run: node tests/presenter-browser.cjs
       - run: node tests/ai-lab-browser.cjs
       - run: node tests/ai-options-browser.cjs
       - run: node tests/video-logo-browser.cjs
@@ -61,6 +62,7 @@ jobs:
         with:
           name: photo-options-evidence
           path: |
+            qa-guided-flow/
             qa-photo-choices/
             qa-showcase/
             qa-ai-lab/

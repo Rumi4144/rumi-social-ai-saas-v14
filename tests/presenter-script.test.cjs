@@ -29,3 +29,11 @@ test('missing configuration, unusable output and provider errors return failure 
  assert.equal((await fixture({output:''}).post()).status,502);
  const failed=fixture({fail:true});assert.equal((await failed.post()).status,500);assert.equal(failed.calls.length,1);
 });
+test('selected product facts replace an unrelated campaign caption and short durations have bounded scripts',async()=>{
+ for(const [seconds,words] of [[5,'8–12'],[10,'18–24'],[15,'28–35']]){
+  const f=fixture();assert.equal((await f.post({seconds,productName:'Selected cedar guitar',productDetails:'Cedar top.'})).status,200);
+  const data=JSON.parse(f.calls[0].input);assert.equal(data.productName,'Selected cedar guitar');assert.equal(data.productDetails,'Cedar top.');assert.equal(data.headline,undefined);assert.equal(data.caption,undefined);
+  assert.ok(f.calls[0].instructions.includes(words));assert.match(f.calls[0].instructions,/Maximum 500 characters/);
+ }
+ assert.equal((await fixture({output:'x'.repeat(501)}).post({productName:'Selected cedar guitar'})).status,502);
+});
