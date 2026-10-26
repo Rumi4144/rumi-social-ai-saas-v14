@@ -10,6 +10,7 @@ import { CONTENT_TYPES, campaignDate, newYorkToday, buildQuantityContentPlan, ap
 
 export default function Create() {
   const [step, setStep] = useState(0);
+  const [savingStep, setSavingStep] = useState(false);
   const [createdCampaign, setCreatedCampaign] = useState<string>();
   const [brief, setBrief] = useState("");
   const [suggestionContext, setSuggestionContext] = useState<{organizationId:string;draftScope:string;brandName:string;website?:string|null;source?:string;suggestions:BriefSuggestion[]}|null>(null);
@@ -161,6 +162,13 @@ export default function Create() {
   const draft = useBrowserDraft(suggestionContext?.draftScope ? `campaign:${suggestionContext.draftScope}` : undefined, draftValue, campaignDraftSchema, saved => {
     setStep(saved.step); setBrief(saved.brief); setGoal(saved.goal); setDays(saved.days); setAppliedTopics(saved.appliedTopics); setMixTopics(saved.mixTopics); setSelectedTopics(saved.selectedTopics); setQuantities(saved.quantities); setIncludeSpecialDays(saved.includeSpecialDays); setExcludedSpecialDays(saved.excludedSpecialDays); setCustomSpecialDays(saved.customSpecialDays); setCampaignStartDate(saved.campaignStartDate); setDailyPlatforms(saved.dailyPlatforms); setPhotoSource(saved.photoSource); setPhotos(saved.photos); setProductUrl(saved.productUrl); setProductTitle(saved.productTitle); setWebsiteImages(saved.websiteImages); setSelectedImages(saved.selectedImages); setPhotoReceipt(saved.photoReceipt); setCreatedCampaign(saved.createdCampaign);
   });
+  async function changeStep(next: number) {
+    if (savingStep) return;
+    setSavingStep(true);
+    try { await draft.save({...draftValue, step: next}); setStep(next); }
+    catch { setStatus("Your changes could not be saved. Keep this page open and try Continue again."); }
+    finally { setSavingStep(false); }
+  }
   const creditCost = photoSource === "ai" ? 3 : 1;
   const blocker = !draft.ready ? suggestionsLoading ? "Loading your business…" : !suggestionContext?.draftScope ? "Your business could not load. Refresh this page to try again." : "Restoring your draft…"
     : brief.trim().length < 10 ? "Describe what you want to promote in at least 10 characters."
@@ -232,7 +240,7 @@ export default function Create() {
 
   async function go() {
     if (createdCampaign) {window.location.href = `/campaigns/${createdCampaign}`; return;}
-    if (!draft.ready || step !== 3 || blocker || brief.trim().length < 10 || busy || importing || !validQuantities || !campaignStartDate || (photoSource === "website" && selectedImages.length === 0) || (["saved","upload"].includes(photoSource) && !campaignPhotos.length)) return;
+    if (!draft.ready || step !== 3 || blocker || brief.trim().length < 10 || busy || savingStep || importing || !validQuantities || !campaignStartDate || (photoSource === "website" && selectedImages.length === 0) || (["saved","upload"].includes(photoSource) && !campaignPhotos.length)) return;
 
     setBusy(true);
     setStatus("Preparing campaign...");
@@ -442,8 +450,8 @@ export default function Create() {
       <h1>Plan your next campaign.</h1>
       <p>Choose your content, review the plan and cost, then create your drafts.</p>
 
-      <GuidedFlow steps={["Your message", "Your photos", "Your plan", "Review & create"]} step={step} onStep={setStep} busy={busy || importing} blocked={createdCampaign ? undefined : blocker} saved={draft.message} action={createdCampaign ? <a className="button" href={`/campaigns/${createdCampaign}`}>Open created campaign</a> : <button className="button" type="button" disabled={busy || importing || !!blocker} onClick={go}>{busy ? "Creating drafts…" : `Create campaign drafts · ${creditCost} ${creditCost === 1 ? "credit" : "credits"}`}</button>}>
-      <fieldset disabled={busy || !draft.ready} style={{border:0,padding:0,margin:0}}>
+      <GuidedFlow steps={["Your message", "Your photos", "Your plan", "Review & create"]} step={step} onStep={changeStep} busy={busy || importing || savingStep} blocked={createdCampaign ? undefined : blocker} saved={draft.message} action={createdCampaign ? <a className="button" href={`/campaigns/${createdCampaign}`}>Open created campaign</a> : <button className="button" type="button" disabled={busy || savingStep || importing || !!blocker} onClick={go}>{busy ? "Creating drafts…" : `Create campaign drafts · ${creditCost} ${creditCost === 1 ? "credit" : "credits"}`}</button>}>
+      <fieldset disabled={busy || savingStep || !draft.ready} style={{border:0,padding:0,margin:0}}>
       {suggestionContext && <p><strong>{suggestionContext.brandName}</strong>{suggestionContext.website && <> · {suggestionContext.website}</>}</p>}
       <section hidden={step !== 0} aria-label="Your message">
         <details aria-label="Campaign ideas" style={{marginBottom:20}}>
@@ -967,12 +975,12 @@ export default function Create() {
         </div>
       </section>
       <section hidden={step !== 3} aria-label="Review your campaign">
-        <h3>Your message</h3><p style={{whiteSpace:"pre-wrap"}}>{brief}</p><button type="button" disabled={busy} onClick={()=>setStep(0)}>Edit message</button>
+        <h3>Your message</h3><p style={{whiteSpace:"pre-wrap"}}>{brief}</p><button type="button" disabled={busy} onClick={()=>changeStep(0)}>Edit message</button>
         <h3>Your photos</h3><p>{photoSource === "none" ? "Drafts only, without generated images" : photoSource === "ai" ? "Generate campaign photos with AI" : `${photoSource === "website" ? selectedImages.length : photos.length} selected photos`}</p>
-        <div style={{display:"flex",flexWrap:"wrap",gap:10}}>{(photoSource === "website" ? selectedImages.map(src=>({src,label:"Selected website photo"})) : ["saved","upload"].includes(photoSource) ? photos : []).map((photo,index)=><img key={index} src={photo.src} alt={photo.label} style={{width:90,height:100,objectFit:"contain"}}/>)}</div><button type="button" disabled={busy} onClick={()=>setStep(1)}>Edit photos</button>
+        <div style={{display:"flex",flexWrap:"wrap",gap:10}}>{(photoSource === "website" ? selectedImages.map(src=>({src,label:"Selected website photo"})) : ["saved","upload"].includes(photoSource) ? photos : []).map((photo,index)=><img key={index} src={photo.src} alt={photo.label} style={{width:90,height:100,objectFit:"contain"}}/>)}</div><button type="button" disabled={busy} onClick={()=>changeStep(1)}>Edit photos</button>
         <h3>Your {days}-day plan</h3><p>{totalQuantity} regular drafts and {selectedSpecialDays.length} special-day drafts, beginning {campaignStartDate}.</p>
         <ul>{CONTENT_TYPES.filter(type=>quantities[type.value]>0).map(type=><li key={type.value}>{quantities[type.value]} {contentTypeLabel(type.value)} drafts</li>)}</ul>
-        <details><summary>View day-by-day plan</summary><div style={{display:"grid",gap:12}}>{quantityCalendar.map(day=><article style={{padding:"12px 0",borderBottom:"1px solid #d7e3dc"}} key={day.day}><strong>{formatCampaignDate(day.day)}</strong><p>{contentForDay(day.day)}</p>{selectedSpecialDays.filter(special=>special.date===day.date).map(special=><p key={specialKey(special)}>{special.label} · extra draft</p>)}<small>{day.platforms.join(" · ") || "No platforms selected"}</small></article>)}</div></details><button type="button" disabled={busy} onClick={()=>setStep(2)}>Edit plan</button>
+        <details><summary>View day-by-day plan</summary><div style={{display:"grid",gap:12}}>{quantityCalendar.map(day=><article style={{padding:"12px 0",borderBottom:"1px solid #d7e3dc"}} key={day.day}><strong>{formatCampaignDate(day.day)}</strong><p>{contentForDay(day.day)}</p>{selectedSpecialDays.filter(special=>special.date===day.date).map(special=><p key={specialKey(special)}>{special.label} · extra draft</p>)}<small>{day.platforms.join(" · ") || "No platforms selected"}</small></article>)}</div></details><button type="button" disabled={busy} onClick={()=>changeStep(2)}>Edit plan</button>
         <h3>Creation cost: {creditCost} Rumi {creditCost === 1 ? "credit" : "credits"}</h3>
         <p>Includes the campaign copy and {photoSource === "ai" ? "AI campaign photos" : "your selected photo choices"}. Reels and presenter videos are plans at this stage; finished video generation is priced separately.</p>
         <p>Review the generated drafts before scheduling. Creating this campaign does not publish any posts.</p>

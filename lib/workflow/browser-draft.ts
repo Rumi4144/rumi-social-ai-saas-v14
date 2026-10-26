@@ -43,11 +43,15 @@ async function readBrowserDraft(key: string) {
 export function useBrowserDraft<T>(key: string | undefined, value: T, schema: z.ZodType<T>, restore: (value: T) => void) {
   const [loadedKey, setLoadedKey] = useState<string>();
   const [message, setMessage] = useState("");
+  const [savedSnapshot, setSavedSnapshot] = useState<{key:string; serialized:string}>();
+  const [saveError, setSaveError] = useState(false);
   const restoreRef = useRef(restore); restoreRef.current = restore;
   const serialized = JSON.stringify(value);
   useEffect(() => {
     let active = true;
     setLoadedKey(undefined);
+    setSavedSnapshot(undefined);
+    setSaveError(false);
     if (!key) return;
     setMessage("Checking for a saved draft…");
     readBrowserDraft(key).then(stored => {
@@ -61,17 +65,28 @@ export function useBrowserDraft<T>(key: string | undefined, value: T, schema: z.
   useEffect(() => {
     if (!key || key !== loadedKey) return;
     let active = true;
+    setSaveError(false);
     setMessage("Saving draft…");
-    writeBrowserDraft(key, JSON.parse(serialized)).then(() => active && setMessage("Draft saved in this browser."))
-      .catch(() => active && setMessage("Draft could not be saved. Keep this page open; browser storage may be full."));
+    writeBrowserDraft(key, JSON.parse(serialized)).then(() => {
+      if (!active) return;
+      setSavedSnapshot({key, serialized}); setMessage("Draft saved in this browser.");
+    }).catch(() => {
+      if (!active) return;
+      setSaveError(true); setMessage("Draft could not be saved. Keep this page open; browser storage may be full.");
+    });
     return () => { active = false; };
   }, [key, loadedKey, serialized]);
-  return {ready: !!key && loadedKey === key, message, save: async (next = value) => {
+  const ready = !!key && loadedKey === key;
+  const saving = ready && !saveError && (savedSnapshot?.key !== key || savedSnapshot?.serialized !== serialized);
+  return {ready, message: saving ? "Saving draft…" : message, save: async (next = value) => {
     if (!key || key !== loadedKey) throw new Error("Wait for your saved draft to load.");
     try {
+      setSaveError(false);
       await writeBrowserDraft(key, next);
+      setSavedSnapshot({key, serialized: JSON.stringify(next)});
       setMessage("Draft saved in this browser.");
     } catch (error) {
+      setSaveError(true);
       setMessage("Draft could not be saved. Keep this page open; browser storage may be full.");
       throw error;
     }

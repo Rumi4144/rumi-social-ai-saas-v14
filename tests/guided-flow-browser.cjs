@@ -94,6 +94,7 @@ async function body(req) { const chunks = []; for await (const chunk of req)
     const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
     browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } : fs.existsSync(chrome) ? { executablePath: chrome } : {}) });
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } }), errors = [];
+    if(process.env.GUIDED_SLOW_BROWSER) { const session=await page.context().newCDPSession(page); await session.send('Emulation.setCPUThrottlingRate',{rate:4}); }
     page.on('pageerror', error => errors.push(error.message));
     const base = 'http://127.0.0.1:' + server.address().port;
     const next = () => page.getByRole('button', { name: 'Continue', exact: true }).click();
