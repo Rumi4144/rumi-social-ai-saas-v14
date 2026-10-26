@@ -32,7 +32,7 @@ function fixture(){
  db.$transaction=async fn=>fn(db);
  const env={NODE_ENV:'test',NEXT_PUBLIC_APP_URL:origin,TOKEN_ENCRYPTION_KEY:'unit-test',X_CLIENT_ID:'client',X_CLIENT_SECRET:'client-secret'};
  const fetchMock=async(url,options={})=>{
-  calls.push({url,options});await hook(url,options);
+  calls.push({url,options});const intercepted=await hook(url,options);if(intercepted instanceof Response)return intercepted;
   assert.equal(options.redirect,'error');assert.equal(options.cache,'no-store');
   if(url.endsWith('/oauth2/token'))return Response.json({access_token:'renewed-access',refresh_token:'renewed-refresh',expires_in:7200,token_type:'bearer',scope:'tweet.read tweet.write users.read media.write offline.access'});
   if(url.endsWith('/users/me'))return Response.json({data:{id:'123',username:'RumiGuitars'}});
@@ -53,7 +53,7 @@ function fixture(){
   'next/server':{NextResponse:{json:(value,init)=>Response.json(value,init)}},
  };
  function load(file){if(mocks['@/'+file.replace(/\.ts$/, '')])return mocks['@/'+file.replace(/\.ts$/, '')];if(cache.has(file))return cache.get(file);const module={exports:{}};cache.set(file,module.exports);const code=ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'..',file),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
-  vm.runInNewContext(code,{module,exports:module.exports,Buffer,URL,URLSearchParams,AbortSignal,Response,Date:Clock,Error,console,process:{env},fetch:fetchMock,require:name=>mocks[name]||(name.startsWith('@/')?load(name.slice(2)+'.ts'):name.startsWith('.')?load(path.join(path.dirname(file),name)+'.ts'):require(name))});return module.exports;
+  vm.runInNewContext(code,{module,exports:module.exports,Buffer,URL,URLSearchParams,AbortSignal,Response,Request,FormData,Blob,Date:Clock,Error,console,process:{env},fetch:fetchMock,require:name=>mocks[name]||(name.startsWith('@/')?load(name.slice(2)+'.ts'):name.startsWith('.')?load(path.join(path.dirname(file),name)+'.ts'):require(name))});return module.exports;
  }
  const security=load('lib/security/crypto.ts'),client=load('lib/x/connection.ts'),prep=load('lib/x/publishing.ts');publisher=load('lib/publishing/x.ts');
  const connection={id:'conn',organizationId:'org',provider:'x',externalId:'123',accountName:'RumiGuitars',status:'connected',encryptedToken:security.encryptSecret(JSON.stringify({accessToken:'access',refreshToken:'refresh',expiresAt:now+7200000,scope:client.X_SCOPES,clientId:'client'}))};
@@ -75,7 +75,7 @@ function fixture(){
 test('X counts URLs, emoji and non-Latin text with the official validator',()=>{const f=fixture();assert.equal(f.prep.xCaption('a'.repeat(280),false).length,280);assert.throws(()=>f.prep.xCaption('a'.repeat(281),false),/281/);assert.doesNotThrow(()=>f.prep.xCaption('a'.repeat(256)+' '+ 'https://example.com/'+'b'.repeat(1000),false));assert.throws(()=>f.prep.xCaption('界'.repeat(141),false),/282/);assert.doesNotThrow(()=>f.prep.xCaption('👨‍👩‍👧‍👦'.repeat(140),false));assert.throws(()=>f.prep.xCaption('',false),/valid text/);});
 test('X text publishing returns a real receipt and deduplicates retries and separate jobs',async()=>{const f=fixture();await f.queue();assert.equal((await f.publish()).externalId,'555');assert.equal((await f.publish()).externalId,'555');await f.queue('second');assert.equal((await f.publish('second')).externalId,'555');assert.equal(f.posts().length,1);assert.deepEqual(JSON.parse(f.posts()[0].options.body),{text:'Meet Rumi Guitars.'});});
 test('concurrent X submissions claim a single public write',async()=>{const f=fixture();await f.queue();await f.queue('second');const results=await Promise.all([f.publish(),f.publish('second')]);assert.equal(results.filter(r=>r.ok).length,1);assert.equal(results.filter(r=>r.pending).length,1);assert.equal(f.posts().length,1);});
-test('X video uploads approved bytes once, polls processing, then publishes with the same media ID',async()=>{const f=fixture();f.item.mediaUrl='/api/video/media/media';f.setProcessing(true);await f.queue();assert.equal((await f.publish()).pending,true);assert.equal(f.posts().length,0);f.advance(300000);f.setProcessing(false);assert.equal((await f.publish()).ok,true);assert.equal(f.calls.filter(c=>c.url.endsWith('/initialize')).length,1);const append=f.calls.find(c=>c.url.endsWith('/append'));assert.equal(Buffer.from(JSON.parse(append.options.body).media,'base64').toString(),'approved-media');assert.deepEqual(JSON.parse(f.posts()[0].options.body).media,{media_ids:['900']});});
+test('X video uploads approved bytes once, polls processing, then publishes with the same media ID',async()=>{const f=fixture();f.item.mediaUrl='/api/video/media/media';f.setProcessing(true);await f.queue();assert.equal((await f.publish()).pending,true);assert.equal(f.posts().length,0);f.advance(300000);f.setProcessing(false);assert.equal((await f.publish()).ok,true);assert.equal(f.calls.filter(c=>c.url.endsWith('/initialize')).length,1);const append=f.calls.find(c=>c.url.endsWith('/append'));assert.equal(await append.options.body.get('media').text(),'approved-media');assert.deepEqual(JSON.parse(f.posts()[0].options.body).media,{media_ids:['900']});});
 test('X photo uploads use tweet_image and preserve approved bytes',async()=>{const f=fixture();f.item.mediaUrl='/api/media/media';await f.queue();assert.equal((await f.publish()).ok,true);assert.equal(JSON.parse(f.calls.find(c=>c.url.endsWith('/initialize')).options.body).media_category,'tweet_image');});
 test('changed caption, withdrawn approval, or changed media cannot be published',async()=>{for(const change of[f=>f.item.caption='Different product',f=>f.item.status='draft',f=>f.setMedia(Buffer.from('wrong guitar'))]){const f=fixture();f.item.mediaUrl='/api/video/media/media';await f.queue();change(f);assert.equal((await f.publish()).ok,false);assert.equal(f.posts().length,0);}});
 test('X rejects cross-workspace context and a swapped account before API calls',async()=>{for(const extra of[{organizationId:'foreign'},{externalAccountId:'999'}]){const f=fixture();await f.queue();assert.equal((await f.publish('publish',extra)).ok,false);assert.equal(f.calls.length,0);}});
@@ -102,4 +102,70 @@ test('X preparation failures explicitly confirm no submission and hide unexpecte
   assert.ok(!body.error.includes('parseTweet'));
   assert.equal(f.tables.publishJob.size,0);assert.equal(f.tables.job.size,0);assert.equal(f.calls.length,0);
  }
+});
+
+test('X sends ordered binary multipart chunks, finalizes without a body, and uses the documented STATUS command',async()=>{
+ const f=fixture(),bytes=Buffer.alloc(4*1024*1024+537);for(let i=0;i<bytes.length;i++)bytes[i]=i%256;
+ f.item.mediaUrl='/api/video/media/media';f.setMedia(bytes);f.setProcessing(true);
+ const uploaded=[];
+ f.setHook(async(url,options)=>{
+  if(url.endsWith('/initialize'))assert.deepEqual(JSON.parse(options.body),{total_bytes:bytes.length,media_type:'video/mp4',media_category:'tweet_video'});
+  if(url.endsWith('/append')){
+   assert.equal(options.method,'POST');assert.equal(options.headers['Content-Type'],undefined);
+   const request=new Request(url,options);
+   assert.match(request.headers.get('content-type'),/^multipart\/form-data; boundary=/);
+   const fields=await request.formData(),file=fields.get('media');
+   assert.equal(fields.get('segment_index'),String(uploaded.length));
+   assert.equal(file.type,'video/mp4');assert.equal(file.name,'reel.mp4');assert.ok(file.size<=4*1024*1024);
+   uploaded.push(Buffer.from(await file.arrayBuffer()));
+   // X upload implementations may acknowledge a chunk with an empty 200.
+   return new Response(null,{status:200});
+  }
+  if(url.endsWith('/finalize')){assert.equal(options.method,'POST');assert.equal(options.body,undefined);assert.equal(options.headers['Content-Type'],undefined);}
+  if(url.includes('/2/media/upload?')){const query=new URL(url).searchParams;assert.equal(query.get('command'),'STATUS');assert.equal(query.get('media_id'),'900');}
+ });
+ await f.queue();assert.equal((await f.publish()).pending,true);assert.equal(f.posts().length,0);
+ assert.equal(uploaded.length,2);assert.deepEqual(Buffer.concat(uploaded),bytes);
+ f.advance(300000);f.setProcessing(false);assert.equal((await f.publish()).ok,true);
+ assert.equal(f.calls.filter(c=>c.url.endsWith('/initialize')).length,1);assert.equal(f.posts().length,1);
+});
+
+test('X reports the rejected stage and safe field reason without publishing or exposing provider values',async()=>{
+ for(const endpoint of ['initialize','append','finalize']){
+  const f=fixture();f.item.mediaUrl='/api/video/media/media';await f.queue();
+  f.setHook(async url=>url.endsWith('/'+endpoint)?Response.json({detail:'secret-caption private-token-should-never-appear',errors:[{parameters:{media:['secret-file']},message:'private-token-should-never-appear'}]},{status:400}):undefined);
+  const result=await f.publish();assert.equal(result.ok,false);assert.equal(result.code,400);
+  assert.match(result.error,new RegExp({initialize:'starting the media upload',append:'receiving the photo or reel',finalize:'finishing the media upload'}[endpoint]));
+  assert.match(result.error,/media upload fields/);assert.doesNotMatch(result.error,/secret|private-token/);assert.equal(f.posts().length,0);
+  assert.match([...f.tables.job.values()].find(row=>row.type==='X_POST').error,/media upload fields/);
+ }
+});
+
+test('an explicitly retried failed upload starts clean and publishes the same approved media once',async()=>{
+ const f=fixture();f.item.mediaUrl='/api/video/media/media';await f.queue();
+ f.setHook(async url=>url.endsWith('/finalize')?Response.json({detail:'Invalid media data'},{status:400}):undefined);
+ assert.equal((await f.publish()).ok,false);assert.equal(f.posts().length,0);
+ const count=f.calls.length;assert.equal((await f.publish()).ok,false);assert.equal(f.calls.length,count);
+ await f.queue('deliberate-retry');f.setHook(async()=>{});
+ assert.equal((await f.publish('deliberate-retry')).ok,true);assert.equal(f.calls.filter(c=>c.url.endsWith('/initialize')).length,2);assert.equal(f.posts().length,1);
+});
+
+test('X never finalizes a rejected chunk even if its error is in a 200 response',async()=>{
+ const f=fixture();f.item.mediaUrl='/api/video/media/media';await f.queue();
+ f.setHook(async url=>url.endsWith('/append')?Response.json({errors:[{parameter:'segment_index',message:'Invalid segment'}]}):undefined);
+ assert.match((await f.publish()).error,/receiving the photo or reel/);
+ assert.equal(f.calls.some(c=>c.url.endsWith('/finalize')),false);assert.equal(f.posts().length,0);
+});
+
+test('X media-only posts include an empty text field and a confirmed media reference',async()=>{
+ const f=fixture();f.item.caption='';f.item.headline='';f.item.mediaUrl='/api/video/media/media';await f.queue();
+ assert.equal((await f.publish()).ok,true);assert.deepEqual(JSON.parse(f.posts()[0].options.body),{text:'',media:{media_ids:['900']}});
+});
+
+test('X recognizes duplicate and expired media rejections but does not echo arbitrary provider text',()=>{
+ const f=fixture();
+ assert.match(f.prep.xHttpError(400,'/2/tweets',{errors:[{code:187,message:'private-token'}]}).message,/duplicate content/);
+ assert.match(f.prep.xHttpError(400,'/2/tweets',{detail:'Media ID has expired: private-token'}).message,/invalid or expired/);
+ assert.doesNotMatch(f.prep.xHttpError(400,'/2/tweets',{detail:'private-token'}).message,/private-token/);
+ assert.match(f.prep.xHttpError(400,'/2/media/upload?command=STATUS&media_id=900').message,/checking media processing/);
 });

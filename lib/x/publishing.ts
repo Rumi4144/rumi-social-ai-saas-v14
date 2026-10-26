@@ -10,7 +10,8 @@ export type XPost = { contentItemId: string; connectionId: string; accountId: st
 // PostgreSQL JSON objects do not preserve insertion order.
 export function xPostFingerprint(post: Omit<XPost, "fingerprint">) { return xHash(JSON.stringify([post.contentItemId, post.connectionId, post.accountId, post.text, post.mediaUrl, post.media ? [post.media.assetId, post.media.kind, post.media.hash] : null])); }
 export const X_RECONNECT = "Open Settings → X and select Enable X posting, then authorize this account again.";
-export class XPublishError extends Error { constructor(message: string, public code?: number) { super(message); } }
+type XRequestStage = "initialize" | "append" | "finalize" | "status" | "post";
+export class XPublishError extends Error { constructor(message: string, public code?: number, public stage?: XRequestStage) { super(message); } }
 export class XBusy extends Error {}
 
 export function xCaption(text: string, hasMedia: boolean) {
@@ -38,14 +39,51 @@ export async function prepareXPost(org: string, item: { id: string; caption: str
   } catch { throw new XPublishError("The selected photo or reel could not be prepared for X. Save a finished MP4 reel (under 100 MB) or a Rumi photo, then approve it again."); }
 }
 
-export function xHttpError(status: number) {
-  return new XPublishError(status === 401 ? X_RECONNECT : status === 402 ? "X requires more API credits. Check the balance in your X Developer Console, then try this post again." : status === 403 ? "X refused this post. Check your X app’s posting permissions, account restrictions and media requirements before trying again." : status === 429 ? "X is limiting requests. Wait a few minutes before trying again." : status === 400 ? "X rejected the text or media. Review the caption and export the photo or reel again." : "X could not complete this request. Check publishing history before trying again.", status);
+function xRequestStage(path: string): XRequestStage | undefined {
+  if (path === "/2/tweets") return "post";
+  if (path === "/2/media/upload/initialize") return "initialize";
+  if (/^\/2\/media\/upload\/\d+\/append$/.test(path)) return "append";
+  if (/^\/2\/media\/upload\/\d+\/finalize$/.test(path)) return "finalize";
+  if (path.startsWith("/2/media/upload?")) return "status";
+}
+// Only translate known provider reasons. Never echo raw response text, request
+// values, credentials, captions or media data into the UI or saved job history.
+function xRejectionReason(payload: unknown) {
+  if (!payload || typeof payload !== "object") return "";
+  const value = payload as Record<string, unknown>;
+  const problems = [value, ...(Array.isArray(value.errors) ? value.errors.filter(item => item && typeof item === "object").slice(0, 10) : [])];
+  const detail = problems.flatMap(item => [item.detail, item.message, item.title]).filter(text => typeof text === "string").join(" ").slice(0, 4000).toLowerCase();
+  if (problems.some(item => item.code === 187) || /duplicate (?:content|post|tweet)/.test(detail)) return "X reports duplicate content. Check your X profile for the existing post.";
+  if (/media(?:_id| id)?.{0,40}(?:invalid|expired)|(?:invalid|expired).{0,40}media(?:_id| id)/.test(detail)) return "X reports that the uploaded media is invalid or expired.";
+  if (/unsupported.{0,40}(?:format|codec)|(?:format|codec).{0,40}(?:unsupported|not supported)/.test(detail)) return "X does not support this file’s encoding. Export the reel as MP4 with H.264 video and AAC audio.";
+  if (/segments?.{0,80}(?:size|bytes|match)|(?:size|bytes).{0,80}(?:mismatch|does not match)/.test(detail)) return "X reports an incomplete media upload.";
+  const fields = problems.flatMap(item => [item.parameter, ...Object.keys(item.parameters && typeof item.parameters === "object" ? item.parameters : {})]);
+  if (fields.some(field => ["media", "media_data", "segment_index", "total_bytes", "media_type", "media_category"].includes(field))) return "X reports a problem with the media upload fields.";
+  if (fields.some(field => ["media_id", "media.media_ids", "media_ids"].includes(field))) return "X reports a problem with the uploaded media reference.";
+  if (fields.includes("text")) return "X reports a problem with the caption.";
+  return "";
+}
+export function xHttpError(status: number, path = "", payload?: unknown) {
+  const stage = xRequestStage(path);
+  const actions = { initialize: "starting the media upload", append: "receiving the photo or reel", finalize: "finishing the media upload", status: "checking media processing", post: "creating the post" };
+  const rejection = `X rejected the request${stage ? ` while ${actions[stage]}` : ""} (${status}). ${xRejectionReason(payload) || "Rumi could not complete this step. Your saved post is still available."}`;
+  return new XPublishError(status === 401 ? X_RECONNECT : status === 402 ? "X requires more API credits. Check the balance in your X Developer Console, then try this post again." : status === 403 ? "X refused this post. Check your X app’s posting permissions, account restrictions and media requirements before trying again." : status === 429 ? "X is limiting requests. Wait a few minutes before trying again." : [400, 404, 413, 422].includes(status) ? rejection : "X could not complete this request. Check publishing history before trying again.", status, stage);
 }
 export async function xRequest(path: string, token: string, body?: unknown) {
-  const response = await fetch(`https://api.x.com${path}`, { method: body === undefined ? "GET" : "POST", headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000) });
-  if (!response.ok) throw xHttpError(response.status);
+  const multipart = body instanceof FormData;
+  const hasBody = body !== undefined && body !== null;
+  const response = await fetch(`https://api.x.com${path}`, { method: body === undefined ? "GET" : "POST", headers: { Authorization: `Bearer ${token}`, ...(hasBody && !multipart ? { "Content-Type": "application/json" } : {}) }, ...(hasBody ? { body: multipart ? body : JSON.stringify(body) } : {}), cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000) });
+  if (!response.ok) {
+    let payload: unknown;
+    try { payload = await response.json(); } catch { /* An HTML/empty rejection has no safe provider details. */ }
+    throw xHttpError(response.status, path, payload);
+  }
   if (response.status === 204) return {};
-  return response.json();
+  const text = await response.text();
+  if (!text.trim() && xRequestStage(path) === "append") return {};
+  const result = JSON.parse(text);
+  if (xRequestStage(path) === "append" && result.errors?.length) throw xHttpError(400, path, result);
+  return result;
 }
 
 export async function xAccessToken(connection: SocialConnection): Promise<string> {

@@ -43,6 +43,9 @@ export async function publishX(input: { organizationId?: string; contentItemId?:
     if (!["ready", "working", "failed"].includes(previous.status)) return stop(unknown);
     lease = randomUUID();
     state = { ...state, lease, publishJobId: jobId, ...(previous.status === "failed" ? { startedAt: Date.now() } : {}) };
+    // A deliberate retry may restart a rejected, incomplete upload. Keep ready
+    // media and receipts, and keep resumable uploads after transient failures.
+    if (previous.status === "failed" && state.upload?.stage !== "ready") delete state.upload;
     const claimed = await prisma.job.updateMany({ where: { id: stateId, organizationId: org, status: previous.status, updatedAt: previous.updatedAt }, data: { status: "working", payload: JSON.parse(JSON.stringify(state)), error: null } });
     if (!claimed.count) return waiting();
     if (Date.now() - state.startedAt > 2 * 60 * 60 * 1000) throw new XPublishError("X took too long to prepare this media. Review the reel and try again.");
@@ -72,7 +75,10 @@ export async function publishX(input: { organizationId?: string; contentItemId?:
       while (upload.stage === "append" && upload.offset < media.bytes.length) {
         if (Date.now() > deadline) { await patch("ready"); return waiting(); }
         const end = Math.min(upload.offset + 4 * 1024 * 1024, media.bytes.length);
-        await xRequest(`/2/media/upload/${upload.id}/append`, accessToken, { segment_index: upload.segment, media: media.bytes.subarray(upload.offset, end).toString("base64") });
+        const chunk = new FormData();
+        chunk.set("segment_index", String(upload.segment));
+        chunk.set("media", new Blob([new Uint8Array(media.bytes.subarray(upload.offset, end))], { type: media.contentType }), post.media.kind === "video" ? "reel.mp4" : "photo.jpg");
+        await xRequest(`/2/media/upload/${upload.id}/append`, accessToken, chunk);
         upload.offset = end; upload.segment++;
         if (end === media.bytes.length) upload.stage = "finalize";
         await patch("working");
@@ -89,10 +95,10 @@ export async function publishX(input: { organizationId?: string; contentItemId?:
         if (Date.now() > deadline) { await patch("ready"); return waiting(); }
         // Persist before finalization: after a timeout, inspect this upload instead of starting over.
         upload.stage = "processing"; await patch("working");
-        processing(await xRequest(`/2/media/upload/${upload.id}/finalize`, accessToken, {}));
+        processing(await xRequest(`/2/media/upload/${upload.id}/finalize`, accessToken, null));
         await patch("working");
       } else if (upload.stage === "processing" && (!upload.checkAt || upload.checkAt <= Date.now())) {
-        processing(await xRequest(`/2/media/upload?media_id=${upload.id}`, accessToken));
+        processing(await xRequest(`/2/media/upload?command=STATUS&media_id=${upload.id}`, accessToken));
         await patch("working");
       }
       if (upload.stage !== "ready" || Date.now() > deadline) { await patch("ready"); return waiting(); }
@@ -105,7 +111,7 @@ export async function publishX(input: { organizationId?: string; contentItemId?:
     if (xGrant(await currentPost()).accessToken !== accessToken) throw new XPublishError("The X authorization changed. Review the connection and try again.");
     await patch("submitting"); submitting = true;
     let result;
-    try { result = await xRequest("/2/tweets", accessToken, { ...(post.text ? { text: post.text } : {}), ...(state.upload ? { media: { media_ids: [state.upload.id] } } : {}) }); }
+    try { result = await xRequest("/2/tweets", accessToken, { text: post.text, ...(state.upload ? { media: { media_ids: [state.upload.id] } } : {}) }); }
     catch (error) {
       // Only explicit rejection proves no post was created. A timeout/5xx must never be resubmitted.
       const rejected = error instanceof XPublishError && [400, 401, 402, 403, 404, 413, 422, 429].includes(error.code || 0);
