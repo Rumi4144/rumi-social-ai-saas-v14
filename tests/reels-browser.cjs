@@ -12,6 +12,41 @@ function verify(file) {
  const decoded=spawnSync('ffmpeg',['-v','error','-i',file,'-f','null','-'],{encoding:'utf8'});assert.equal(decoded.status,0,decoded.stderr);
  const audio=spawnSync('ffmpeg',['-i',file,'-vn','-af','volumedetect','-f','null','-'],{encoding:'utf8'});assert.match(audio.stderr,/max_volume: -?[0-9.]+ dB/,'Sound must contain audio rather than silence');
 }
+async function verifyPhotoSelection(page) {
+ const original=await page.evaluate(async()=>{
+  const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('social-reel-drafts',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const draft=await new Promise((resolve,reject)=>{const r=db.transaction('drafts').objectStore('drafts').get('org-a:demo:post-a');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const sources=Array.from({length:7},(_,i)=>({id:'choice-'+i,src:'/photo.svg'+(i?'?choice='+i:''),kind:'image',contentItemId:'post-a',label:['Post photo','AI photo Scene 2','AI photo Scene 1'][i]||'Extra photo '+i}));
+  const scenes=[0,0,0,1,1,1].map((choice,i)=>({id:'scene-'+i,src:sources[choice].src,kind:'image',seconds:i+1,headline:'Scene title '+i,detail:'Keep caption '+i}));
+  await new Promise((resolve,reject)=>{const tx=db.transaction('drafts','readwrite');tx.objectStore('drafts').put({...draft,sources,project:{...draft.project,scenes}},'org-a:demo:post-a');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();return draft;
+ });
+ const reopen=async()=>{await page.reload();await page.getByLabel('Campaign',{exact:true}).selectOption('demo');await page.getByRole('status').filter({hasText:'Your saved draft was restored'}).waitFor();await page.getByText('Adjust photos, captions and branding',{exact:true}).click();};
+ await reopen();
+ const photo=name=>page.getByRole('checkbox',{name:'Use '+name+' in reel',exact:true});
+ assert.equal(await photo('Post photo').isChecked(),true);assert.equal(await photo('AI photo Scene 2').isChecked(),true);
+ assert.equal(await photo('AI photo Scene 1').isChecked(),false);
+ assert.equal(await photo('AI photo Scene 1').isEnabled(),true,'A third photo must remain selectable when six scenes contain repeated photos');
+ await photo('AI photo Scene 1').check();
+ await page.getByRole('status').filter({hasText:'3 photos or clips selected · 6 of 6 scenes'}).waitFor();
+ assert.deepEqual(await page.getByLabel('Supporting caption').allTextContents(),Array.from({length:6},(_,i)=>'Keep caption '+i));
+ assert.deepEqual(await page.getByLabel('Scene length').evaluateAll(items=>items.map(item=>item.value)),['1','2','3','4','5','6']);
+ await photo('Post photo').uncheck();await photo('AI photo Scene 2').uncheck();
+ await photo('Post photo').check();await photo('AI photo Scene 2').check();
+ await page.getByRole('status').filter({hasText:'3 photos or clips selected · 3 of 6 scenes'}).waitFor();
+ await page.getByRole('button',{name:'Save draft in this browser',exact:true}).click();await page.getByRole('status').filter({hasText:'Draft saved in this browser'}).waitFor();
+ await reopen();
+ for(const label of ['Post photo','AI photo Scene 2','AI photo Scene 1'])assert.equal(await photo(label).isChecked(),true,'All three photo choices must survive reload');
+ await page.getByRole('status').filter({hasText:'3 photos or clips selected · 3 of 6 scenes'}).waitFor();
+ if(process.env.REEL_PHOTO_QA_DIR){fs.mkdirSync(process.env.REEL_PHOTO_QA_DIR,{recursive:true});await page.getByRole('heading',{name:'Photos and clips for this post',exact:true}).evaluate(element=>element.scrollIntoView({block:'start'}));await page.screenshot({path:path.join(process.env.REEL_PHOTO_QA_DIR,'three-photos-selected.png')});}
+ for(const label of ['Extra photo 3','Extra photo 4','Extra photo 5'])await photo(label).check();
+ assert.equal(await photo('Extra photo 6').isDisabled(),true);assert.equal(await photo('Post photo').isEnabled(),true);
+ await page.getByText('All 6 scenes use different photos or clips.',{exact:false}).waitFor();
+ await photo('Post photo').uncheck();await photo('Extra photo 6').check();
+ await page.getByRole('status').filter({hasText:'6 photos or clips selected · 6 of 6 scenes'}).waitFor();
+ await page.evaluate(async draft=>{const db=await new Promise(resolve=>{const r=indexedDB.open('social-reel-drafts',1);r.onsuccess=()=>resolve(r.result);});await new Promise((resolve,reject)=>{const tx=db.transaction('drafts','readwrite');tx.objectStore('drafts').put(draft,'org-a:demo:post-a');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();},original);
+ await reopen();
+ console.log('PASS: third photo selection with six repeated scenes, captions/timing preserved, three chosen photos saved/restored, deselection, and explained six-distinct-photo limit.');
+}
 (async()=>{
  if (!previewOnly) { const fixture=spawnSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','color=c=blue:s=720x1280:r=30','-f','lavfi','-i','sine=frequency=600:sample_rate=44100','-t','2','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac',path.join(output,'clip.mp4')]);assert.equal(fixture.status,0,String(fixture.stderr)); }
  fs.writeFileSync(path.join(output,'entry.tsx'),`import React from 'react';import {createRoot} from 'react-dom/client';import ReelEditor from ${JSON.stringify(repo+'/app/studio/reels/ReelEditor')};import ${JSON.stringify(repo+'/app/globals.css')};createRoot(document.getElementById('root')!).render(<ReelEditor quick={${quick}} initialCampaignId="" initialContentItemId="post-a"/>);`);
@@ -62,6 +97,7 @@ function verify(file) {
    await page.getByRole('button',{name:'Stop preview',exact:true}).click();
    await page.waitForFunction(()=>window.__audioTaps.every(tap=>tap.context.state==='closed'));
   }
+  await verifyPhotoSelection(page);
   if (previewOnly) {
    // Exercise the actual browser encoder and player even where ffmpeg is not installed.
    await musicChoice.selectOption('classical');

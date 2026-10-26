@@ -29,6 +29,26 @@ test('saved reused photos survive draft restoration only within the same brand; 
  const project={scenes:[{id:'scene1',src:'/old',kind:'image',seconds:3,headline:'Keep this',detail:'Caption',direction:'A planned shot'},{id:'scene2',src:'/second',kind:'image',seconds:4}],closingSeconds:0};
  const replaced=lib.replaceScenePhoto(project,'scene1',source);assert.equal(replaced.scenes[0].src,'/reused');assert.equal(replaced.scenes[0].seconds,3);assert.equal(replaced.scenes[0].headline,'Keep this');assert.equal(replaced.scenes[0].direction,'A planned shot');assert.equal(replaced.scenes[1].src,'/second');assert.equal(project.scenes[0].src,'/old');
 });
+test('a third photo can replace a repeat in a full reel while retaining every caption and scene length',()=>{
+ const lib=load('lib/reels/source-library.ts');
+ const project={scenes:['/a','/a','/a','/b','/b','/b'].map((src,i)=>({id:'scene-'+i,src,kind:'image',seconds:i+1,headline:'Title '+i,detail:'Caption '+i,direction:'Shot '+i})),closingSeconds:3};
+ const source={id:'third',src:'/c',kind:'image'};
+ assert.equal(lib.hasRoomForReelSource(project),true);
+ const selected=lib.selectReelSource(project,source,()=>{throw Error('Must reuse an existing scene');});
+ assert.equal(selected.scenes.length,6);assert.equal(new Set(selected.scenes.map(s=>s.src)).size,3);
+ selected.scenes.forEach((scene,i)=>{const {src,...rest}=scene;const {src:old,...previous}=project.scenes[i];assert.deepEqual(rest,previous);});
+ assert.equal(project.scenes[5].src,'/b');assert.equal(selected.scenes[5].src,'/c');
+ assert.equal(lib.selectReelSource(selected,source,()=>{throw Error('Already selected');}),selected);
+});
+test('photo selection appends once and never removes a distinct photo when all six slots are full',()=>{
+ const lib=load('lib/reels/source-library.ts');
+ let project={scenes:[],closingSeconds:0};
+ for(let i=0;i<6;i++)project=lib.selectReelSource(project,{id:String(i),src:'/photo-'+i,kind:'image'},()=>String(i));
+ assert.equal(project.scenes.length,6);assert.equal(lib.hasRoomForReelSource(project),false);
+ assert.equal(lib.selectReelSource(project,{id:'seventh',src:'/photo-7',kind:'image'},()=> '7'),project);
+ const fewer={...project,scenes:project.scenes.slice(1)};assert.equal(lib.hasRoomForReelSource(fewer),true);
+ assert.equal(lib.selectReelSource(fewer,{id:'seventh',src:'/photo-7',kind:'image'},()=> '7').scenes.length,6);
+});
 test('library media proxy enforces brand scope and uses a smaller thumbnail without changing export resolution',async()=>{
  let size,missing=false,assetCalls=0;
  const pipeline={rotate(){return this;},resize(w,h){size=w;assert.equal(w,h);return this;},png(){return this;},async toBuffer(){return Buffer.from('photo');}};

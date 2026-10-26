@@ -12,7 +12,7 @@ import PhotoLibraryPicker from "./PhotoLibraryPicker";
 import SchedulePostButton from "@/components/SchedulePostButton";
 import { DEFAULT_MUSIC_VOLUME, musicSettings, prepareMusic, type MusicChoice } from "@/lib/reels/music";
 import styles from "./ReelEditor.module.css";
-import { appendScenes, mergeSources, restoreLibrary, uploadSelection, replaceScenePhoto } from "@/lib/reels/source-library";
+import { appendScenes, mergeSources, restoreLibrary, uploadSelection, replaceScenePhoto, selectReelSource, hasRoomForReelSource } from "@/lib/reels/source-library";
 import {reelDraftKey,selectedPostProject,matchingDraft,type ReelSource} from "@/lib/reels/post-context";
 import { reelOperationIsCurrent, autoPlanMatches, automaticMusic, type AutoReelPlan } from "@/lib/reels/automatic";
 type Source = ReelSource;
@@ -122,7 +122,8 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   useEffect(() => { if (!rendered) { setDownloadUrl(""); return; } const url = URL.createObjectURL(rendered); setDownloadUrl(url); return () => URL.revokeObjectURL(url); }, [rendered]);
   const changeScene = (index: number, patch: Partial<ReelScene>) => setProject(old => ({ ...old, scenes: old.scenes.map((scene, i) => i === index ? { ...scene, ...patch } : scene) }));
   function addSource(source: Source) {
-    setProject(old => appendScenes(old, [source], () => crypto.randomUUID()));
+    setProject(old => selectReelSource(old, source, () => crypto.randomUUID()));
+    setPhotoMessage(project.scenes.length >= 6 && !project.scenes.some(scene => scene.src === source.src) ? "Photo selected in place of a repeat. Scene captions and timing were kept." : "Photo selected for your reel.");
   }
   function importFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -132,7 +133,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       return { id: crypto.randomUUID(), src, kind: file.type.startsWith("video/") ? "video" : "image", contentItemId, label: file.name };
     });
     setSources(old => mergeSources(old, added));
-    setProject(old => appendScenes(old, added, () => crypto.randomUUID()));
+    setProject(old => added.reduce((next, source) => selectReelSource(next, source, () => crypto.randomUUID()), old));
     setPhotoMessage(`${added.length} file${added.length === 1 ? "" : "s"} added. Up to 6 scenes can be used in one reel.${invalid > 0 ? " Some files were skipped: choose JPEG, PNG, WebP, MP4 or WebM up to 100 MB each." : ""}${overflow > 0 ? " The photo library holds up to 30 items." : ""}`);
   }
   async function loadProductPhotos() {
@@ -147,7 +148,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       if (!response.ok) throw new Error(data.error || "Could not load product photos.");
       const photos = (data.sources as Source[]).filter(source => source.contentItemId === contentItemId);
       setSources(old => mergeSources(old, photos)); setProductUrl(data.sourceUrl);
-      setPhotoMessage(`${photos.length} product photo${photos.length === 1 ? "" : "s"} available. Choose Add to reel, or replace a scene’s photo below.`);
+      setPhotoMessage(`${photos.length} product photo${photos.length === 1 ? "" : "s"} available. Select the photos you want to use below.`);
     } catch (error) {
       if (photoController.current === active) setPhotoMessage(active.signal.aborted ? "Loading took too long. Try again or upload the photos." : error instanceof Error ? error.message : "Could not load product photos.");
     } finally {
@@ -248,6 +249,8 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     } catch (error) { if (reelOperationIsCurrent(key, selection.current)) setMessage(error instanceof Error ? error.message : "Could not save reel. Download your copy."); }
     finally { setBusy(false); }
   }
+  const selectedSources = new Set(project.scenes.map(scene => scene.src));
+  const hasSelectionRoom = hasRoomForReelSource(project);
   const readyAsset = !project.scenes.length ? undefined : savedAsset && rendered?.type === "video/mp4" ? savedAsset : !rendered && !rendering && !planning ? savedReels.find(asset => asset.contentItemId === contentItemId)?.id : undefined;
   // Readiness belongs to the current reel, including restored and manually edited
   // drafts. It must not depend on running the automatic planner in this visit.
@@ -270,16 +273,21 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <label>Animation<select value={project.animation || "gentle"} onChange={event=>setProject({...project,animation:event.target.value as ReelAnimation})}>{REEL_ANIMATIONS.map(animation=><option key={animation.value} value={animation.value}>{animation.label}</option>)}</select></label>
         <p className={styles.hint}>{REEL_ANIMATIONS.find(animation=>animation.value===(project.animation || "gentle"))?.description} Applies to every scene automatically. No AI credits needed.</p>
         <h3>Photos and clips for this post</h3>
-        <p className={styles.hint}>Reuse saved campaign photos, load this product’s gallery or upload your own photos. Add different photos to separate scenes; collages use those photos together.</p>
-        <PhotoLibraryPicker key={`${campaignId}:${contentItemId}:library`} organizationId={organizationId} campaignId={campaignId} contentItemId={contentItemId} disabled={busy || previewing || loadingPhotos || project.scenes.length >= 6} onPhoto={source=>{setSources(old=>mergeSources(old,[source]));addSource(source);}} />
+        <p className={styles.hint}>Check the photos you want in your reel. Uncheck a photo to remove its scenes. You can also load product photos or upload your own.</p>
+        <PhotoLibraryPicker key={`${campaignId}:${contentItemId}:library`} organizationId={organizationId} campaignId={campaignId} contentItemId={contentItemId} disabled={busy || previewing || loadingPhotos || !hasSelectionRoom} onPhoto={source=>{setSources(old=>mergeSources(old,[source]));addSource(source);}} />
         <button type="button" disabled={loadingPhotos} onClick={loadProductPhotos}>{loadingPhotos ? "Loading photos…" : "Load product photos"}</button>
         <details><summary>Choose a product page</summary><label>Product page address<input type="url" placeholder="https://your-website.com/product/…" value={productUrl} onChange={event => setProductUrl(event.target.value)} /></label><p className={styles.hint}>Use this brand’s website. Leave blank to find the product link in the selected post.</p></details>
         <label>Upload photos or presenter clips<input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={event => { importFiles(event.target.files); event.target.value = ""; }} /></label>
         <p role="status" className={styles.hint}>{photoMessage}</p>
-        <div className={styles.library}>{sources.map((source, index) => <div key={source.id} className={styles.photo}>
+        <p role="status">{selectedSources.size} photos or clips selected · {project.scenes.length} of 6 scenes</p>
+        {project.scenes.length >= 6 && <p className={styles.hint}>{hasSelectionRoom ? "Selecting another photo replaces a repeated picture and keeps the scene’s text and timing." : "All 6 scenes use different photos or clips. Uncheck one to choose another."}</p>}
+        <div className={styles.library}>{sources.map((source, index) => <div key={source.id} className={`${styles.photo} ${selectedSources.has(source.src) ? styles.selectedPhoto : ""}`}>
           {source.kind === "image" ? <img src={source.src} alt={source.label || `Photo ${index + 1}`} loading="lazy" /> : <video src={source.src} muted playsInline preload="metadata" aria-label={source.label || `Clip ${index + 1}`} />}
           <p>{source.label || `${source.kind === "image" ? "Photo" : "Clip"} ${index + 1}`}</p>
-          <button type="button" disabled={project.scenes.length >= 6} onClick={() => addSource(source)} aria-label={`Add ${source.label || `item ${index + 1}`} to reel`}>{project.scenes.some(scene => scene.src === source.src) ? "Add again" : "Add to reel"}</button>
+          <label className={styles.photoChoice}><input type="checkbox" aria-label={`Use ${source.label || `item ${index + 1}`} in reel`} checked={selectedSources.has(source.src)} disabled={!selectedSources.has(source.src) && !hasSelectionRoom} onChange={event => {
+            if (event.target.checked) addSource(source);
+            else { setProject(old => ({ ...old, scenes: old.scenes.filter(scene => scene.src !== source.src) })); setPhotoMessage("Photo deselected."); }
+          }} /><span>{selectedSources.has(source.src) ? "Selected" : "Select photo"}</span></label>
         </div>)}</div>
         {project.scenes.length === 1 && <p className={styles.hint}>One photo selected. It appears once in the collage. Add another photo for a multi-photo layout.</p>}
         {project.scenes.map((scene, index) => <div key={scene.id} style={{ borderTop: "1px solid #7775", marginTop: 20, paddingTop: 14 }}><h3>Scene {index + 1}</h3>
@@ -292,7 +300,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
           <label>Scene length<select value={scene.seconds} onChange={event => changeScene(index, { seconds: Number(event.target.value) })}>{Array.from({length:15},(_,index)=>index+1).map(seconds => <option key={seconds} value={seconds}>{seconds} seconds</option>)}</select></label>
           <button type="button" disabled={index === 0} onClick={() => { const scenes = [...project.scenes]; [scenes[index - 1], scenes[index]] = [scenes[index], scenes[index - 1]]; setProject({ ...project, scenes }); }}>Move earlier</button> <button type="button" onClick={() => setProject({ ...project, scenes: project.scenes.filter((_, i) => i !== index) })}>Remove scene</button>
         </div>)}
-        <p>Up to 6 scenes. Short clips loop to fill their scene.</p><button type="button" disabled={project.scenes.length >= 6 || !sources.length} onClick={() => addSource(sources.find(source => !project.scenes.some(scene => scene.src === source.src)) || sources[0])}>Add scene</button>
+        <p>Up to 6 scenes. Short clips loop to fill their scene.</p><button type="button" disabled={project.scenes.length >= 6 || !sources.length} onClick={() => setProject(old => appendScenes(old, [sources.find(source => !old.scenes.some(scene => scene.src === source.src)) || sources[0]], () => crypto.randomUUID()))}>Add scene</button>
         <h2>Closing screen</h2><label>Closing screen length<select value={project.closingSeconds} onChange={event=>setProject({...project,closingSeconds:Number(event.target.value)})}>{[0,1,2,3,4,5].map(seconds=><option key={seconds} value={seconds}>{seconds===0 ? "No separate closing screen" : `${seconds} seconds`}</option>)}</select></label><label>Brand name<input value={project.brand} maxLength={80} onChange={event => setProject({ ...project, brand: event.target.value })} /></label><label>Call to action<input value={project.cta} maxLength={70} onChange={event => setProject({ ...project, cta: event.target.value })} /></label><label>Website<input value={project.website} maxLength={140} onChange={event => setProject({ ...project, website: event.target.value })} /></label>
         <label>Brand color<input type="color" value={/^#[a-f0-9]{6}$/i.test(project.color) ? project.color : "#132342"} onChange={event => setProject({ ...project, color: event.target.value })} /></label><label>Accent color<input type="color" value={/^#[a-f0-9]{6}$/i.test(project.accent) ? project.accent : "#dec184"} onChange={event => setProject({ ...project, accent: event.target.value })} /></label>
         <label>Upload brand logo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => { const file = event.target.files?.[0]; if (!file || file.size > 5_000_000 || !["image/png","image/jpeg","image/webp"].includes(file.type)) { setMessage("Choose a PNG, JPEG or WebP logo under 5 MB."); return; } const src = ownUrl(file); localFiles.current.set(src, file); setProject({ ...project, logo: src }); }} /></label>{project.logo && <button type="button" onClick={() => setProject({ ...project, logo: undefined })}>Remove logo</button>}

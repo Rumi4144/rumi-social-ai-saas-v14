@@ -12,6 +12,23 @@ export function appendScenes(project: ReelProject, sources: ReelSource[], id: ()
   return { ...project, scenes: [...project.scenes, ...sources.slice(0, Math.max(0, 6 - project.scenes.length)).map(source => ({ id: id(), src: source.src, kind: source.kind, headline: "", detail: "", seconds: source.seconds || 4 }))] };
 }
 
+function repeatedSceneIndex(project: ReelProject) {
+  return project.scenes.findLastIndex((scene, index, scenes) => scenes.findIndex(other => other.src === scene.src) < index);
+}
+
+export function hasRoomForReelSource(project: ReelProject) {
+  return project.scenes.length < 6 || repeatedSceneIndex(project) >= 0;
+}
+
+export function selectReelSource(project: ReelProject, source: ReelSource, id: () => string): ReelProject {
+  if (project.scenes.some(scene => scene.src === source.src)) return project;
+  if (project.scenes.length < 6) return appendScenes(project, [source], id);
+  // A new choice can take a repeated photo's place without losing any scene's
+  // captions, timing or identity. Keep at least one scene for every chosen photo.
+  const index = repeatedSceneIndex(project);
+  return index < 0 ? project : replaceScenePhoto(project, project.scenes[index].id, source);
+}
+
 export function mergeSources(...groups: ReelSource[][]): ReelSource[] {
   return [...new Map(groups.flat().map(source => [source.src, source])).values()];
 }
