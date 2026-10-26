@@ -12,6 +12,7 @@ export type SubjectCategory = typeof subjectCategories[number];
 export type VisualConcept = {
   subjectCategory: SubjectCategory;
   direction: string;
+  variationIndex?: number;
 };
 export type RecentVisualConcept = {
   subjectCategory?: string;
@@ -20,6 +21,15 @@ export type RecentVisualConcept = {
 
 export function isSubjectCategory(value: unknown): value is SubjectCategory {
   return typeof value === "string" && subjectCategories.some(category => category === value);
+}
+
+export function recentVisualConcept(concept?: VisualConcept, originalDirection?: string): RecentVisualConcept {
+  // Keep the action/setting and the casting in the same bounded record. Long
+  // casting boilerplate must not crowd out the actual scene we're avoiding.
+  const casting = concept?.direction?.match(/PEOPLE VARIETY[^]*?(?= Do not reuse| Keep clothing|$)/)?.[0].slice(0, 250) || "";
+  const scene = (originalDirection || "").slice(0, 250);
+  const subject = concept?.direction?.split("PEOPLE VARIETY")[0].trim().slice(0, 90);
+  return { subjectCategory: isSubjectCategory(concept?.subjectCategory) ? concept.subjectCategory : undefined, direction: [scene, casting, subject].filter(Boolean).join("\n").slice(0, 600) };
 }
 
 export function businessVisualMode(context: VisualBusinessContext): "product" | "service" | "unknown" {
@@ -78,7 +88,7 @@ export function buildVisualConcept(input: {
     product: "Make the actual supplied product the primary subject. Preserve its identity and features; do not redesign it or invent inventory. Choose a setting and angle different from recent concepts.",
     conceptual: "Express the message through a relevant human moment or abstract color, light, and movement. Do not replace an abstract benefit with a chair, road, doorway, clock, or arbitrary physical object. Do not invent measurable results or imply guarantees.",
   };
-  return { subjectCategory, direction: `${directions[subjectCategory]}\n${campaignCastingDirection(index)}` };
+  return { subjectCategory, variationIndex: index, direction: `${directions[subjectCategory]}\n${campaignCastingDirection(index)}` };
 }
 
 export function buildVisualPlanPrompt(input: {

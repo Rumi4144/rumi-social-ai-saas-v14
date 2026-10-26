@@ -230,3 +230,44 @@ test('seven concurrent post regenerations retain planned casting beyond twelve p
  assert.equal(history.regenerationVariationIndex('post',{subjectCategory:'human'},-1),history.regenerationVariationIndex('post'));
  const legacy=Array.from({length:7},(_,i)=>history.regenerationVariationIndex('post'+i));assert.equal(new Set(legacy.map(index=>index%7)).size,7);assert.equal(history.regenerationVariationIndex('post0'),history.regenerationVariationIndex('post0'));
 });
+
+test('successive image slots change composition and preserve their assigned typography position',()=>{
+ const compositions=[];
+ for(let i=0;i<8;i++){
+  const textPosition=['top','left','right'][i%3];
+  const prompt=director.buildVisualDirection({brand:{name:'Client'},variationIndex:i,textPosition,businessContext:{businessType:'service'}});
+  compositions.push(prompt.match(/COMPOSITION\nUse ([^\n]+)/)[1]);
+  assert.ok(prompt.includes(`typography space at the ${textPosition}`));
+ }
+ assert.equal(new Set(compositions).size,8,'A campaign must not repeat one composition for its first eight images');
+});
+
+test('history preserves actual actions and settings alongside casting, even with long boilerplate',async()=>{
+ const concept=plan.buildVisualConcept({businessContext:{businessType:'service'},variationIndex:4});
+ const originalDirection='Two adults compare notes while standing beside a community notice board outdoors. '+ 'Extra scene details. '.repeat(100);
+ const history=load('lib/ai/visual-history.ts',{'@/lib/prisma':{prisma:{campaign:{findMany:async()=>[{id:'campaign'}]},job:{findMany:async()=>[{payload:{visualConcept:concept,originalDirection}}]}}}});
+ const recent=await history.recentBrandConcepts('org','brand');
+ assert.match(recent[0].direction,/compare notes/);assert.match(recent[0].direction,/notice board outdoors/);
+ assert.match(recent[0].direction,/campaign casting slot 5/);assert.ok(recent[0].direction.length<=600);
+ const prompt=director.buildVisualDirection({brand:{name:'Client'},recentConcepts:recent});
+ assert.match(prompt,/compare notes/);assert.match(prompt,/notice board outdoors/);
+});
+
+test('regeneration retains full scene sequence beyond seven casting slots',()=>{
+ const history=load('lib/ai/visual-history.ts',{'@/lib/prisma':{prisma:{}}});
+ const concept=plan.buildVisualConcept({businessContext:{businessType:'service'},variationIndex:19});
+ assert.equal(history.regenerationVariationIndex('post',concept,0),19);
+ const legacy={subjectCategory:'human',direction:plan.campaignCastingDirection(19)};
+ assert.equal(history.regenerationVariationIndex('post',legacy,19),19);
+});
+
+test('campaign writing advances visual history for every requested slot, including multiple drafts on one day',async()=>{
+ let prompt;const oldKey=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='mock-only';
+ const api=load('lib/ai/campaign.ts',{openai:class {responses={create:async input=>{prompt=input.input;return{output_text:'{"posts":[]}'}}}}});
+ const contentPlan=Array.from({length:14},(_,i)=>({planKey:'slot-'+i,day:Math.floor(i/2)+1,type:'post',extra:false}));
+ try{await api.generateCampaign({brand:{name:'Client'},brief:'A useful campaign for the client',goal:'education',days:7,businessContext:{businessType:'service'},contentPlan,recentConcepts:[{subjectCategory:'human'},{subjectCategory:'lifestyle'}]});}
+ finally{if(oldKey===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=oldKey;}
+ const categories=Array.from(prompt.matchAll(/^Slot slot-\d+, Day \d+: (\w+) —/gm),match=>match[1]);
+ assert.equal(categories.length,14);assert.ok(categories.every((category,i)=>i===0||category!==categories[i-1]));
+ assert.equal(new Set(categories).size,5);assert.match(prompt,/primary subject, observable action, specific setting, and camera distance/);
+});

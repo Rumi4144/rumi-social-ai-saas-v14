@@ -20,6 +20,7 @@ type VisualDirectorInput = {
   headline?: string | null;
   visualDirection?: string | null;
   variationIndex?: number;
+  textPosition?: "left" | "right" | "top";
   businessContext?: VisualBusinessContext;
   visualConcept?: VisualConcept;
   recentConcepts?: RecentVisualConcept[];
@@ -91,20 +92,21 @@ export function buildVisualDirection(
     headline,
     visualDirection,
     variationIndex = 0,
+    textPosition = "top",
     businessContext = {},
     visualConcept,
     recentConcepts = [],
     occasion,
   } = input;
 
-  const index = Math.abs(variationIndex);
+  const index = Number.isFinite(variationIndex) ? Math.abs(Math.trunc(variationIndex)) : 0;
 
   const treatment =
     treatments[index % treatments.length];
 
   const composition =
     compositions[
-      Math.floor(index / treatments.length) %
+      index %
         compositions.length
     ];
 
@@ -141,6 +143,8 @@ ${treatment.direction}
 
 COMPOSITION
 Use ${composition}.
+Reserve calm typography space at the ${textPosition} of the frame. Arrange the subject around that space, without hiding important details.
+Follow the primary subject plan for shot distance: a detail stays close, an environment stays wide, and a human action remains readable. Do not turn every category into a seated portrait.
 
 ORIGINAL CREATIVE DIRECTION
 ${visualDirection || "Interpret the campaign message visually."}

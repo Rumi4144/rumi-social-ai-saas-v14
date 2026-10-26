@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import {generateImage, imageConfiguration, ImageRejectedError} from "@/lib/ai/image-provider";
 export const maxDuration=180;
 import { prisma } from "@/lib/prisma";
-import { recentBrandConcepts } from "@/lib/ai/visual-history";
+import { recentBrandConcepts, regenerationVariationIndex } from "@/lib/ai/visual-history";
 import { generateCampaign } from "@/lib/ai/campaign";
 import { applyContentPlan, type ContentSlot } from "@/lib/campaign/content-plan";
 import { matchingWebsitePhoto, modelCodes, type PhotoEvidence } from "@/lib/campaign/photo-matching";
@@ -11,7 +11,7 @@ import { renderSocialSvg } from "@/lib/render/svg";
 import { automaticShowcaseStyle } from "@/lib/render/showcase";
 import { occasionVisualConcept, savedPostOccasion } from "@/lib/ai/occasion";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
-import { buildVisualConcept, isSubjectCategory, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "@/lib/ai/visual-plan";
+import { buildVisualConcept, isSubjectCategory, recentVisualConcept, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "@/lib/ai/visual-plan";
 import { imageToJpegDataUrl, logoToPngDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
 
 
@@ -155,6 +155,7 @@ export async function POST(req: Request) {
         sourceEvidence?: PhotoEvidence;
         photoSource?: "website" | "ai";
         textPosition?: "left" | "right" | "top";
+        variationIndex?: number;
         visualConcept?: VisualConcept;
         businessContext?: VisualBusinessContext;
         recentConcepts?: RecentVisualConcept[];
@@ -220,12 +221,8 @@ export async function POST(req: Request) {
       businessContext,
       visualConcept: isSubjectCategory(p.visualConcept?.subjectCategory) ? p.visualConcept : undefined,
       recentConcepts,
-      variationIndex: Math.abs(
-        Array.from(visualContentItem.id).reduce(
-          (sum, ch) => sum + ch.charCodeAt(0),
-          0
-        )
-      ),
+      variationIndex: p.variationIndex ?? regenerationVariationIndex(visualContentItem.id, p.visualConcept),
+      textPosition: p.textPosition,
     });
 
       let dataUrl: string;
@@ -494,7 +491,7 @@ export async function POST(req: Request) {
       const occasion = p.contentPlan?.find(slot=>slot.planKey===x.planKey && slot.extra)?.occasion;
       const concept = occasion ? occasionVisualConcept(occasion) : buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });
       const priorConcepts = plannedConcepts.slice(-6);
-      plannedConcepts.push({ subjectCategory: concept.subjectCategory, direction: `${concept.direction} Campaign direction: ${x.visualDirection}` });
+      plannedConcepts.push(recentVisualConcept(concept, x.visualDirection));
       const scheduledDay = p.dailyPlan?.find(
         (day) => day.day === x.day
       );
@@ -536,6 +533,7 @@ export async function POST(req: Request) {
                 contentItemId: item.id,
                 businessContext,
                 visualConcept: concept,
+                variationIndex: creativeLayoutIndex,
                 recentConcepts: priorConcepts,
                 originalDirection: x.visualDirection,
                 occasion: occasion || undefined,
@@ -557,8 +555,6 @@ PRODUCT FIDELITY — CRITICAL:
 When a source/product image is provided, the product shown in that image is authoritative. Preserve the actual product faithfully. Do NOT redesign, substitute, reinterpret, or invent a different product.
 
 Maintain the original product's body shape, proportions, silhouette, materials, wood appearance, finish, hardware, decorative details, construction details, and identifying visual features.
-
-For guitars and other musical instruments, preserve the exact instrument category and construction. For a classical or flamenco guitar, preserve its nylon-string/classical character, body proportions, headstock, bridge, rosette, fretboard, string configuration, woods, finish, and hardware. NEVER transform a classical or flamenco guitar into a steel-string acoustic guitar. Do not invent a pickguard, steel-string bridge, alternate headstock, different soundhole treatment, extra hardware, or unrelated design features.
 
 Treat the source product as something being professionally photographed, not something being redesigned. You may improve the environment, background, lighting, shadows, camera angle, staging, and advertising composition while keeping the product itself visually faithful.
 
@@ -586,10 +582,8 @@ Avoid seven variations of the same object centered in different rooms. Avoid rep
 
 The seven images should feel like one premium campaign with seven distinct chapters, not seven versions of the same advertisement.
 
-COMPOSITION: Position the planned primary subject predominantly on the RIGHT side
-of the portrait frame. Do not turn a human, experience, or service concept into a product hero. Reserve generous, visually calm NEGATIVE SPACE on the LEFT
-side for professional editorial typography that Rumi Social AI will add
-later. Do not place important product details in the left typography zone.
+COMPOSITION: Follow this post's assigned composition and keep calm negative space at the ${creativeLayouts[creativeLayoutIndex % creativeLayouts.length]} for typography.
+Do not turn a human, experience, or service concept into a product hero.
 Maintain a balanced premium advertising composition and natural perspective.
 
 IMPORTANT: Generate ONLY the underlying photography/artwork. The final image must contain absolutely NO typography, words, letters, numbers, dates, captions, headlines, labels, logos, brand marks, signatures, watermarks, signs, posters, packaging text, or UI elements. Leave clean negative space where appropriate for Rumi Social AI to add professional typography later. Do not render the campaign title or content headline inside the image. Use people when the planned subject requires a human or lifestyle experience; do not imply a real customer endorsement.`,
@@ -608,7 +602,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
     for (const x of (p.contentPlan?.length ? [] : pack.stories)) {
       const concept = buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });
       const priorConcepts = plannedConcepts.slice(-6);
-      plannedConcepts.push({ subjectCategory: concept.subjectCategory, direction: `${concept.direction} Campaign direction: ${x.visualDirection}` });
+      plannedConcepts.push(recentVisualConcept(concept, x.visualDirection));
       const storyItem = await tx.contentItem.create({
         data: {
           campaignId: campaign.id,
@@ -632,6 +626,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
             contentItemId: storyItem.id,
             businessContext,
             visualConcept: concept,
+            variationIndex: creativeLayoutIndex,
             recentConcepts: priorConcepts,
             originalDirection: x.visualDirection,
             photoSource: p.photoSource || "ai",

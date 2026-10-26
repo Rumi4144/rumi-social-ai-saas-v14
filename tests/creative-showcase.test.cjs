@@ -93,7 +93,7 @@ test('campaign worker embeds owned logos and persists the chosen template in gen
    const api=load('app/api/jobs/run/route.ts',{
     'next/server':{NextResponse:{json}},openai:class {},
     '@/lib/auth/context':{},'@/lib/ai/campaign':{},
-    '@/lib/ai/visual-history':{recentBrandConcepts:async()=>[]},
+    '@/lib/ai/visual-history':{recentBrandConcepts:async()=>[],regenerationVariationIndex:()=>0},
     '@/lib/ai/visual-director':{buildVisualDirection:()=> 'Use this business photo'},
     '@/lib/ai/visual-plan':{isSubjectCategory:()=>false},
     '@/lib/render/showcase':{automaticShowcaseStyle},

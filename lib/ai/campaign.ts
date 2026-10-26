@@ -183,6 +183,21 @@ export async function generateCampaign(input: {
           .join("\n")
       : "No day-by-day publishing plan supplied.";
 
+  // Every requested draft gets a separate plan, including multiple drafts on one day.
+  // Advance the history as we plan; a fixed recent-history window can otherwise
+  // force several consecutive slots into the same remaining category.
+  const visualHistory = [...(input.recentConcepts || [])];
+  const visualSlots = input.contentPlan?.length
+    ? input.contentPlan.map(slot => ({ day: slot.day, planKey: slot.planKey, occasion: slot.extra ? slot.occasion : undefined }))
+    : Array.from({ length: input.days }, (_, i) => ({ day: i + 1, planKey: undefined, occasion: undefined }));
+  const visualPlan = visualSlots.map((slot, index) => {
+    const concept = slot.occasion
+      ? { subjectCategory: "environment", direction: `Show the recognizable subject of ${slot.occasion}; follow the occasion's respectful tone.` }
+      : buildVisualConcept({ businessContext: input.businessContext || {}, variationIndex: index, recentConcepts: visualHistory });
+    visualHistory.push(concept);
+    return `${slot.planKey ? `Slot ${slot.planKey}, ` : ""}Day ${slot.day}: ${concept.subjectCategory} — ${concept.direction}`;
+  }).join("\n");
+
   const prompt = `Create a complete ${input.days}-day social campaign for ${input.brand.name}.
 Brief: ${input.brief}
 Goal: ${input.goal}
@@ -239,11 +254,8 @@ Visual rules: ${input.brand.visualRules || ""}
 Use the Brand Brain and business context as persistent background context.
 VISUAL SUBJECT PLANNING:
 Plan distinct primary subjects across daily posts as well as Stories. Do not make every post a product hero or treat a service benefit as an arbitrary physical object.
-${Array.from({ length: input.days }, (_, index) => {
-  const context = input.businessContext || {};
-  const concept = buildVisualConcept({ businessContext: context, variationIndex: index, recentConcepts: input.recentConcepts });
-  return `Day ${index + 1}: ${concept.subjectCategory} — ${concept.direction}`;
-}).join("\n")}
+${visualPlan}
+For every visualDirection, write a concrete shot brief: primary subject, observable action, specific setting, and camera distance. Assign visibly different actions and settings across the campaign. Changing only the person's age, clothing, lighting or headline does not make a new scene. Do not default to a person seated indoors or with closed eyes for every service-business topic. A close-up, a wide active scene, an interaction and a non-figurative concept should be visibly different even without captions. Stay relevant to this business and the assigned topic; never invent a treatment, service, location, endorsement or product feature.
 Business context and recent concepts for this brand only: ${JSON.stringify({ business: input.businessContext || {}, recentConcepts: (input.recentConcepts || []).slice(-6) })}
 The subject plan is adapted to this business. For real-photo campaigns, describe the supplied photographs honestly; do not imply a new generated scene or product.
 The current brief and campaign goal determine this campaign's specific objective.

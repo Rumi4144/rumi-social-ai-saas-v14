@@ -79,12 +79,15 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
    '@/lib/ai/occasion':load('lib/ai/occasion.ts'),'@/lib/campaign/content-plan':plan,'@/lib/ai/visual-history':{recentBrandConcepts:async()=>[]},
    '@/lib/ai/campaign':{generateCampaign:async()=>{const p=pack();if(invalid)p.posts[1].planKey=p.posts[0].planKey;return p;}},
    '@/lib/campaign/photo-matching':{matchingWebsitePhoto:()=>null,modelCodes:()=>[]},'@/lib/render/svg':{},'@/lib/render/showcase':{automaticShowcaseStyle:()=> 'modern-gradient'},'@/lib/render/raster':{},'@/lib/ai/visual-director':{},
-   '@/lib/ai/visual-plan':{buildVisualConcept:()=>({subjectCategory:'human',direction:'Service scene'})},
+   '@/lib/ai/visual-plan':{...load('lib/ai/visual-plan.ts'),buildVisualConcept:()=>({subjectCategory:'human',direction:'Service scene'})},
   });
   const req={headers:{get:()=> 'planner-test'},json:async()=>({organizationId:'master-mind'})};
   assert.equal((await api.POST(req)).status,200);assert.equal(items.length,9);assert.equal(items[8].type,"story_post");assert.equal(media.length,0);assert.equal(items[1].type,'reel_post');assert.equal(items[1].platform,'');assert.equal(items[2].type,'presenter_post');assert.equal(items[7].type,'holiday_post');assert.equal(items[3].scheduledFor.getTime(),items[7].scheduledFor.getTime());assert.ok(items.every(i=>i.status==='draft'));assert.equal(result.result.posts[2].visualDirection,'Scene and spoken plan');
   invalid=true;assert.equal((await api.POST(req)).status,500);assert.equal(transactions,1);
   invalid=false;job.payload.photoSource="ai";assert.equal((await api.POST(req)).status,200);assert.equal(media.length,9);assert.equal(media.filter(j=>j.data.payload.format==="story").length,1);
+  assert.deepEqual(media.map(j=>j.data.payload.variationIndex),Array.from({length:9},(_,i)=>i));
+  for(const image of media){assert.ok(image.data.payload.prompt.includes(`negative space at the ${image.data.payload.textPosition}`));assert.ok(!image.data.payload.prompt.includes('predominantly on the RIGHT'));assert.ok(!image.data.payload.prompt.includes('classical or flamenco guitar'));}
+  assert.ok(media[1].data.payload.recentConcepts[0].direction.includes(result.result.posts[0].visualDirection));
   const extraJob=media.find(j=>j.data.payload.occasion);assert.equal(extraJob.data.payload.occasion,'Kindness event');assert.match(extraJob.data.payload.visualConcept.direction,/Kindness event/);
   media.length=0;job.payload.photoSource="website";job.payload.imageUrls=['https://business.example/product.jpg'];assert.equal((await api.POST(req)).status,200);assert.equal(media.length,0);assert.ok(result.result.photoWarnings.length>0);
 
