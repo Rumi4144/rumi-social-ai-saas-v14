@@ -45,6 +45,7 @@ export function useBrowserDraft<T>(key: string | undefined, value: T, schema: z.
   const [message, setMessage] = useState("");
   const [savedSnapshot, setSavedSnapshot] = useState<{key:string; serialized:string}>();
   const [saveError, setSaveError] = useState(false);
+  const [explicitSaves, setExplicitSaves] = useState(0);
   const restoreRef = useRef(restore); restoreRef.current = restore;
   const serialized = JSON.stringify(value);
   useEffect(() => {
@@ -77,9 +78,10 @@ export function useBrowserDraft<T>(key: string | undefined, value: T, schema: z.
     return () => { active = false; };
   }, [key, loadedKey, serialized]);
   const ready = !!key && loadedKey === key;
-  const saving = ready && !saveError && (savedSnapshot?.key !== key || savedSnapshot?.serialized !== serialized);
+  const saving = ready && !saveError && (explicitSaves > 0 || savedSnapshot?.key !== key || savedSnapshot?.serialized !== serialized);
   return {ready, message: saving ? "Saving draft…" : message, save: async (next = value) => {
     if (!key || key !== loadedKey) throw new Error("Wait for your saved draft to load.");
+    setExplicitSaves(count => count + 1);
     try {
       setSaveError(false);
       await writeBrowserDraft(key, next);
@@ -89,6 +91,8 @@ export function useBrowserDraft<T>(key: string | undefined, value: T, schema: z.
       setSaveError(true);
       setMessage("Draft could not be saved. Keep this page open; browser storage may be full.");
       throw error;
+    } finally {
+      setExplicitSaves(count => count - 1);
     }
   }};
 }
