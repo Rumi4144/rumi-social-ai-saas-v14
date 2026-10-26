@@ -42,6 +42,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   });
 
   const googleConnection = await prisma.socialConnection.findFirst({ where: { organizationId: ctx.organizationId, provider: "google_business", status: "connected" } });
+  const xConnections = await prisma.socialConnection.findMany({ where: { organizationId: ctx.organizationId, provider: "x", status: "linked" }, select: { accountName: true } });
 
   return (
     <>
@@ -59,6 +60,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           "Facebook Page",
           "YouTube",
           "TikTok",
+          "X (Twitter)",
           "LinkedIn",
           "WooCommerce",
           "Shopify",
@@ -124,6 +126,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </>
             ) : x === "Google Business Profile" ? (
               <><p>{googleConnection ? `Connected as ${googleConnection.accountName || "Business location"}` : "Not connected"}</p><a className="button" href="/settings/google-business">{googleConnection ? "Change business location" : "Connect"}</a>{googleConnection && <form action="/api/social/google-business/disconnect" method="POST"><button type="submit">Disconnect Google Business Profile</button></form>}</>
+            ) : x === "X (Twitter)" ? (
+              <>
+                <p>{xConnections.length ? `Linked: ${xConnections.map(account => `@${account.accountName}`).join(", ")}` : "Not connected"}</p>
+                <p>Account linking is available. Publishing to X is not available yet.</p>
+                <a className="button" href="/settings/x">{xConnections.length ? "Manage X connection" : "Connect X"}</a>
+              </>
             ) : x === "TikTok" ? (
               <>
                 <p>

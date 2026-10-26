@@ -26,6 +26,22 @@ export default function PrivacyPage() {
         integration.
       </p>
 
+      <h3>X (Twitter) account linking</h3>
+      <p>
+        When you connect X, we retrieve your X account ID and username and store
+        encrypted access and refresh tokens in your workspace. This connection
+        currently identifies your account; publishing to X is not yet available.
+        We do not retrieve direct messages or use X data to train AI models.
+      </p>
+      <p>
+        Disconnecting X in Settings removes the linked account information and
+        stored tokens and attempts to revoke those tokens with X. If X cannot
+        confirm revocation, we show a link to its connected-app settings so you
+        can remove access there. Workspace administrators may also supply X app
+        credentials, which are encrypted and retained separately for reconnecting.
+        Contact rumi@rumiguitars.com to request deletion of saved app credentials.
+      </p>
+
       <h2>3. How We Use Information</h2>
       <p>
         Information is used to provide the service, identify connected accounts,
