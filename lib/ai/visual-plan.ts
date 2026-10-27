@@ -82,7 +82,7 @@ export function buildVisualConcept(input: {
     human: "Make a person's meaningful action or interaction the primary subject. Connect it to the supplied business and message; an object must not be the hero. Do not imply a real customer, endorsement, practitioner, or employee.",
     lifestyle: "Make a believable everyday experience relevant to the audience the primary subject. Show a distinct action and setting rather than a product posed in another room. Do not invent a service, testimonial, facility, or outcome.",
     detail: mode === "product"
-      ? "Use an expressive close-up of a supplied product detail, material, or hands interacting with it. Avoid another full-product hero photograph. Only show construction and features that were supplied."
+      ? "Use an expressive close-up of a supplied product detail, material or craftsmanship. Include hands only if the requested action or message needs them, using a simple natural pose. Avoid another full-product hero photograph. Only show construction and features that were supplied."
       : "Use an expressive human gesture or moment of attention relevant to the message. Do not turn the service into a close-up of invented equipment or a symbolic object.",
     environment: "Show a relevant place through human activity and context. The activity and atmosphere tell the story; an empty room, chair, doorway, or unrelated object must not be the primary subject. Do not present an invented location as the business's premises.",
     product: "Make the actual supplied product the primary subject. Preserve its identity and features; do not redesign it or invent inventory. Choose a setting and angle different from recent concepts.",

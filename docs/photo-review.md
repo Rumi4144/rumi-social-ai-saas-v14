@@ -2,7 +2,7 @@
 
 New AI photos created by the campaign worker, manual image regeneration and reel scene generation are reviewed before automatic selection. User-selected website photos and uploads retain their existing explicit selection flow. Existing campaigns are not regenerated retroactively.
 
-The reviewer sees the actual candidate at up to 1024 pixels, the headline and caption, brand/business/audience/voice, occasion and creative direction, and up to three distinct recent selected photos from the same campaign. It checks message, emotion, visual variety and obvious factual/visual problems. Matching is advisory: it does not verify real customer identities, testimonials or exact product specifications. Supplied content and image text are treated as data, not instructions.
+The reviewer sees the actual candidate at up to 1024 pixels, the headline and caption, brand/business/audience/voice, occasion and creative direction, and up to three distinct recent selected photos from the same campaign. It checks message, emotion, visual variety and obvious factual/visual problems. It now first reports separate anatomy and hand-to-object contact assessments, with visible evidence. Either a defect or uncertainty blocks automatic selection, even when the general criteria pass. Normal occlusion, cropping and real anatomical differences are not defects by themselves; images without people can pass without these checks being applicable. Matching is advisory: it does not verify real customer identities, testimonials or exact product specifications. Supplied content and image text are treated as data, not instructions.
 
 `OPENAI_PHOTO_REVIEW_MODEL` defaults to `gpt-4.1-mini`, using the existing server-only `OPENAI_API_KEY`. Reviews use Responses image input and strict structured output, with `store: false`, a 30-second timeout, no SDK retries, bounded output and resized image inputs. Remote comparison images use the existing DNS-pinned public fetcher.
 
@@ -37,3 +37,11 @@ Official API references:
 - https://developers.openai.com/api/docs/guides/images-vision
 - https://developers.openai.com/api/docs/guides/structured-outputs
 - https://developers.openai.com/api/docs/models/gpt-4.1-mini
+
+## Anatomy review update
+
+New review responses must include `anatomy`, `anatomyEvidence`, `objectInteraction` and `interactionEvidence`. The application checks these fields independently of `accurate` and derives a readable issue if the model reports a physical defect but leaves its general issues empty. Invalid or omitted fields require manual review. This uses the existing review call, model and image inputs; it does not add another paid call or increase the one-replacement limit. Completed reviews retain their cached outcomes and are not retroactively re-purchased.
+
+Campaign and new reel generation prompts favor simple credible poses, coherent fingers/joints/nails and realistic contact with objects. Product detail concepts avoid gratuitous hands; explicit hands/playing requests are preserved. Already-started reel requests keep their frozen prompt so resuming them does not change a provider purchase.
+
+The automated tests verify rejection decisions and bounded retries using fixture verdicts. They do not establish the vision model's detection accuracy on real photographs. A manual final check is still needed; this change does not repair existing image pixels.

@@ -1,0 +1,4 @@
+export const PHOTO_REALISM_DIRECTION = `PHYSICAL REALISM
+Use believable anatomy, coherent joints, natural proportions and an uncomplicated pose. Visible fingers and thumbs must connect coherently to the palm and wrist, with distinct joints and nails; avoid fused, duplicated or floating digits. Natural occlusion is fine. Do not change a supplied person's real anatomical differences.
+Hands must meet objects naturally: fingers must not merge into or pass through strings, tools or product surfaces. When showing a musician, use a credible resting or playing gesture and preserve consistent instrument construction, string paths and attachment points.
+For product detail shots, prefer the material, craftsmanship or instrument alone when hands are not needed by the requested message. If hands are explicitly requested, preserve them with a simple, readable pose instead of hiding the requested action. Do not invent features or add a person just to fill the frame.`;

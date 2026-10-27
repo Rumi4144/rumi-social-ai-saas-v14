@@ -1,5 +1,6 @@
 import { buildVisualConcept, buildVisualPlanPrompt, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "./visual-plan";
 import { occasionVisualConcept } from "./occasion";
+import { PHOTO_REALISM_DIRECTION } from "./photo-realism";
 
 type BrandVisualInput = {
   name: string;
@@ -377,6 +378,8 @@ These may appear only when genuinely relevant to the specific business
 and campaign.
 
 QUALITY BAR
+${PHOTO_REALISM_DIRECTION}
+
 The result should resemble professionally art-directed advertising
 or editorial photography—not generic AI imagery or stock photography.
 

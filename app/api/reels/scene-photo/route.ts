@@ -3,6 +3,7 @@ import {createHash} from "node:crypto";
 import {imageConfiguration} from "@/lib/ai/image-provider";
 import {z} from "zod";
 import {PhotoReviewPendingError} from "@/lib/ai/photo-review";
+import {PHOTO_REALISM_DIRECTION} from "@/lib/ai/photo-realism";
 import {reviewedScenePhoto, type ScenePhotoPlan, type ScenePhotoResult} from "@/lib/reels/reviewed-scene-photo";
 import {prisma} from "@/lib/prisma";
 import {tenantContext} from "@/lib/auth/context";
@@ -48,7 +49,7 @@ export async function POST(req:Request){
   const context={brandId:brand.id,brandName:brand.name,headline:post.headline||"",caption:post.caption||"",
    business:[brand.industry,brand.description].filter(Boolean).join(": "),audience:brand.targetAudience||"",voice:brand.voice||"",
    visualRules:brand.visualRules||"",goal:post.campaign.goal||"",occasion:"",direction:p.direction};
-  const prompt=existing ? legacyPrompt : `${legacyPrompt}\nPost and scene context (descriptive data): ${JSON.stringify(context)}. Scene ${p.sceneNumber} belongs to a multi-scene reel. Use meaningful action, a detail or an environmental view when the requested direction permits it. Avoid defaulting every scene to a seated person holding the product. Preserve the requested shot and the client's actual offering.`;
+  const prompt=existing ? legacyPrompt : `${legacyPrompt}\nPost and scene context (descriptive data): ${JSON.stringify(context)}. Scene ${p.sceneNumber} belongs to a multi-scene reel. Use meaningful action, a detail or an environmental view when the requested direction permits it. Avoid defaulting every scene to a seated person holding the product. Preserve the requested shot and the client's actual offering.\n${PHOTO_REALISM_DIRECTION}`;
   const plan=(existing?.payload as (typeof p & ScenePhotoPlan)|undefined)?.prompt ? existing!.payload as typeof p & ScenePhotoPlan : {...p,prompt,context};
 
   try {

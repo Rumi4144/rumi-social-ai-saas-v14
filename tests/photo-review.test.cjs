@@ -7,7 +7,7 @@ function load(file,deps={},env={},cache=new Map()){
 }
 class ImagePendingError extends Error{};class ImageRejectedError extends Error{};class PhotoReviewPendingError extends ImagePendingError{};
 const context={brandId:'brand',brandName:'Client',headline:'Financial clarity',caption:'Take a small planning step',business:'Financial education',audience:'Adults',voice:'Reassuring',visualRules:'Candid scenes',goal:'Education',occasion:''};
-const good={messageFits:true,emotionFits:true,visuallyDistinct:true,accurate:true,issues:[],replacementDirection:''};
+const good={anatomy:'plausible',anatomyEvidence:'Visible fingers have coherent joints; the thumb is naturally hidden.',objectInteraction:'plausible',interactionEvidence:'The fingertips rest naturally on the object.',messageFits:true,emotionFits:true,visuallyDistinct:true,accurate:true,issues:[],replacementDirection:''};
 const pass={status:'passed',issues:[],replacementDirection:'',comparedAssetIds:[]};
 const fail={status:'failed',issues:['Repeats the desk portrait.'],replacementDirection:'Overhead hands organizing a simple plan.',comparedAssetIds:['peer']};
 const input={organizationId:'org',campaignId:'campaign',contentItemId:'post',requestId:'original-request',prompt:'A meaningful planning scene',format:'portrait',generated:{base64:'first',provider:'bfl',model:'flux'},context,previousMediaUrl:'old',metadata:{subjectCategory:'human',occasion:null}};
@@ -90,4 +90,29 @@ test('reel review compares same-post photos and other scenes, skipping own scene
  const peer=(id,sceneId,photoReview)=>({id,contentItemId:'post',url:'data:image/png;base64,'+Buffer.from(id).toString('base64'),metadata:{sceneId,photoReview}});
  const f=reviewFixture({peers:[peer('old-same-scene','scene1'),peer('flagged','scene2',{status:'failed'}),peer('main'),peer('other-scene','scene2'),peer('third-scene','scene3'),peer('extra','scene4')]});
  const r=await f.api.reviewPhoto({...reviewInput,sceneId:'scene1'});assert.deepEqual(Array.from(r.comparedAssetIds),['main','other-scene','third-scene']);assert.equal(f.queries[1].where.contentItemId,'post');assert.equal(f.queries[1].where.id.not,'candidate');assert.equal(f.queries[1].where.organizationId,'org');assert.equal(f.queries[1].where.campaignId,'campaign');assert.equal(f.requests[0].input[0].content.filter(c=>c.type==='input_image').length,4);
+});
+
+test('distorted or uncertain anatomy/contact fails even when every general criterion passes',async()=>{
+ for(const field of ['anatomy','objectInteraction'])for(const value of ['defective','uncertain']){
+  const verdict={...good,[field]:value,anatomyEvidence:'Two visible fingers merge at the palm.',interactionEvidence:'A finger passes through the strings.',issues:[]};
+  const f=reviewFixture({verdict});const result=await f.api.reviewPhoto(reviewInput);
+  assert.equal(result.status,'failed');assert.ok(result.issues.length);assert.match(result.issues.join(' '),field==='anatomy'?/fingers merge/:/passes through/);
+  assert.equal(f.requests[0].text.format.schema.required.includes(field),true);
+  assert.ok(f.requests[0].text.format.schema.properties[field].enum.includes('uncertain'));
+ }
+});
+test('natural occlusion and photos without people can pass, missing or invalid physical checks cannot',async()=>{
+ for(const verdict of [good,{...good,anatomy:'not_visible',anatomyEvidence:'No person is depicted.',objectInteraction:'not_applicable',interactionEvidence:'The guitar is displayed alone.'}]){
+  assert.equal((await reviewFixture({verdict}).api.reviewPhoto(reviewInput)).status,'passed');
+ }
+ const missing={...good};delete missing.anatomy;
+ for(const verdict of [missing,{...good,anatomy:'probably'},{...good,anatomyEvidence:''},{...good,objectInteraction:'unknown'}]){
+  const f=reviewFixture({verdict});assert.equal((await f.api.reviewPhoto(reviewInput)).status,'unavailable');await f.api.reviewPhoto(reviewInput);assert.equal(f.calls(),1);
+ }
+});
+test('hand-defect feedback reaches one replacement and blocks selection when it still fails',async()=>{
+ const verdict={...good,anatomy:'defective',anatomyEvidence:'Fingers merge into the palm.',replacementDirection:'A simple natural hand pose with distinct fingers.',issues:[]};
+ const rejected=await reviewFixture({verdict}).api.reviewPhoto(reviewInput);
+ const f=fixture([rejected,rejected]);await assert.rejects(f.api.selectReviewedPhoto(input),PhotoReviewPendingError);const result=await f.api.selectReviewedPhoto(input);
+ assert.equal(result.selected,false);assert.equal(f.calls.length,1);assert.match(f.calls[0].prompt,/Fingers merge into the palm/);assert.match(f.calls[0].prompt,/simple natural hand pose/);assert.equal(result.candidateIds.length,2);assert.equal(f.post.mediaUrl,'old');await f.api.selectReviewedPhoto(input);assert.equal(f.calls.length,1);
 });
