@@ -1,13 +1,15 @@
+import { Buffer } from "node:buffer";
+import { isFlare, photoUsageCost } from "./photos";
 import { createHash } from "node:crypto";
 import type { Job } from "@prisma/client";
 import { put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { fetchPublicBytes } from "@/lib/reels/public-fetch";
 import { labModels, type LabInput } from "./catalog";
-import { labPoll } from "./providers";
+import { labPoll, type LabTask } from "./providers";
 import { assertMp4Video, mp4Duration } from "@/lib/video/mp4";
 
-export type LabPayload = LabInput & { estimateUsd: number; taskId?: string; pollingUrl?: string };
+export type LabPayload = LabInput & { estimateUsd: number } & Partial<LabTask>;
 export function labJobId(org: string, requestId: string) {
   return `lab-${createHash("sha256").update(JSON.stringify([org, requestId])).digest("hex").slice(0,40)}`;
 }
@@ -15,7 +17,7 @@ export function labSummary(job: Job) {
   const payload = job.payload as unknown as LabPayload;
   const detached = (job.result as {campaignAttached?:boolean}|null)?.campaignAttached === false;
   return { id: job.id, status: job.status, model: payload.model, prompt: payload.prompt, kind: labModels[payload.model].kind,
-    estimateUsd: payload.estimateUsd, error: job.error, createdAt: job.createdAt,
+    estimateUsd: payload.estimateUsd, usageCostUsd: payload.photoUsage ? photoUsageCost(payload.photoUsage) : null, photoSettings: payload.photoSettings, elapsedMs: payload.elapsedMs, error: job.error, createdAt: job.createdAt,
     productLayout: payload.productLayout, productAssetId: payload.productLayout === "beside" ? payload.productAssetId : undefined,
     voiceId: payload.voiceId, voiceAccent: payload.voiceAccent ?? "original", accentSpeaker: payload.accentSpeaker || null, voiceEmotion: payload.voiceEmotion ?? "neutral", voiceSpeed: payload.voiceSpeed ?? 1,
     imageAssetId: payload.model === "holding" && job.status === "succeeded" ? job.id : null,
@@ -29,14 +31,16 @@ export async function labRefresh(job: Job) {
   const claimed = await prisma.job.updateMany({ where: { id: job.id, organizationId: job.organizationId, status: { in: ["running", "saving"] }, updatedAt: { lt: new Date(Date.now() - 10000) } }, data: { updatedAt: new Date() } });
   if (!claimed.count) return job;
   try {
-    const result = await labPoll(payload.model, { taskId: payload.taskId, pollingUrl: payload.pollingUrl });
+    const result = isFlare(payload.model) ? {status: "ready", url: undefined} : await labPoll(payload.model, { taskId: payload.taskId, pollingUrl: payload.pollingUrl });
     if (result.status === "failed") {
       await prisma.job.update({ where: { id: job.id }, data: { status: "failed", error: "The provider could not finish this sample. Check provider billing before trying a new test." } });
-    } else if (result.status === "ready" && result.url) {
+    } else if (result.status === "ready" && (result.url || payload.inlinePhoto)) {
       await prisma.job.update({ where: { id: job.id }, data: { status: "saving", progress: 95 } });
       const image = labModels[payload.model].kind === "image";
       const audio = payload.model === "speech";
-      const { bytes, contentType } = await fetchPublicBytes(result.url, audio ? 10_000_000 : image ? 20_000_000 : 100_000_000);
+      const { bytes, contentType } = isFlare(payload.model) && payload.inlinePhoto
+        ? {bytes: Buffer.from(payload.inlinePhoto, "base64"), contentType: "image/png"}
+        : await fetchPublicBytes(result.url!, audio ? 10_000_000 : image ? 20_000_000 : 100_000_000);
       if (!(audio ? /^audio\/(mpeg|mp3)/ : image ? /^image\/(png|jpeg|webp)/ : /^video\/mp4/).test(contentType)) throw new Error("Unexpected output format.");
       const ext = audio ? "mp3" : image ? (contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg") : "mp4";
       const pathname = `ai-lab/${job.organizationId}/${job.id}.${ext}`;
@@ -56,12 +60,13 @@ export async function labRefresh(job: Job) {
         if (!post) attachmentError = "Your sample is saved and can be downloaded. Its campaign post was removed, so it was not attached to a post.";
         else await prisma.mediaAsset.upsert({ where: { id: job.id }, update: {}, create: {
           id: job.id, organizationId: job.organizationId, campaignId: payload.campaignId, contentItemId: payload.contentItemId,
-          kind: image ? "ai_image" : "campaign_video", provider: image ? "bfl" : "wavespeed", status: "ready",
+          kind: image ? "ai_image" : "campaign_video", provider: image ? (isFlare(payload.model) ? "openai" : "bfl") : "wavespeed", status: "ready",
           url: image ? `data:${contentType};base64,${bytes.toString("base64")}` : `/api/video/media/${job.id}`, prompt: payload.prompt,
           metadata: { pathname, contentType, model: labModels[payload.model].model, label: image ? "Generated photo" : "Presenter ad", publishMode: "review", requiresProductReview: true, ...(!image && mp4Duration(bytes) ? {duration:mp4Duration(bytes)} : {}) },
         } });
       }
-      await prisma.job.update({ where: { id: job.id }, data: { status: "succeeded", progress: 100, error: attachmentError, result: { pathname, contentType, campaignAttached: !attachmentError } } });
+      const {inlinePhoto: _savedPhoto, ...savedPayload} = payload;
+      await prisma.job.update({ where: { id: job.id }, data: { payload: savedPayload, status: "succeeded", progress: 100, error: attachmentError, result: { pathname, contentType, campaignAttached: !attachmentError } } });
     } else {
       await prisma.job.update({ where: { id: job.id }, data: { error: null } });
     }

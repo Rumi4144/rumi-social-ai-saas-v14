@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+import { isFlare, flareQuote, flareQuality, labPhotoPrompt, FLARE_MODEL, FLARE_SIZE, photoUsage, type PhotoUsage } from "./photos";
 import { labModels, labCost, labVoices, labVoiceStyles, labAccentVoice, type LabInput } from "./catalog";
 
 export function speechInputs(input: LabInput) {
@@ -26,9 +28,9 @@ export function veoInputs(input: LabInput, media?: LabMedia) {
 export class LabProviderError extends Error {
   constructor(public definitive: boolean) { super("Provider request failed"); }
 }
-async function json(url: string, key: string, body?: object, bfl = false) {
+async function json(url: string, key: string, body?: object, bfl = false, timeoutMs = 25000) {
   const response = await fetch(url, {
-    method: body ? "POST" : "GET", redirect: "error", cache: "no-store", signal: AbortSignal.timeout(25000),
+    method: body ? "POST" : "GET", redirect: "error", cache: "no-store", signal: AbortSignal.timeout(timeoutMs),
     headers: { "Content-Type": "application/json", ...(bfl ? { "x-key": key } : { Authorization: `Bearer ${key}` }) },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
@@ -45,6 +47,7 @@ export function bflPollingUrl(value: string) {
 }
 export async function labQuote(input: LabInput, media?: LabMedia) {
   if (input.model === "flux") return 0.009;
+  if (isFlare(input.model)) return flareQuote(input.model, input.prompt);
   if (input.model !== "speech" && !media) throw new Error("Choose a presenter photo and a voice recording.");
   const response = await json("https://api.wavespeed.ai/api/v3/model/price", process.env.WAVESPEED_API_KEY!, {
     model_id: labModels[input.model].model,
@@ -53,11 +56,26 @@ export async function labQuote(input: LabInput, media?: LabMedia) {
   if (response.data?.currency !== "USD") throw new Error("Could not confirm the test price in USD.");
   return labCost(response.data?.discounted_price);
 }
-export async function labSubmit(input: LabInput, media?: LabMedia) {
+export type LabTask = { taskId: string; pollingUrl?: string; inlinePhoto?: string; photoUsage?: PhotoUsage; elapsedMs?: number; photoSettings?: {model: string; quality: string; size: string} };
+export async function labSubmit(input: LabInput, media?: LabMedia): Promise<LabTask> {
+  if (isFlare(input.model)) {
+    const started = Date.now();
+    const settings = {model: FLARE_MODEL, quality: flareQuality(input.model), size: FLARE_SIZE};
+    const result = await json("https://api.openai.com/v1/images/generations", process.env.OPENAI_API_KEY!, {
+      ...settings, prompt: labPhotoPrompt(input.prompt), n: 1, output_format: "png",
+    }, false, 120000);
+    const encoded = result.data?.[0]?.b64_json;
+    // Preserve the purchased image durably in the job before copying it to private storage.
+    // Never return these bytes in the browser summary or resubmit when saving is delayed.
+    if (result.data?.length !== 1 || typeof encoded !== "string" || encoded.length > 27_000_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) throw new LabProviderError(false);
+    const bytes = Buffer.from(encoded, "base64");
+    if (bytes.length < 24 || bytes.length > 20_000_000 || bytes.subarray(0,8).toString("hex") !== "89504e470d0a1a0a") throw new LabProviderError(false);
+    if (bytes.readUInt32BE(16) !== 1024 || bytes.readUInt32BE(20) !== 1280) throw new LabProviderError(false);
+    const usage = photoUsage(result.usage);
+    return {taskId: "inline-photo", inlinePhoto: encoded, photoSettings: settings, elapsedMs: Date.now() - started, ...(usage ? {photoUsage: usage} : {})};
+  }
   if (input.model === "flux") {
-    const prompt = `${input.prompt}
-
-Mobile readability guidance: If the requested image includes advertising text, design it to be read comfortably on a phone at feed size. Use a very large bold headline, large supporting text, a prominent call-to-action button, and a clearly readable website address. Use strong text/background contrast, generous line spacing and safe margins. Give the requested lettering enough space; avoid tiny lettering, dense paragraphs, condensed fonts and narrow text columns. Prefer short supporting copy only when the request allows it. Preserve all supplied exact wording and spelling; never silently shorten or omit required text. If necessary, reduce the photograph's share of the layout instead of shrinking the words. Follow any explicit text sizing or layout instructions in the request. If the request is for a clean photo, no text, or no lettering, do not add any text, buttons or website addresses.`;
+    const prompt = labPhotoPrompt(input.prompt);
     const result = await json("https://api.bfl.ai/v1/flux-3-image-klein", process.env.BFL_API_KEY!, {
       prompt, aspect_ratio: "4:5", resolution: "1k", output_format: "png",
     }, true);
@@ -72,6 +90,7 @@ Mobile readability guidance: If the requested image includes advertising text, d
   return { taskId };
 }
 export async function labPoll(model: LabInput["model"], task: { taskId: string; pollingUrl?: string }) {
+  if (isFlare(model)) throw new Error("OpenAI image results are recovered from the saved job, never resubmitted or polled through another provider.");
   if (model === "flux") {
     const result = await json(bflPollingUrl(task.pollingUrl!), process.env.BFL_API_KEY!, undefined, true);
     if (result.status === "Ready") return { status: "ready", url: result.result?.sample as string };

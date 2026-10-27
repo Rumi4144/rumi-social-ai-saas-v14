@@ -1,3 +1,4 @@
+import { isFlare } from "@/lib/ai-lab/photos";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -5,10 +6,10 @@ import { tenantContext } from "@/lib/auth/context";
 import { apiError } from "@/lib/http/errors";
 import { LabPriceLimitError, labCanRun, labAccentAvailable, labConfigured, labCost, labDailyLimit, labModels, type LabInput } from "@/lib/ai-lab/catalog";
 import { labJobId, labRefresh, labSummary, type LabPayload } from "@/lib/ai-lab/jobs";
-import { labQuote, labSubmit, LabProviderError } from "@/lib/ai-lab/providers";
+import { labQuote, labSubmit, LabProviderError, type LabTask } from "@/lib/ai-lab/providers";
 
-export const maxDuration = 60;
-const inputSchema = z.object({ model: z.enum(["flux", "infinitetalk", "kling", "speech", "holding", "veo"]), prompt: z.string().trim().min(10).max(2000), imageAssetId: z.string().max(150).optional(), audioAssetId: z.string().max(150).optional(), productAssetId: z.string().max(150).optional(), productLayout: z.literal("beside").optional(), holdingPose: z.enum(["guitar", "guitar-standing-strum", "reference"]).optional(), productReviewed: z.boolean().optional(), voiceId: z.enum(["Calm_Woman", "Friendly_Person", "Patient_Man", "Casual_Guy", "Wise_Woman", "Elegant_Man", "Deep_Voice_Man"]).optional(), accentSpeaker: z.string().min(1).max(150).optional(), voiceAccent: z.enum(["original", "american", "british", "australian", "indian", "southern", "french", "persian", "spanish", "italian"]).optional(), voiceEmotion: z.enum(["neutral", "happy"]).optional(), voiceSpeed: z.number().min(0.85).max(1.15).optional(), campaignId: z.string().min(1).max(150).optional(), contentItemId: z.string().min(1).max(150).optional() }).strict().refine(input => input.model !== "veo" || (Boolean(input.imageAssetId) && Boolean(input.productAssetId) && !input.audioAssetId && !input.productLayout), "Veo needs two original photos and generates its own audio.").refine(input => !input.productLayout || (["infinitetalk", "kling"].includes(input.model) && Boolean(input.productAssetId)), "Choose a product photo for the presenter layout.").refine(input => input.model !== "speech" || (input.prompt.length <= 600 && Boolean(input.voiceId)), "Choose a voice and a script up to 600 characters.").refine(input => input.model !== "speech" || !input.voiceId || labAccentAvailable(input.voiceId,input.voiceAccent ?? "original",input.accentSpeaker), "Choose an accent available for this voice.").refine(input => Boolean(input.campaignId) === Boolean(input.contentItemId), "Choose both a campaign and post.");
+export const maxDuration = 180;
+const inputSchema = z.object({ model: z.enum(["flux", "flare-medium", "flare-high", "infinitetalk", "kling", "speech", "holding", "veo"]), prompt: z.string().trim().min(10).max(2000), imageAssetId: z.string().max(150).optional(), audioAssetId: z.string().max(150).optional(), productAssetId: z.string().max(150).optional(), productLayout: z.literal("beside").optional(), holdingPose: z.enum(["guitar", "guitar-standing-strum", "reference"]).optional(), productReviewed: z.boolean().optional(), voiceId: z.enum(["Calm_Woman", "Friendly_Person", "Patient_Man", "Casual_Guy", "Wise_Woman", "Elegant_Man", "Deep_Voice_Man"]).optional(), accentSpeaker: z.string().min(1).max(150).optional(), voiceAccent: z.enum(["original", "american", "british", "australian", "indian", "southern", "french", "persian", "spanish", "italian"]).optional(), voiceEmotion: z.enum(["neutral", "happy"]).optional(), voiceSpeed: z.number().min(0.85).max(1.15).optional(), campaignId: z.string().min(1).max(150).optional(), contentItemId: z.string().min(1).max(150).optional() }).strict().refine(input => !isFlare(input.model) || !(input.campaignId || input.contentItemId || input.imageAssetId || input.productAssetId || input.audioAssetId), "Flare comparison samples use text instructions and stay separate from campaign posts.").refine(input => input.model !== "veo" || (Boolean(input.imageAssetId) && Boolean(input.productAssetId) && !input.audioAssetId && !input.productLayout), "Veo needs two original photos and generates its own audio.").refine(input => !input.productLayout || (["infinitetalk", "kling"].includes(input.model) && Boolean(input.productAssetId)), "Choose a product photo for the presenter layout.").refine(input => input.model !== "speech" || (input.prompt.length <= 600 && Boolean(input.voiceId)), "Choose a voice and a script up to 600 characters.").refine(input => input.model !== "speech" || !input.voiceId || labAccentAvailable(input.voiceId,input.voiceAccent ?? "original",input.accentSpeaker), "Choose an accent available for this voice.").refine(input => Boolean(input.campaignId) === Boolean(input.contentItemId), "Choose both a campaign and post.");
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("quote"), organizationId: z.string(), input: inputSchema }),
   z.object({ action: z.literal("generate"), organizationId: z.string(), quoteId: z.string().max(150), requestId: z.string().uuid(), acknowledge: z.literal(true) }),
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       const field = issue?.path.join(".");
-      const error = field === "input.model" ? "This video model is not supported by the current deployment. Refresh the page and choose an available model."
+      const error = field === "input.model" ? "This model is not supported by the current deployment. Refresh the page and choose an available model."
         : field === "input.prompt" ? "Add sample instructions between 10 and 2,000 characters before getting an estimate."
         : field === "input" && issue.code === "custom" ? issue.message
         : "Some sample settings are missing or invalid. Check your model, instructions and reference photos. No sample was started.";
@@ -107,7 +108,7 @@ export async function POST(req: Request) {
       const code = error instanceof Error ? error.message : "";
       return NextResponse.json({ error: code === "LAB_BUDGET" ? "Today's test allowance is used. No sample was started. Allowance resets at midnight UTC." : code === "LAB_ACTIVE" ? "Check the existing sample before starting another. No new sample was started." : "Another request changed the lab. Reload before continuing; no new sample was started." }, { status: 409 });
     }
-    let task: { taskId: string; pollingUrl?: string } | undefined;
+    let task: LabTask | undefined;
     try {
       task = await labSubmit(payload, media);
       job = await prisma.job.update({ where: { id }, data: { status: "running", progress: 10, payload: { ...payload, ...task } } });

@@ -1,8 +1,11 @@
+import { FLARE_MODEL, flareOutputUsd, isFlare } from "./photos";
 export const labModels = {
   veo: { name: "Veo 3.1 Fast · product references", provider: "WaveSpeedAI / Google", model: "google/veo3.1-fast/reference-to-video", kind: "video", estimateUsd: 0.80, source: "https://wavespeed.ai/docs/docs-api/google/google-veo3.1-fast-reference-to-video" },
   kling: { name: "Kling Avatar Standard", provider: "WaveSpeedAI", model: "kwaivgi/kling-v1-ai-avatar-standard", kind: "video", estimateUsd: 0.75, source: "https://wavespeed.ai/models/kwaivgi/kling-v1-ai-avatar-standard" },
   holding: { name: "Presenter holding a product", provider: "WaveSpeedAI · FLUX", model: "wavespeed-ai/flux-2-klein-4b/edit", kind: "image", estimateUsd: 0.012, source: "https://wavespeed.ai/docs/docs-api/wavespeed-ai/flux-2-klein-4b-edit" },
   flux: { name: "FLUX image", provider: "Black Forest Labs", model: "flux-3-image-klein", kind: "image", estimateUsd: 0.009, source: "https://docs.bfl.ai/flux_3/flux3_image_klein" },
+  "flare-medium": { name: "Flare Medium", provider: "OpenAI", model: FLARE_MODEL, kind: "image", estimateUsd: flareOutputUsd["flare-medium"], source: "https://developers.openai.com/api/docs/models/gpt-image-2.5-flare" },
+  "flare-high": { name: "Flare High", provider: "OpenAI", model: FLARE_MODEL, kind: "image", estimateUsd: flareOutputUsd["flare-high"], source: "https://developers.openai.com/api/docs/models/gpt-image-2.5-flare" },
   infinitetalk: { name: "InfiniteTalk Fast", provider: "WaveSpeedAI", model: "wavespeed-ai/infinitetalk-fast", kind: "video", estimateUsd: 0.225, source: "https://wavespeed.ai/models/wavespeed-ai/infinitetalk-fast" },
   speech: { name: "AI voice", provider: "WaveSpeedAI", model: "minimax/speech-02-hd", kind: "audio", estimateUsd: 0.02, source: "https://wavespeed.ai/models/minimax/speech-02-hd" },
 } as const;
@@ -35,7 +38,7 @@ export function labAccentVoice(voice:keyof typeof labVoices,accent:keyof typeof 
 export function labAccentAvailable(voice:keyof typeof labVoices,accent:keyof typeof labAccents,speaker?:string){try{labAccentVoice(voice,accent,speaker);return true;}catch{return false;}}
 export type LabInput = { model: LabModel; prompt: string; imageAssetId?: string; productAssetId?: string; productLayout?: "beside"; holdingPose?: "guitar" | "guitar-standing-strum" | "reference"; productReviewed?: boolean; audioAssetId?: string; voiceId?: keyof typeof labVoices; voiceAccent?: keyof typeof labAccents; accentSpeaker?: string; voiceEmotion?: keyof typeof labVoiceStyles; voiceSpeed?: number; campaignId?: string; contentItemId?: string };
 export function labConfigured(model: LabModel) {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN && (model === "flux" ? process.env.BFL_API_KEY : process.env.WAVESPEED_API_KEY));
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN && (model === "flux" ? process.env.BFL_API_KEY : isFlare(model) ? process.env.OPENAI_API_KEY : process.env.WAVESPEED_API_KEY));
 }
 export function labCanRun(role: string, isSuperAdmin = false) { return isSuperAdmin === true || role === "superadmin"; }
 export function labDailyLimit() {

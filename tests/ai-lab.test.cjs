@@ -1,5 +1,5 @@
 const {test}=require('node:test'), assert=require('node:assert/strict'), fs=require('node:fs'), vm=require('node:vm'), ts=require('typescript');
-function load(file,deps={},extra={}){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module,exports:module.exports,require:n=>n in deps?deps[n]:require(n),URL,Date,process,AbortSignal,console,...extra});return module.exports;}
+function load(file,deps={},extra={}){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module,exports:module.exports,require:n=>n in deps?deps[n]:n==='./photos'||n==='@/lib/ai-lab/photos'?load('lib/ai-lab/photos.ts'):require(n),URL,Date,process,AbortSignal,TextEncoder,console,...extra});return module.exports;}
 const catalog=load('lib/ai-lab/catalog.ts');
 function fixture(){
  const state={jobs:new Map(),org:'own',role:'superadmin',calls:0,fail:null,quoteCost:.009,saveFailure:false,foreignPost:false,assets:[]};
@@ -8,7 +8,7 @@ function fixture(){
  const prisma={job,contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,state.org);return state.foreignPost?null:{id:q.where.id};}},mediaAsset:{findMany:async q=>state.assets.filter(a=>a.organizationId===q.where.organizationId && a.kind===q.where.kind && a.status===q.where.status && a.createdAt>q.where.createdAt.gt && (!q.where.id || q.where.id.in.includes(a.id))) }};let tail=Promise.resolve();prisma.$transaction=(fn,opts)=>{assert.equal(opts.isolationLevel,'Serializable');const run=tail.then(async()=>{const snapshot=structuredClone(state.jobs);try{return await fn(prisma);}catch(e){state.jobs=snapshot;throw e;}});tail=run.catch(()=>{});return run;};
  class ProviderError extends Error{constructor(definitive){super();this.definitive=definitive;}}
  const jobs={labJobId:(org,id)=>org+id,labSummary:j=>({id:j.id,status:j.status,error:j.error,estimateUsd:j.payload.estimateUsd}),labRefresh:async j=>j};
- const api=load('app/api/ai-lab/route.ts',{'next/server':{NextResponse:{json:(body,opts)=>({body,status:opts?.status||200})}},'@/lib/prisma':{prisma},'@/lib/auth/context':{tenantContext:async()=>({organizationId:state.org,role:state.role})},'@/lib/http/errors':{apiError:e=>({status:e.message==='FORBIDDEN'?403:500})},'@/lib/ai-lab/catalog':{...catalog,labConfigured:()=>true},'@/lib/ai-lab/jobs':jobs,'@/lib/ai-lab/providers':{LabProviderError:ProviderError,labQuote:async()=>state.quoteCost,labSubmit:async()=>{state.calls++;if(state.fail)throw state.fail;return {taskId:'task'};}}});
+ const api=load('app/api/ai-lab/route.ts',{'next/server':{NextResponse:{json:(body,opts)=>({body,status:opts?.status||200})}},'@/lib/prisma':{prisma},'@/lib/auth/context':{tenantContext:async()=>({organizationId:state.org,role:state.role})},'@/lib/http/errors':{apiError:e=>({status:e.message==='FORBIDDEN'?403:500})},'@/lib/ai-lab/catalog':{...catalog,labConfigured:()=>true},'@/lib/ai-lab/jobs':jobs,'@/lib/ai-lab/providers':{LabProviderError:ProviderError,labQuote:async()=>state.quoteCost,labSubmit:async()=>{state.calls++;if(state.fail)throw state.fail;return {taskId:'task',...state.task};}}});
  const input={model:'flux',prompt:'A natural portrait in a bright kitchen, teal and cream palette.'};
  const post=body=>api.POST({json:async()=>({organizationId:'own',...body})});
  const quote=()=>post({action:'quote',input});
@@ -253,4 +253,66 @@ test('Veo rejects foreign, expired, prepared or missing references and rechecks 
  const quote=await f.post({action:'quote',input});assert.equal(quote.status,200);assert.equal(f.state.calls,0);
  f.state.assets[1].organizationId='other';assert.equal((await f.post(f.generate(quote.body.quoteId))).status,500);assert.equal(f.state.calls,0);
  f.state.assets[1].organizationId='own';assert.equal((await f.post(f.generate(quote.body.quoteId))).status,200);assert.equal(f.state.calls,1);
+});
+
+test('Flare comparison options require the OpenAI connection and private storage independently of FLUX',()=>{
+ const previous={...process.env};
+ try {
+  delete process.env.OPENAI_API_KEY;process.env.BFL_API_KEY='fixture-bfl';process.env.BLOB_READ_WRITE_TOKEN='fixture-blob';
+  assert.equal(catalog.labConfigured('flux'),true);assert.equal(catalog.labConfigured('flare-medium'),false);
+  process.env.OPENAI_API_KEY='fixture-openai';delete process.env.BFL_API_KEY;
+  assert.equal(catalog.labConfigured('flux'),false);assert.equal(catalog.labConfigured('flare-medium'),true);assert.equal(catalog.labConfigured('flare-high'),true);
+  delete process.env.BLOB_READ_WRITE_TOKEN;assert.equal(catalog.labConfigured('flare-high'),false);
+ } finally {for(const key of ['OPENAI_API_KEY','BFL_API_KEY','BLOB_READ_WRITE_TOKEN']){if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key];}}
+});
+test('both Flare qualities require approval, reject injected settings and cannot spend twice',async()=>{
+ for(const model of ['flare-medium','flare-high']){
+  const f=fixture(),input={model,prompt:'A bright guitar photograph with natural textures.'};
+  for(const extra of [{quality:'max'},{model:'gpt-image-2.5-sunburst'},{imageAssetId:'foreign'},{campaignId:'campaign',contentItemId:'post'}])assert.equal((await f.post({action:'quote',input:{...input,...extra}})).status,400);
+  const q=await f.post({action:'quote',input});assert.equal(q.status,200);assert.equal(f.state.calls,0);
+  assert.equal((await f.post({...f.generate(q.body.quoteId),acknowledge:false})).status,400);
+  f.state.task={inlinePhoto:'saved-fixture',photoSettings:{model:'gpt-image-2.5-flare-2026-09-08',quality:model.split('-')[1],size:'1024x1280'}};f.state.saveFailure=true;
+  await f.post(f.generate(q.body.quoteId));await Promise.all([f.post(f.generate(q.body.quoteId)),f.post(f.generate(q.body.quoteId))]);
+  assert.equal(f.state.calls,1);const job=[...f.state.jobs.values()].find(j=>j.type==='AI_LAB');assert.equal(job.payload.model,model);assert.equal(job.payload.inlinePhoto,'saved-fixture');
+  assert.equal(JSON.stringify((await f.post(f.generate(q.body.quoteId))).body).includes('saved-fixture'),false);
+ }
+});
+test('Flare quote is local, includes the final prompt, and keeps identical photo direction across providers',async()=>{
+ const photos=load('lib/ai-lab/photos.ts');let calls=[];
+ const provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>({id:'task',polling_url:'https://api.bfl.ai/v1/get_result?id=task'})};}});
+ const prompt='A welcoming photograph in daylight.';
+ const medium=await provider.labQuote({model:'flare-medium',prompt}),high=await provider.labQuote({model:'flare-high',prompt});
+ assert.ok(medium>0.01134 && high>0.0453);assert.equal(calls.length,0);assert.ok(Math.abs((high-medium)-(.0453-.01134))<.000002);
+ assert.ok(await provider.labQuote({model:'flare-medium',prompt:prompt+' More exact details.'})>medium);
+ for(const brief of photos.labPhotoBriefs)assert.ok(brief.prompt.length<=2000 && brief.prompt.includes('Bright soft daylight'));
+ await provider.labSubmit({model:'flux',prompt});assert.equal(calls[0].body.prompt,photos.labPhotoPrompt(prompt));
+});
+function photoResponse(quality){const bytes=Buffer.alloc(24);Buffer.from('89504e470d0a1a0a','hex').copy(bytes);bytes.writeUInt32BE(1024,16);bytes.writeUInt32BE(1280,20);return {data:[{b64_json:bytes.toString('base64')}],quality,size:'1024x1280',usage:{input_tokens:100,input_tokens_details:{text_tokens:100,image_tokens:0},output_tokens:quality==='high'?1510:378}};}
+test('Flare sends one pinned image request at the chosen quality, saves usage, and never sends private references',async()=>{
+ const photos=load('lib/ai-lab/photos.ts');
+ for(const quality of ['medium','high']){
+  const calls=[],provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async(url,options)=>{calls.push({url,options,body:JSON.parse(options.body)});return {ok:true,json:async()=>photoResponse(quality)};}});
+  const result=await provider.labSubmit({model:'flare-'+quality,prompt:'A welcoming guitar photograph.'});
+  assert.equal(calls.length,1);assert.equal(calls[0].url,'https://api.openai.com/v1/images/generations');assert.equal(calls[0].options.redirect,'error');
+  assert.equal(calls[0].body.model,'gpt-image-2.5-flare-2026-09-08');assert.equal(calls[0].body.quality,quality);assert.equal(calls[0].body.size,'1024x1280');assert.equal(calls[0].body.n,1);assert.equal(calls[0].body.output_format,'png');
+  assert.equal(calls[0].body.prompt,photos.labPhotoPrompt('A welcoming guitar photograph.'));assert.equal(result.inlinePhoto,photoResponse(quality).data[0].b64_json);assert.equal(result.photoSettings.quality,quality);
+  assert.ok(Math.abs(photos.photoUsageCost(result.photoUsage)-(quality==='high'?.0458:.01184))<.0000001);
+  await assert.rejects(()=>provider.labPoll('flare-'+quality,{taskId:'inline-photo'}));assert.equal(calls.length,1);
+ }
+});
+test('Flare failures and malformed images never trigger another request',async()=>{
+ for(const response of [{ok:false,status:403},{ok:false,status:500},{ok:true,json:async()=>({data:[{url:'https://untrusted.test/photo'}]})},{ok:true,json:async()=>({data:[{b64_json:'not-png'}]})},new Error('timeout')]){
+  let calls=0;const provider=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async()=>{calls++;if(response instanceof Error)throw response;return response;}});
+  await assert.rejects(()=>provider.labSubmit({model:'flare-high',prompt:'A bright guitar portrait.'}),e=>response.status===403?e.definitive===true:true);assert.equal(calls,1);
+ }
+ const photos=load('lib/ai-lab/photos.ts');assert.equal(photos.photoUsage({}),undefined);assert.equal(photos.photoUsage({input_tokens:2,input_tokens_details:{text_tokens:-1,image_tokens:3},output_tokens:100}),undefined);
+});
+test('purchased Flare photo recovers from private storage failure without any provider request and hides pending bytes',async()=>{
+ const job={id:'flare-photo',organizationId:'own',status:'running',updatedAt:new Date(0),createdAt:new Date(),payload:{model:'flare-high',prompt:'A bright guitar portrait.',estimateUsd:.052,taskId:'inline-photo',inlinePhoto:photoResponse('high').data[0].b64_json,photoUsage:{textInputTokens:100,imageInputTokens:0,outputTokens:1510},photoSettings:{model:'gpt-image-2.5-flare-2026-09-08',quality:'high',size:'1024x1280'}}};
+ let stores=0,paid=0;const prisma={job:{updateMany:async q=>{if(q.where.status?.in&&!q.where.status.in.includes(job.status))return {count:0};Object.assign(job,q.data);return {count:1};},update:async q=>{Object.assign(job,q.data);return job;},findUniqueOrThrow:async()=>job},mediaAsset:{upsert:async()=>assert.fail('Comparison must not attach to a campaign')}};
+ const jobs=load('lib/ai-lab/jobs.ts',{'@/lib/video/mp4':{},'@/lib/prisma':{prisma},'@vercel/blob':{put:async(path,bytes,options)=>{stores++;assert.equal(path,'ai-lab/own/flare-photo.png');assert.equal(options.access,'private');assert.equal(bytes.length,24);if(stores===1)throw Error('storage unavailable');}},'@/lib/reels/public-fetch':{fetchPublicBytes:async()=>assert.fail('No public URL download')},'./catalog':catalog,'./providers':{labPoll:async()=>{paid++;throw Error('must not call');}}});
+ assert.equal('inlinePhoto' in jobs.labSummary(job),false);await jobs.labRefresh(job);assert.equal(job.status,'saving');assert.ok(job.payload.inlinePhoto);
+ await jobs.labRefresh(job);assert.equal(job.status,'succeeded');assert.equal(job.payload.inlinePhoto,undefined);assert.equal(stores,2);assert.equal(paid,0);
+ const summary=jobs.labSummary(job);assert.equal(summary.photoSettings.quality,'high');assert.equal(summary.usageCostUsd,.0458);assert.match(summary.url,/api\/ai-lab\/file/);
+ await jobs.labRefresh(job);assert.equal(stores,2);
 });
