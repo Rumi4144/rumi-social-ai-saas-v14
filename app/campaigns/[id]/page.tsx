@@ -1,4 +1,5 @@
 import PostDeliveryStatus from "@/components/PostDeliveryStatus";
+import PhotoReviewNotice from "@/components/PhotoReviewNotice";
 import CampaignPhotoChoices from "@/components/CampaignPhotoChoices";
 import { matchingWebsitePhoto, modelCodes, type PhotoEvidence } from "@/lib/campaign/photo-matching";
 import CampaignProductPicker from "@/components/CampaignProductPicker";
@@ -37,7 +38,7 @@ export default async function Campaign({
   console.log("[CAMPAIGN PERF] tenantContext:", Date.now() - tenantStarted, "ms");
 
   const dataStarted = Date.now();
-  const [campaign, assets, videoJobs, planningJob] = await Promise.all([
+  const [campaign, assets, videoJobs, planningJob, photoReviews] = await Promise.all([
     prisma.campaign.findFirst({
       where: {
         id,
@@ -63,6 +64,7 @@ export default async function Campaign({
     }),
     prisma.job.findMany({ where: { organizationId, type: "RUNWAY_VIDEO", status: { in: ["starting", "running", "saving", "uncertain"] }, payload: { path: ["campaignId"], equals: id } }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, payload: true } }),
     prisma.job.findFirst({where:{organizationId,type:"CREATE_EVERYTHING",status:"succeeded",payload:{path:["campaignId"],equals:id}},orderBy:{createdAt:"desc"},select:{payload:true,result:true}}),
+    prisma.job.findMany({where: {organizationId, type: 'PHOTO_SELECTION', status: 'succeeded', payload: {path: ['campaignId'], equals: id}}, orderBy: {createdAt: 'desc'}, take: 200, select: {result: true, createdAt: true}}),
   ]);
 
   console.log(
@@ -204,6 +206,9 @@ export default async function Campaign({
           const photoMeta = originalImage?.metadata as { sourceEvidence?: PhotoEvidence; userSelected?: boolean } | null;
           const photoNeedsReview = Boolean(originalImage?.url?.startsWith("https://") && modelCodes(`${item.headline || ""} ${plannedSlot?.topics?.join(" ") || ""}`).length && !photoMeta?.userSelected && (!photoMeta?.sourceEvidence || !matchingWebsitePhoto({ headline: item.headline, topics: plannedSlot?.topics }, [photoMeta.sourceEvidence], [originalImage.url!])));
           const needsVideo = requiresVideo(item.type) && !item.mediaUrl?.startsWith("/api/video/media/");
+          const latestPhotoReview = photoReviews.find(review => (review.result as {contentItemId?: string})?.contentItemId === item.id);
+          const photoReviewResult = latestPhotoReview?.result as {selected?: boolean; assetId?: string; review?: {issues?: string[]}} | null;
+          const showPhotoReview = photoReviewResult?.selected === false && photoReviewResult.assetId && (!originalImage || originalImage.createdAt < latestPhotoReview!.createdAt);
           return (
             <article className="card" key={item.id}>
               <div style={{marginBottom:20,padding:16,borderRadius:12,border:item.type === "story_post" ? "2px solid #9a5b12" : "1px solid #315943",background:item.type === "story_post" ? "#fff4dd" : "#edf5ef",color:"#172b24"}}>
@@ -218,6 +223,7 @@ export default async function Campaign({
                 <p>Review this clip, then select it for Facebook publishing or YouTube upload. Download it for other platforms.</p>
               </div>}
               {photoNeedsReview && <p role="status">Check this photo before publishing: its source has not been verified against the named product. Use “Choose photo from website” below to select the exact item.</p>}
+              {showPhotoReview && <PhotoReviewNotice campaignId={campaign.id} contentItemId={item.id} assetId={photoReviewResult!.assetId!} issues={photoReviewResult!.review?.issues || ['Please inspect this photo before using it.']} />}
               {!originalImage && <p>Choose a matching website photo below or generate an image. A different product photo will not be substituted automatically.</p>}
               {displayAsset?.url && !originalImage?.url && (
                 <img

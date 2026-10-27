@@ -229,6 +229,7 @@ export async function POST(req: Request) {
       let imageProvider: string;
       let imageModel: string = "website";
       let generatedSize: string | undefined;
+      let reviewedPhoto: Awaited<ReturnType<typeof import('@/lib/ai/reviewed-photo').selectReviewedPhoto>> | undefined;
 
       if (p.sourceImageUrl) {
         // Use the real product photograph selected from the website.
@@ -245,6 +246,19 @@ export async function POST(req: Request) {
         imageProvider = generated.provider;
         imageModel = generated.model;
         generatedSize = generated.size;
+        const {selectReviewedPhoto} = await import('@/lib/ai/reviewed-photo');
+        reviewedPhoto = await selectReviewedPhoto({organizationId: job.organizationId, campaignId: p.campaignId, contentItemId: p.contentItemId,
+          requestId: `worker:${job.id}`, generated, prompt: frozenPrompt, format, previousMediaUrl: visualContentItem.mediaUrl,
+          context: {brandId: visualBrand.id, brandName: visualBrand.name, headline: visualContentItem.headline || '', caption: visualContentItem.caption || '',
+            business: [visualBrand.industry, visualBrand.description].filter(Boolean).join(': '), audience: visualBrand.targetAudience || '', voice: visualBrand.voice || '',
+            visualRules: visualBrand.visualRules || '', goal: visualCampaign.goal || '', occasion: occasion || '', direction: p.prompt},
+          metadata: {subjectCategory: p.visualConcept?.subjectCategory || 'unrecorded', occasion: occasion || null},
+        });
+        if (!reviewedPhoto.selected) {
+          await prisma.job.update({where: {id: job.id}, data: {status: 'succeeded', progress: 100, result: {assetId: reviewedPhoto.asset.id, contentItemId: p.contentItemId, needsReview: true}}});
+          return NextResponse.json({status: 'succeeded', type: 'GENERATE_IMAGE', jobId: job.id, needsReview: true, assetId: reviewedPhoto.asset.id});
+        }
+        dataUrl = reviewedPhoto.asset.url!;
       }
 
       const imageData = {
@@ -267,7 +281,7 @@ export async function POST(req: Request) {
       };
 
       const {saveGeneratedPhoto} = await import("@/lib/creative/image-history");
-      const asset = await saveGeneratedPhoto(imageData);
+      const asset = reviewedPhoto?.asset || await saveGeneratedPhoto(imageData);
 
       // Automatically turn the clean AI source image into
       // a finished Brand Brain creative.

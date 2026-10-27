@@ -121,6 +121,15 @@ export default function PrivacyPage() {
       </p>
 
       <p>
+        When you generate campaign photos, we send the new photo, its post and
+        brand context, and up to three recent photos from the same campaign to
+        OpenAI for a visual quality review. We save the review result and any
+        replacement photo in your workspace. This review helps assess relevance,
+        mood, variety and visible image problems; you remain responsible for
+        reviewing and approving posts before publishing.
+      </p>
+
+      <p>
         When you request AI video generation, we send your selected image and
         motion prompt to Runway. We retain the prompt, generation status and
         completed video in your workspace. Completed videos are stored in

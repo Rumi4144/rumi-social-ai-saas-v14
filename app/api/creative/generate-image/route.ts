@@ -1,4 +1,3 @@
-import {saveGeneratedPhoto} from "@/lib/creative/image-history";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {generateImage, ImagePendingError} from "@/lib/ai/image-provider";
@@ -40,6 +39,8 @@ export async function POST(req: Request) {
       include: { campaign: { include: { brand: true } } },
     });
     if (!contentItem) return NextResponse.json({ error: "CONTENT_NOT_FOUND" }, { status: 404 });
+    const delivery = await prisma.publishJob.findFirst({where: {organizationId: ctx.organizationId, contentItemId: contentItem.id, status: {in: ['scheduled', 'retry', 'publishing', 'published']}}});
+    if (delivery || ['scheduled', 'published'].includes(contentItem.status)) return NextResponse.json({error: 'Cancel scheduled posting before changing this photo.'}, {status: 409});
     const brand = contentItem.campaign.brand;
     const onboarding = await prisma.onboardingState.findUnique({ where: { organizationId: ctx.organizationId }, select: { businessType: true } });
     const businessContext = { businessType: onboarding?.businessType, industry: brand.industry, description: brand.description, targetAudience: brand.targetAudience };
@@ -63,30 +64,22 @@ export async function POST(req: Request) {
     const prompt = buildVisualDirection({ brand, businessContext, occasion, campaignGoal: contentItem.campaign.goal, headline: contentItem.headline, contentType: contentItem.type, platform: contentItem.platform, visualDirection: p.data.prompt, visualConcept: concept, recentConcepts, variationIndex });
 
     const generated = await generateImage({organizationId:ctx.organizationId,requestId:`manual:${p.data.contentItemId}:${p.data.requestId}`,prompt,requestDescription:p.data.prompt,format:p.data.format});
-    const base64=generated.base64;
-
-    const dataUrl = `data:image/png;base64,${base64}`;
-
-    const assetData = {
+    const {selectReviewedPhoto} = await import('@/lib/ai/reviewed-photo');
+    const reviewed = await selectReviewedPhoto({
       organizationId: ctx.organizationId,
       campaignId: p.data.campaignId,
       contentItemId: p.data.contentItemId,
-      kind: "ai_image",
-      provider: generated.provider,
-      status: "ready",
-      url: dataUrl,
-      prompt,
+      requestId: `manual:${p.data.contentItemId}:${p.data.requestId}`,
+      generated, prompt, format: p.data.format, previousMediaUrl: contentItem.mediaUrl,
+      context: {brandId: brand.id, brandName: brand.name, headline: contentItem.headline || '', caption: contentItem.caption || '',
+        business: [brand.industry, brand.description].filter(Boolean).join(': '), audience: brand.targetAudience || '', voice: brand.voice || '',
+        visualRules: brand.visualRules || '', goal: contentItem.campaign.goal || '', occasion: occasion || '', direction: p.data.prompt},
       metadata: {
-        model: generated.model,
-        format: p.data.format,
-        ...(generated.size ? {size:generated.size} : {}),
         subjectCategory: concept.subjectCategory,
         occasion: occasion || null,
       },
-    };
-
-    // Keep every paid generation available for later reuse instead of overwriting it.
-    const asset = await saveGeneratedPhoto(assetData);
+    });
+    const asset = reviewed.asset;
 
     await prisma.job.create({ data: {
       organizationId: ctx.organizationId, type: "GENERATE_IMAGE", status: "succeeded", progress: 100,
@@ -96,11 +89,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       assetId: asset.id,
-      url: dataUrl,
+      url: asset.url,
       format: p.data.format,
+      needsReview: !reviewed.selected,
+      review: reviewed.review,
     });
   } catch (e) {
-    if(e instanceof ImagePendingError)return NextResponse.json({error:e.message},{status:409});
+    if(e instanceof ImagePendingError)return NextResponse.json({error:e.message,pending:true},{status:202});
     const message =
       e instanceof Error ? e.message : "IMAGE_GENERATION_FAILED";
 

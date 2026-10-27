@@ -20,18 +20,22 @@ export default function RegenerateImageButton({
   const requestId = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
+  const storageKey = `rumi-photo-request:${campaignId}:${contentItemId}:${format}`;
 
   async function regenerate() {
     if (busy) return;
     setBusy(true);
-    requestId.current ||= crypto.randomUUID();
-    setStatus("Generating...");
+    setStatus("Generating and reviewing your photo…");
 
     const prompt = `Create a fresh, brand-relevant visual concept for this campaign message: ${headline}.
 Use the current business context and previous campaign subjects supplied by the server.
 Generate underlying photography or artwork only, with no text or branding; leave space for the existing creative layout.`;
 
     try {
+      requestId.current ||= sessionStorage.getItem(storageKey) || crypto.randomUUID();
+      sessionStorage.setItem(storageKey, requestId.current);
+      let result: {pending?: boolean; needsReview?: boolean; error?: unknown; url?: string} = {};
+      for (let check = 0; check < 8; check++) {
       const res = await fetch("/api/creative/generate-image", {
         method: "POST",
         headers: {
@@ -46,7 +50,14 @@ Generate underlying photography or artwork only, with no text or branding; leave
         }),
       });
 
-      const result = await res.json();
+      result = await res.json();
+
+      if (result.pending) {
+        setStatus(typeof result.error === 'string' ? result.error : 'Checking saved photo progress…');
+        if (check === 7) throw new Error('Your photo request is saved. Click again to continue without starting another generation.');
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        continue;
+      }
 
       if (!res.ok) {
         throw new Error(
@@ -55,6 +66,17 @@ Generate underlying photography or artwork only, with no text or branding; leave
             : JSON.stringify(result.error)
         );
       }
+      break;
+      }
+
+      if (result.needsReview) {
+        requestId.current = null;
+        sessionStorage.removeItem(storageKey);
+        setStatus('Photo saved for your review. It has not replaced the current photo.');
+        window.location.reload();
+        return;
+      }
+      if (!result.url) throw new Error('The photo is saved but unavailable. Continue this request to check it again.');
 
     setStatus("Updating branded creative...");
 
@@ -85,6 +107,7 @@ Generate underlying photography or artwork only, with no text or branding; leave
 
     setStatus("✓ Image and branded creative updated");
     requestId.current = null;
+    sessionStorage.removeItem(storageKey);
     window.location.reload();
     } catch (error) {
       setStatus(
