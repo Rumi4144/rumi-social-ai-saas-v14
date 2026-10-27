@@ -1,3 +1,4 @@
+import {photoAllowsAutomaticUse} from "@/lib/ai/photo-eligibility";
 import { reelProductSubject, reelPhotoMatchesProduct } from "@/lib/reels/product-identity";
 import { NextResponse } from "next/server";
 import { tenantContext } from "@/lib/auth/context";
@@ -30,7 +31,7 @@ export async function GET(req: Request) {
       return {...item,visualDirection:saved?.visualDirection||null,productSubject:reelProductSubject({...item,topics},campaign.brand)};
     });
     const productForAsset=(asset:typeof assets[number])=>posts.find(post=>post.id===asset.contentItemId)?.productSubject;
-    const visibleAssets=assets.filter(asset=>asset.kind==="campaign_video" || reelPhotoMatchesProduct(productForAsset(asset),asset));
+    const visibleAssets=assets.filter(asset=>asset.kind==="campaign_video" || (photoAllowsAutomaticUse(asset.metadata) && reelPhotoMatchesProduct(productForAsset(asset),asset)));
     const productVerified=(asset:typeof assets[number])=>!productForAsset(asset) || (asset.kind==="campaign_video" ? (asset.metadata as {productSubject?:string})?.productSubject===productForAsset(asset) : true);
 
     return NextResponse.json({ organizationId: ctx.organizationId, campaign: { id: campaign.id, title: campaign.title }, brand: { id: campaign.brand.id, name: campaign.brand.name, industry: campaign.brand.industry, color: campaign.brand.primaryColor || "#132342", accent: campaign.brand.accentColor || "#dec184", website: campaign.brand.websiteUrl || "", logo: campaign.brand.logoUrl ? `/api/reels/media?brandId=${campaign.brand.id}` : undefined }, posts, savedReels: visibleAssets.filter(asset => productVerified(asset) && asset.kind === "campaign_video" && asset.provider === "reel-editor" && (asset.metadata as {contentType?:string})?.contentType === "video/mp4").map(asset => ({id: asset.id, contentItemId: asset.contentItemId})), sources: visibleAssets.map(asset => ({ productVerified: productVerified(asset), id: asset.id, kind: asset.kind !== "campaign_video" ? "image" : "video", src: asset.kind !== "campaign_video" ? `/api/reels/media?assetId=${asset.id}` : `/api/video/media/${asset.id}`, contentItemId: asset.contentItemId, sceneId: typeof (asset.metadata as {sceneId?:string})?.sceneId === "string" ? (asset.metadata as {sceneId:string}).sceneId : undefined, label: typeof (asset.metadata as {label?:string})?.label === "string" ? (asset.metadata as {label:string}).label : asset.kind === "campaign_video" ? "Post video" : "Post photo", seconds: typeof (asset.metadata as {duration?:number})?.duration === "number" ? Math.min(15,Math.max(3,(asset.metadata as {duration:number}).duration)) : undefined })) });

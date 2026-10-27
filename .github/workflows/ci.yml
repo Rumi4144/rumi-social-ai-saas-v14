@@ -56,6 +56,7 @@ jobs:
       - run: node tests/user-activity-browser.cjs
       - run: node tests/campaign-photo-browser.cjs
       - run: node tests/photo-review-browser.cjs
+      - run: node tests/scene-photo-browser.cjs
       - run: node tests/reels-browser.cjs
       - run: node tests/reels-browser.cjs
         env:

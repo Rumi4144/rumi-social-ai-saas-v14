@@ -1,3 +1,4 @@
+import {photoAllowsAutomaticUse} from "@/lib/ai/photo-eligibility";
 import { savedProductSubject, reelPhotoMatchesProduct } from "@/lib/reels/product-identity";
 import { NextResponse } from "next/server";
 import { tenantContext } from "@/lib/auth/context";
@@ -49,7 +50,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ brandName: current.brand.name, productSubject, matchingOnly, page, hasMore: choices.length > 24, sources: choices.slice(0, 24).map(asset => {
       const src = `/api/reels/media?assetId=${encodeURIComponent(asset.id)}&campaignId=${encodeURIComponent(campaignId || "")}`;
       const label = typeof (asset.metadata as { label?: string })?.label === "string" ? (asset.metadata as { label: string }).label : posts.find(post => post.id === asset.contentItemId)?.headline || (asset.kind === "product_photo" ? "Product photo" : "Generated photo");
-      return { id: asset.id, src, thumbnail: `${src}&thumbnail=1`, kind: "image", contentItemId: asset.contentItemId, libraryBrandId: current.brandId, label, campaignTitle: campaigns.find(campaign => campaign.id === asset.campaignId)?.title || "Past campaign" };
+      return { reviewRequired: !photoAllowsAutomaticUse(asset.metadata), id: asset.id, src, thumbnail: `${src}&thumbnail=1`, kind: "image", contentItemId: asset.contentItemId, libraryBrandId: current.brandId, label, campaignTitle: campaigns.find(campaign => campaign.id === asset.campaignId)?.title || "Past campaign" };
     }) }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return apiError(error, "Could not load past campaign photos."); }
 }

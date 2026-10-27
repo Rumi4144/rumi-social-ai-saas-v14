@@ -82,3 +82,10 @@ test('library media proxy enforces brand scope and uses a smaller thumbnail with
  await api.GET(new Request(url));assert.equal(size,1920);
  missing=true;assert.equal((await api.GET(new Request(url))).status,404);assert.equal(assetCalls,2);
 });
+
+test('library marks flagged photos for manual review and automatic three-photo selection skips them',async()=>{
+ const f=fixture();f.state.assets[0].metadata={photoReview:{status:'failed'}};f.state.assets[1].metadata={photoReview:{status:'passed'}};
+ const response=await f.api.GET(f.request());assert.equal(response.body.sources[0].reviewRequired,true);assert.equal(response.body.sources[1].reviewRequired,false);
+ const lib=load('lib/reels/source-library.ts');const project={scenes:[],closingSeconds:3};
+ const chosen=lib.selectThreeReelPhotos(project,response.body.sources,()=>Math.random().toString());assert.ok(chosen.scenes.every(scene=>scene.src!==response.body.sources[0].src));
+});

@@ -31,7 +31,7 @@ export function selectReelSource(project: ReelProject, source: ReelSource, id: (
 
 /** Choose up to three distinct photos from the already scoped, available library. */
 export function selectThreeReelPhotos(project: ReelProject, sources: ReelSource[], id: () => string): ReelProject {
-  const eligible = sources.filter(source => source.kind === "image" && (!project.productSubject || source.productVerified === true || source.src.startsWith("blob:") || project.scenes.some(scene => scene.src === source.src)));
+  const eligible = sources.filter(source => source.kind === "image" && !source.reviewRequired && (!project.productSubject || source.productVerified === true || source.src.startsWith("blob:") || project.scenes.some(scene => scene.src === source.src)));
   const ordered = [...project.scenes.flatMap(scene => {
     const source = eligible.find(item => item.src === scene.src);
     return source ? [source] : [];

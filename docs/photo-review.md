@@ -1,6 +1,6 @@
 # Campaign photo review
 
-New AI photos created by the campaign worker and manual image regeneration are now reviewed before automatic selection. User-selected website photos and uploads retain their existing explicit selection flow. Existing campaigns are not regenerated retroactively.
+New AI photos created by the campaign worker, manual image regeneration and reel scene generation are reviewed before automatic selection. User-selected website photos and uploads retain their existing explicit selection flow. Existing campaigns are not regenerated retroactively.
 
 The reviewer sees the actual candidate at up to 1024 pixels, the headline and caption, brand/business/audience/voice, occasion and creative direction, and up to three distinct recent selected photos from the same campaign. It checks message, emotion, visual variety and obvious factual/visual problems. Matching is advisory: it does not verify real customer identities, testimonials or exact product specifications. Supplied content and image text are treated as data, not instructions.
 
@@ -17,11 +17,21 @@ The reviewer sees the actual candidate at up to 1024 pixels, the headline and ca
 - Manual regeneration keeps the request identifier in browser session storage so refreshing can resume the same purchase.
 - Comparison is bounded to available recent photos at review time, not a guarantee of uniqueness across every historical campaign. Failed provider requests may still incur provider charges; there is no claim that a failed review is free.
 
+## Reel scene photos
+
+Reel scenes use the same reviewer with up to three ready photos from their own post, including its main photo and other scenes. Other versions of the same scene, the candidate itself and flagged photos are excluded. The request freezes the caption, brand context and requested shot. One Rumi credit covers the request, including at most one corrected replacement. Each generated image is saved before review; only a passed result becomes ready. A changed post or unavailable review requires a manual choice. This does not replace the main post image or change delivery settings.
+
+`REEL_SCENE_PHOTO` retains its progress, frozen plan and result. A replacement resumes in a separate HTTP request with a fixed provider identifier, and duplicates do not debit again. The browser retains the request in local storage until success or a manual decision. A definitive initial provider rejection returns the credit once. A failed replacement retains the initial image without refunding the completed first generation. Both originals remain available through the photo library. The scene review notice can select the photo explicitly or keep it saved while changing the description; neither action purchases a new image. Legacy pending requests keep the original prompt shape.
+
+The automatic reel planner excludes failed, pending and unavailable review candidates, including archived assets. The manual photo library labels these candidates for inspection. Video cards expose playback controls, seek to an initial frame where possible, and provide an error message/link if playback cannot load.
+
 ## Validation
 
 `node --test tests/photo-review.test.cjs` covers decisions, one-replacement limits, retained originals, stable retry IDs/prompts, changed posts, publishing locks, tenant-scoped comparisons, duplicate claims, malformed results and unavailable review.
 
 `node tests/photo-review-browser.cjs` exercises a pending request across reload, no rendering of flagged results, explicit selection, and desktop/mobile layout with local fixture data. It makes no paid provider requests. Existing creative regression, holiday, worker recovery and full suite checks also apply.
+
+`node --test tests/scene-photo.test.cjs tests/reel-auto-plan.test.cjs tests/reel-library.test.cjs` covers scene billing, retries, retained candidates, frozen context and automatic exclusion. `node tests/scene-photo-browser.cjs` verifies scene continuation, explicit review, reload recovery and clip controls/error states at desktop and mobile widths. These fixtures do not establish real-world model quality or verify a user's private video.
 
 Official API references:
 - https://developers.openai.com/api/docs/guides/images-vision

@@ -7,6 +7,7 @@ import { assertReelHasMedia, REEL_STYLES, REEL_ANIMATIONS, frameAt, reelDuration
 import { loadDraft, saveDraft } from "@/lib/reels/drafts";
 import WeeklyReels from "./WeeklyReels";
 import MusicControls from "./MusicControls";
+import ClipPreview from "./ClipPreview";
 import ScenePhotoControls from "./ScenePhotoControls";
 import PhotoLibraryPicker from "./PhotoLibraryPicker";
 import SchedulePostButton from "@/components/SchedulePostButton";
@@ -292,12 +293,12 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <p role="status">{selectedSources.size} photos or clips selected · {project.scenes.length} of 6 scenes</p>
         {project.scenes.length >= 6 && <p className={styles.hint}>{hasSelectionRoom ? "Selecting another photo replaces a repeated picture and keeps the scene’s text and timing." : "All 6 scenes use different photos or clips. Uncheck one to choose another."}</p>}
         <div className={styles.library}>{sources.map((source, index) => <div key={source.id} className={`${styles.photo} ${selectedSources.has(source.src) ? styles.selectedPhoto : ""}`}>
-          {source.kind === "image" ? <img src={source.src} alt={source.label || `Photo ${index + 1}`} loading="lazy" /> : <video src={source.src} muted playsInline preload="metadata" aria-label={source.label || `Clip ${index + 1}`} />}
+          {source.kind === "image" ? <img src={source.src} alt={source.label || `Photo ${index + 1}`} loading="lazy" /> : <ClipPreview src={source.src} label={source.label || `Clip ${index + 1}`} />}
           <p>{source.label || `${source.kind === "image" ? "Photo" : "Clip"} ${index + 1}`}</p>
           <label className={styles.photoChoice}><input type="checkbox" aria-label={`Use ${source.label || `item ${index + 1}`} in reel`} checked={selectedSources.has(source.src)} disabled={!selectedSources.has(source.src) && !hasSelectionRoom} onChange={event => {
             if (event.target.checked) addSource(source);
-            else { setProject(old => ({ ...old, scenes: old.scenes.filter(scene => scene.src !== source.src) })); setPhotoMessage("Photo deselected."); }
-          }} /><span>{selectedSources.has(source.src) ? "Selected" : "Select photo"}</span></label>
+            else { setProject(old => ({ ...old, scenes: old.scenes.filter(scene => scene.src !== source.src) })); setPhotoMessage(source.kind === "video" ? "Clip deselected." : "Photo deselected."); }
+          }} /><span>{selectedSources.has(source.src) ? "Selected" : source.kind === "video" ? "Select clip" : "Select photo"}</span></label>
         </div>)}</div>
         {project.scenes.length === 1 && <p className={styles.hint}>One photo selected. It appears once in the collage. Add another photo for a multi-photo layout.</p>}
         {project.scenes.map((scene, index) => <div key={scene.id} style={{ borderTop: "1px solid #7775", marginTop: 20, paddingTop: 14 }}><h3>Scene {index + 1}</h3>

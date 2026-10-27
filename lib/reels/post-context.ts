@@ -1,12 +1,12 @@
 import type {ReelProject} from './timeline';
 import {parseReelScenePlan} from './scene-plan';
-export type ReelSource={id:string;src:string;kind:'image'|'video';contentItemId?:string;sceneId?:string;seconds?:number;label?:string;libraryBrandId?:string;productVerified?:boolean};
+export type ReelSource={id:string;src:string;kind:'image'|'video';contentItemId?:string;sceneId?:string;seconds?:number;label?:string;libraryBrandId?:string;productVerified?:boolean;reviewRequired?:boolean};
 export type ReelPost={id:string;headline:string|null;caption:string|null;visualDirection?:string|null;productSubject?:string;status?:string};
 export function reelDraftKey(organizationId:string,campaignId:string,postId:string){return `${organizationId}:${campaignId}:${postId}`;}
 export function selectedPostProject(data:{posts:ReelPost[];sources:ReelSource[];brand:{name:string;color:string;accent:string;website:string;logo?:string}},requestedPostId:string):{post:ReelPost;project:ReelProject}{
  const post=requestedPostId?data.posts.find(p=>p.id===requestedPostId):data.posts[0];
  if(!post)throw new Error('This post is not available in the selected campaign. Return to the campaign and open its reel again.');
- const owned=data.sources.filter(s=>s.contentItemId===post.id && (!post.productSubject || s.productVerified===true));
+ const owned=data.sources.filter(s=>s.contentItemId===post.id && !s.reviewRequired && (!post.productSubject || s.productVerified===true));
  // Newest matching image is the authoritative source, not the campaign's first
  // photographs. Use a matching clip only when no photo is available.
  const source=owned.find(s=>s.kind==='image'&&!s.sceneId)||owned.find(s=>s.kind==='image')||owned.find(s=>s.kind==='video');

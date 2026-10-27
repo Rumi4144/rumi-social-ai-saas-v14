@@ -144,3 +144,10 @@ test('previously replaced photos remain reusable while failed, deleted and forei
  const result=plan([asset('saved','Notice breathing',{status:'superseded'}),asset('failed','Notice breathing',{status:'failed'}),asset('deleted','Notice breathing',{status:'deleted'}),asset('foreign','Notice breathing',{status:'superseded',brandId:'other-brand'}),asset('tenant','Notice breathing',{status:'superseded',organizationId:'other-org'})]);
  assert.deepEqual(Array.from(result.sources,s=>s.id),['saved']);
 });
+
+test('automatic planner excludes failed, pending and unavailable photos even if archived or attached to this post',()=>{
+ const photos=['failed','pending','unavailable'].map(status=>asset(status,'Breathing beside a window',{status:'superseded',contentItemId:'post',metadata:{photoReview:{status}}}));
+ photos.push(asset('changed-post','Breathing beside a window',{metadata:{photoReview:{status:'passed',issues:['The post changed after review.']}}}));
+ photos.push(asset('passed','Breathing beside a window',{metadata:{photoReview:{status:'passed'}}}),asset('human','Breathing beside a window',{metadata:{photoReview:{status:'failed',userReviewed:true}}}));
+ assert.deepEqual(Array.from(plan(photos).sources,s=>s.id).sort(),['human','passed']);
+});

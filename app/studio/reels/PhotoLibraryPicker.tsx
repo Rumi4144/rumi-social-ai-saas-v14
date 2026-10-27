@@ -35,8 +35,8 @@ export default function PhotoLibraryPicker({ organizationId, campaignId, content
       {message && <button type="button" disabled={disabled || loading} onClick={() => setReload(value => value + 1)}>Try again</button>}
       <div className={styles.library}>{photos.map(photo => <div className={styles.photo} key={photo.id}>
         <img src={photo.thumbnail} alt={photo.label || "Campaign photo"} loading="lazy" />
-        <p>{photo.label}</p><p>{photo.campaignTitle}</p>
-        <button type="button" disabled={disabled} aria-pressed={selectedSrc === photo.src} onClick={() => { onPhoto(photo); if(purpose !== "campaign") setOpen(false); }}>{selectedSrc === photo.src ? "Selected photo" : purpose === "campaign" ? "Add to campaign" : purpose === "post" ? "Use for this post" : "Use for this scene"}</button>
+        <p>{photo.label}</p><p>{photo.campaignTitle}</p>{photo.reviewRequired && <p>Automatic review flagged this photo. Inspect it before choosing it.</p>}
+        <button type="button" disabled={disabled} aria-pressed={selectedSrc === photo.src} onClick={() => { onPhoto({...photo,reviewRequired:false}); if(purpose !== "campaign") setOpen(false); }}>{selectedSrc === photo.src ? "Selected photo" : purpose === "campaign" ? "Add to campaign" : purpose === "post" ? "Use for this post" : "Use for this scene"}</button>
       </div>)}</div>
       {!loading && !message && <div className={styles.actions}>
         <button type="button" disabled={disabled || page === 1} onClick={() => setPage(value => value - 1)}>Previous photos</button>
