@@ -1,5 +1,5 @@
 const {test}=require('node:test'), assert=require('node:assert/strict'), fs=require('node:fs'), vm=require('node:vm'), ts=require('typescript');
-function load(file,deps={},extra={}){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module,exports:module.exports,require:n=>n in deps?deps[n]:n==='./photos'||n==='@/lib/ai-lab/photos'?load('lib/ai-lab/photos.ts'):require(n),URL,Date,process,AbortSignal,TextEncoder,console,...extra});return module.exports;}
+function load(file,deps={},extra={}){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module,exports:module.exports,require:n=>n in deps?deps[n]:n==='./photos'||n==='@/lib/ai-lab/photos'?load('lib/ai-lab/photos.ts'):n==='../ai/image-models'?load('lib/ai/image-models.ts'):require(n),URL,Date,process,AbortSignal,TextEncoder,console,...extra});return module.exports;}
 const catalog=load('lib/ai-lab/catalog.ts');
 function fixture(){
  const state={jobs:new Map(),org:'own',role:'superadmin',calls:0,fail:null,quoteCost:.009,saveFailure:false,foreignPost:false,assets:[]};

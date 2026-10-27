@@ -24,7 +24,7 @@ export async function reviewedScenePhoto(id: string, organizationId: string, pla
       id: assetId, organizationId, campaignId: plan.campaignId, contentItemId: plan.contentItemId,
       kind: 'reel_scene_image', provider: generated.provider, status: 'superseded', url: `data:image/png;base64,${generated.base64}`, prompt,
       metadata: {sceneId: plan.sceneId, label: `AI photo · Scene ${plan.sceneNumber}${attempt ? ' · Alternative' : ''}`,
-        model: generated.model, ...(generated.size ? {size: generated.size} : {}), photoReview: {status: 'pending', attempt}},
+        model: generated.model, ...(generated.size ? {size: generated.size} : {}), ...(generated.quality ? {quality: generated.quality} : {}), photoReview: {status: 'pending', attempt}},
     }});
   }
   async function review(asset: Awaited<ReturnType<typeof candidate>>) {

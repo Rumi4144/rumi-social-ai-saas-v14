@@ -3,7 +3,7 @@ export function isFlare(model: string): model is FlareModel {
   return model === "flare-medium" || model === "flare-high";
 }
 export function isLabPhoto(model: string) { return model === "flux" || isFlare(model); }
-export const FLARE_MODEL = "gpt-image-2.5-flare-2026-09-08";
+export { FLARE_MODEL } from '../ai/image-models';
 export const FLARE_SIZE = "1024x1280";
 export const flareOutputUsd = { "flare-medium": 0.01134, "flare-high": 0.0453 } as const;
 export function flareQuality(model: FlareModel) { return model === "flare-high" ? "high" : "medium"; }

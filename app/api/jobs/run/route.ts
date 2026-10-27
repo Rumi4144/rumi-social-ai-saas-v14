@@ -1,6 +1,6 @@
 import {campaignSetupPhotos,attachSetupPhoto} from "@/lib/campaign/setup-photos";
 import { NextResponse } from "next/server";
-import {generateImage, imageConfiguration, ImageRejectedError} from "@/lib/ai/image-provider";
+import {generateImage, ImageRejectedError} from "@/lib/ai/image-provider";
 export const maxDuration=180;
 import { prisma } from "@/lib/prisma";
 import { recentBrandConcepts, regenerationVariationIndex } from "@/lib/ai/visual-history";
@@ -236,8 +236,6 @@ export async function POST(req: Request) {
         dataUrl = p.sourceImageUrl;
         imageProvider = "website";
       } else {
-        imageConfiguration();
-
         const frozenPrompt=p.frozenImagePrompt || visualDirectorPrompt;
         if(!p.frozenImagePrompt)await prisma.job.update({where:{id:job.id},data:{payload:{...p,frozenImagePrompt:frozenPrompt}}});
         imageRequested=true;

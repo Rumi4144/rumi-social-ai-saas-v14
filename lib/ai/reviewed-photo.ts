@@ -40,7 +40,7 @@ export async function selectReviewedPhoto(input: PhotoInput) {
     return prisma.mediaAsset.upsert({where: {id: assetId}, update: {}, create: {
       id: assetId, organizationId: input.organizationId, campaignId: plan.campaignId, contentItemId: plan.contentItemId,
       kind: 'ai_image', provider: generated.provider, status: 'superseded', url: `data:image/png;base64,${generated.base64}`, prompt,
-      metadata: {...plan.metadata, model: generated.model, format: plan.format, ...(generated.size ? {size: generated.size} : {}),
+      metadata: {...plan.metadata, model: generated.model, format: plan.format, ...(generated.size ? {size: generated.size} : {}), ...(generated.quality ? {quality: generated.quality} : {}),
         label: attempt ? 'Alternative photo for review' : 'Generated photo', photoReview: {status: 'pending', flowId: id, attempt}},
     }});
   }
