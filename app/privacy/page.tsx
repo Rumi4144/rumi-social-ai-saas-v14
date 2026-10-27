@@ -18,6 +18,15 @@ export default function PrivacyPage() {
         third-party services that users explicitly connect.
       </p>
 
+      <p>
+        We record sign-in and sign-out times, recent activity times, the current
+        workspace, and estimated active time in Rumi. Authorized platform
+        administrators can view these records for account support, service
+        administration, and security. Activity estimates use whether a Rumi tab
+        is active and how recently it was used; they do not record the contents
+        of keystrokes or activity on other websites.
+      </p>
+
       <h2>2. Social Media Connections</h2>
       <p>
         When you connect services such as Instagram, YouTube, TikTok, Facebook,

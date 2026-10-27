@@ -139,3 +139,16 @@ body.authenticated>main{margin-left:250px;width:calc(100% - 250px);max-width:150
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 /* Native workflow controls receive the same finish as named buttons. */
 main button:not(.button):not(.mobile-menu-toggle){font:inherit;min-height:38px;border:1px solid #ccdcd6;border-radius:9px;padding:9px 13px;background:#fff;color:#174b40;max-width:100%;white-space:normal}main button:not(.button):hover:not(:disabled){border-color:#8ebfac;background:#eff8f3}main input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),main select,main textarea{font:inherit;color:var(--rumi-ink);border:1px solid #ccdcd6;border-radius:9px;padding:10px 12px;max-width:100%;min-width:0}main input[type=file]{padding:8px}main table{width:100%;border-collapse:collapse;font-size:13px}main th{text-align:left;color:var(--rumi-muted);background:#edf5f1}main td,main th{padding:12px;border-bottom:1px solid var(--rumi-line)}main pre{max-width:100%;overflow-x:auto}main code{overflow-wrap:anywhere}.application-sidebar button{font:inherit;color:var(--rumi-muted)}
+/* Master Admin activity history */
+.activity-search{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.activity-search label{display:grid;gap:7px;flex:1;min-width:200px;max-width:520px;font-weight:600}
+.activity-search input{width:100%;padding:12px;border:1px solid #c9d9d6;border-radius:8px;font:inherit}
+.activity-explanation{font-size:14px;line-height:1.6;color:#536c69;max-width:1000px}
+.activity-table-wrap{overflow-x:auto;margin:24px 0}
+.user-activity table{width:100%;border-collapse:collapse;min-width:850px;text-align:left}
+.user-activity th,.user-activity td{padding:16px 12px;border-bottom:1px solid #dce5e2;vertical-align:top}
+.user-activity th{font-size:13px;background:#f3f7f5}
+.user-activity td{font-size:14px;overflow-wrap:anywhere;max-width:300px}
+.user-activity small{display:block;margin-top:6px;color:#536c69;line-height:1.4}
+.activity-status{display:inline-block;white-space:nowrap;padding:5px 10px;border-radius:16px;color:#173b32;font-size:13px;font-weight:700}
+.activity-pagination{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}

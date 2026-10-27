@@ -6,6 +6,7 @@ import { tenantContext } from "@/lib/auth/context";
 import SignOutButton from "@/components/SignOutButton";
 import ScrollToTop from "@/components/ScrollToTop";
 import MobileNavigation from "@/components/MobileNavigation";
+import ActivityTracker from "@/components/ActivityTracker";
 export const metadata = {
   title: "Rumi Social AI",
   description: "AI campaign operating system",
@@ -43,6 +44,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={session?.user ? "authenticated" : "public-page"}>
+        {userId && <ActivityTracker userId={String(userId)} />}
         {session?.user && (
         <MobileNavigation>
           <div className="logo">

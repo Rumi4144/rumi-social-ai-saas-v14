@@ -113,6 +113,12 @@ export default async function AdminPage() {
         ))}
       </div>
 
+      <section className="card" style={{ marginTop: 24 }}>
+        <h2>User Activity</h2>
+        <p>See recent sign-ins, last activity and estimated active time.</p>
+        <Link className="button" href="/admin/activity">View User Activity</Link>
+      </section>
+
       <AdminCreateOrganization />
 
       <AdminOrganizationGrid organizations={organizations} />
