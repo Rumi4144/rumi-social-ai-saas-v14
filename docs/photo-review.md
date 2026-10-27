@@ -45,3 +45,11 @@ New review responses must include `anatomy`, `anatomyEvidence`, `objectInteracti
 Campaign and new reel generation prompts favor simple credible poses, coherent fingers/joints/nails and realistic contact with objects. Product detail concepts avoid gratuitous hands; explicit hands/playing requests are preserved. Already-started reel requests keep their frozen prompt so resuming them does not change a provider purchase.
 
 The automated tests verify rejection decisions and bounded retries using fixture verdicts. They do not establish the vision model's detection accuracy on real photographs. A manual final check is still needed; this change does not repair existing image pixels.
+
+## Brighter campaign direction
+
+New campaign photos and reel scenes use shared daylight/mood guidance: open shadows, readable subjects, natural material colors and restrained brand accents. Automatic treatments no longer request cinematic shadows or deep luxury tones. Explicit evening/stage requests and solemn occasions retain their intended atmosphere. Existing pending scene requests keep their frozen prompts.
+
+The seven showcase layouts use light surroundings with dark readable text; the geometric layout gives the complete photo a larger rectangular area. Automatic variety selects from Modern Gradient, Framed Editorial, Geometric Focus and Gallery Story. Explicit style choices remain honored, including the legacy Classic photo overlay. Saved creative files are not overwritten; a user must render a new design to apply the layout changes to an existing post. This change does not edit source photo pixels or change the production image provider.
+
+`tests/brand-template-contrast.test.cjs` checks actual headline/background contrast across dark, pale and saturated brand colors. Existing showcase and browser checks cover formats, original photo preservation, saved-style selection and no writes during preview.

@@ -1,0 +1,4 @@
+export const PHOTO_LIGHTING_DIRECTION = `LIGHT AND MOOD
+Default to bright, welcoming commercial photography: generous natural daylight, open shadows, clear midtones, lifelike skin and fresh, believable color. Preserve detail in highlights and keep the subject well exposed. Avoid a gloomy, gray, brown or heavy teal cast, artificial HDR, washed-out whites and excessive saturation.
+Use the brand palette in small accents rather than tinting skin, the whole room or the entire image. Let real materials keep their natural colors. Choose inviting settings, readable action and an emotionally appropriate expression; do not force smiles or staged celebration.
+Explicit evening, stage, dramatic or low-light requests and solemn occasions take precedence over the daylight default. In those scenes keep the important subject readable and preserve the requested atmosphere. Brightness must never change the client's product, the requested subject or the meaning of the post.`;

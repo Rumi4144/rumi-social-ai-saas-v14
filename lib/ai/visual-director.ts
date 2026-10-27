@@ -1,6 +1,7 @@
 import { buildVisualConcept, buildVisualPlanPrompt, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "./visual-plan";
 import { occasionVisualConcept } from "./occasion";
 import { PHOTO_REALISM_DIRECTION } from "./photo-realism";
+import { PHOTO_LIGHTING_DIRECTION } from "./photo-lighting";
 
 type BrandVisualInput = {
   name: string;
@@ -40,19 +41,19 @@ const treatments = [
       "Use fresh natural light, optimistic color, authentic environments, energetic depth, and an inviting contemporary lifestyle feeling.",
   },
   {
-    name: "Cinematic",
+    name: "Daylight Depth",
     direction:
-      "Use cinematic directional lighting, dimensional shadows, atmospheric depth, rich color separation, and a strong visual focal point.",
+      "Use generous directional daylight, soft open shadows, dimensional depth, fresh color separation, and a clear visual focal point.",
   },
   {
     name: "Brand-Dominant",
     direction:
-      "Let the brand palette strongly influence accents, lighting, surfaces, wardrobe, or environment while maintaining natural photographic realism.",
+      "Use the brand palette for a few deliberate accents in clothing, props or the environment. Keep the setting bright and natural; preserve lifelike skin and material colors.",
   },
   {
-    name: "Rich Luxury",
+    name: "Refined Daylight",
     direction:
-      "Use refined materials, deep tonal range, premium lighting, elegant contrast, restrained richness, and sophisticated commercial art direction.",
+      "Show refined materials in airy natural light, with tactile detail, open shadows, elegant composition and subtle brand accents. Quality should feel welcoming and attainable.",
   },
   {
     name: "Dynamic Contrast",
@@ -77,8 +78,8 @@ const compositions = [
   "dynamic off-center composition with layered depth",
   "close-up or detail-led composition with dramatic visual texture",
   "wide lifestyle composition with natural movement",
-  "architectural composition using light, shadow and geometry",
-  "cinematic perspective with foreground, subject and background separation",
+  "architectural composition using daylight, gentle shadow and geometry",
+  "layered perspective with foreground, subject and background separation",
   "minimal hero composition with one memorable visual idea",
 ];
 
@@ -141,6 +142,8 @@ Message/headline: ${headline || "none"}
 VISUAL TREATMENT
 Treatment: ${treatment.name}
 ${treatment.direction}
+
+${PHOTO_LIGHTING_DIRECTION}
 
 COMPOSITION
 Use ${composition}.

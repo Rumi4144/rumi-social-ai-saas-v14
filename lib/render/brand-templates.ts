@@ -1,19 +1,16 @@
 import type { SocialSvgInput } from './svg';
+import {lightBrandPalette} from './light-palette';
 
 export const BRAND_TEMPLATES = [
   { value: 'modern-gradient', label: 'Modern Gradient', description: 'Luminous brand colors, a spacious headline and a hero photograph.' },
   { value: 'framed-editorial', label: 'Framed Editorial', description: 'A crisp magazine layout with a framed photo and a clear call to action.' },
-  { value: 'geometric-focus', label: 'Geometric Focus', description: 'Layered geometric shapes around a central photograph.' },
+  { value: 'geometric-focus', label: 'Geometric Focus', description: 'A large photograph, playful color accents and a clear headline.' },
 ] as const;
 export type BrandTemplate = typeof BRAND_TEMPLATES[number]['value'];
 export function isBrandTemplate(value: string): value is BrandTemplate { return BRAND_TEMPLATES.some(t => t.value === value); }
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]!));
 const hex = (s: string | undefined, fallback: string) => /^#[a-f0-9]{6}$/i.test(s || '') ? s! : fallback;
 const rgb = (color: string) => color.slice(1).match(/../g)!.map(v => parseInt(v, 16));
-function mix(a: string, b: string, weight: number) {
-  const first = rgb(a), second = rgb(b);
-  return '#' + first.map((v, i) => Math.round(v * (1 - weight) + second[i] * weight).toString(16).padStart(2, '0')).join('');
-}
 function luminance(color: string) {
   const channels = rgb(color).map(v => { const s = v / 255; return s <= .04045 ? s / 12.92 : ((s + .055) / 1.055) ** 2.4; });
   return .2126 * channels[0] + .7152 * channels[1] + .0722 * channels[2];
@@ -62,9 +59,7 @@ export function renderBrandTemplate(input: SocialSvgInput, style: BrandTemplate)
   const square = h === 1080, story = h === 1920;
   const primary = hex(input.primaryColor, '#172846'), accent = hex(input.accentColor, '#bd408d');
   const secondary = hex(input.secondaryColor, '#f5f1eb');
-  const base = luminance(primary) > .16 ? mix(primary, '#071022', .72) : primary;
-  const dark = mix(base, '#071022', .52), paper = mix(secondary, '#ffffff', .90);
-  const foreground = style === 'framed-editorial' ? dark : '#ffffff';
+  const {ink: foreground, paper, tint: base} = lightBrandPalette(primary, accent, secondary);
   const margin = 76, width = 928;
   // Story layouts reserve top/bottom breathing room for social app controls.
   const top = story ? 160 : 52, bottom = story ? 170 : 62;
@@ -83,21 +78,15 @@ export function renderBrandTemplate(input: SocialSvgInput, style: BrandTemplate)
   const cta = fit(input.cta || 'Learn more', 726, 1, 31, 22, true);
   const buttonY = h - bottom - 84;
   const button = `<rect x="${margin}" y="${buttonY}" width="${width}" height="84" rx="${style === 'framed-editorial' ? 3 : 22}" fill="${accent}"/>${text(cta.lines[0], 122, buttonY + 52, cta.size, inkOn(accent), { bold: true, width: 726 })}<path d="M934 ${buttonY + 42}h24m-9-9 9 9-9 9" fill="none" stroke="${inkOn(accent)}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
-  const photo = (x: number, y: number, w: number, height: number, radius = 20) => `<rect x="${x}" y="${y}" width="${w}" height="${height}" rx="${radius}" fill="${style === 'framed-editorial' ? mix(primary, '#ffffff', .94) : mix(base, '#ffffff', .09)}"/>${input.imageUrl ? `<image href="${esc(input.imageUrl)}" x="${x + 14}" y="${y + 14}" width="${w - 28}" height="${height - 28}" preserveAspectRatio="xMidYMid meet"/>` : ''}`;
+  const photo = (x: number, y: number, w: number, height: number, radius = 20) => `<rect x="${x}" y="${y}" width="${w}" height="${height}" rx="${radius}" fill="#ffffff"/>${input.imageUrl ? `<image href="${esc(input.imageUrl)}" x="${x + 10}" y="${y + 10}" width="${w - 20}" height="${height - 20}" preserveAspectRatio="xMidYMid meet"/>` : ''}`;
   let artwork = '', copy = '';
-  const defs = `<defs><linearGradient id="brand-gradient" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${base}"/><stop offset="1" stop-color="${dark}"/></linearGradient><radialGradient id="brand-glow"><stop stop-color="${accent}" stop-opacity=".58"/><stop offset="1" stop-color="${accent}" stop-opacity="0"/></radialGradient></defs>`;
+  const defs = `<defs><linearGradient id="brand-gradient" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${paper}"/><stop offset="1" stop-color="${base}"/></linearGradient><radialGradient id="brand-glow"><stop stop-color="${accent}" stop-opacity=".14"/><stop offset="1" stop-color="${accent}" stop-opacity="0"/></radialGradient></defs>`;
   if (style === 'geometric-focus') {
     const title = fit(input.headline, width, square ? 2 : 3, square ? 62 : 76, 42, true);
     const detail = fit(input.subheadline || '', width - 48, square ? 2 : 3, 29, 24);
     const titleY = buttonY - 34 - title.height - (detail.height ? detail.height + 20 : 0);
     const photoTop = top + 145, available = titleY - photoTop - 26;
-    const diameter = Math.min(story ? 800 : 690, available);
-    const cy = photoTop + available / 2, radius = diameter / 2;
-    artwork = `<path d="M810 0h270v${h}H810Z" fill="${accent}" opacity=".10"/><path d="M0 ${cy}h1080M810 0v${h}" stroke="#ffffff" stroke-opacity=".11"/>${[[ -radius * .28, -radius * .10, accent ], [radius * .22, -radius * .16, '#77c6dc'], [radius * .24, radius * .18, secondary], [-radius * .20, radius * .24, accent]].map(([dx, dy, color]) => `<circle cx="${540 + Number(dx)}" cy="${cy + Number(dy)}" r="${radius * .94}" fill="${color}" opacity=".22"/>`).join('')}<circle cx="540" cy="${cy}" r="${radius}" fill="${mix(base, '#ffffff', .08)}" stroke="#ffffff" stroke-opacity=".32" stroke-width="2"/>`;
-    // Inscribing the image inside the circle preserves the complete supplied photo.
-    const inset = diameter * .71;
-    if (input.imageUrl) artwork += `<image href="${esc(input.imageUrl)}" x="${540 - inset / 2}" y="${cy - inset / 2}" width="${inset}" height="${inset}" preserveAspectRatio="xMidYMid meet"/>`;
-    artwork += `<path d="M${540 - radius - 45} ${cy - radius * .4}v-42h42M${540 + radius + 45} ${cy + radius * .4}v42h-42" fill="none" stroke="${accent}" stroke-width="4"/>`;
+    artwork = `<circle cx="1000" cy="${photoTop + 60}" r="190" fill="${accent}" opacity=".14"/><path d="M0 ${photoTop + available - 130}l190 130L0 ${photoTop + available + 130}Z" fill="${primary}" opacity=".08"/>${photo(margin, photoTop, width, available, 24)}<path d="M58 ${photoTop + 70}v-82h82M1022 ${photoTop + available - 70}v82h-82" fill="none" stroke="${accent}" stroke-width="4"/>`;
     copy = block(title, 540, titleY, foreground, true, true) + block(detail, 540, titleY + title.height + 20, foreground, false, true);
   } else {
     const editorial = style === 'framed-editorial';
