@@ -28,7 +28,11 @@ export function reelPhotoMatchesProduct(subject: string | undefined, asset: { ur
   if (!matchingWebsitePhoto({ topics: [subject] }, [evidence], [evidence.imageUrl])) return false;
   // Model codes alone are not globally unique: Ramirez A1 is not another maker's A1.
   const source = new Set(words(`${evidence.title} ${evidence.sourceUrl || evidence.imageUrl}`));
-  const distinctive = words(subject).filter(word=>word.length > 2 && !generic.has(word));
+  // A reel title can append “in motion” to the product name. That describes the
+  // edit, not a different model. Strip only known trailing presentation phrases
+  // after a model code; keep manufacturer words and the exact code checks above.
+  const identity = namedCodes(subject).length ? subject.replace(/\s+(?:in motion|in action|in focus|up close|at a glance)[.!?]?\s*$/i, "") : subject;
+  const distinctive = words(identity).filter(word=>word.length > 2 && !generic.has(word));
   return distinctive.length > 0 && distinctive.every(word=>source.has(word));
 }
 

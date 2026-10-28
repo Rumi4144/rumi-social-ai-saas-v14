@@ -16,6 +16,14 @@ test('canonical topic protects a product even when its creative headline does no
  assert.deepEqual(Array.from(result.sources,s=>s.id),['right']);assert.equal(result.project.productSubject,'Ramirez Inspired A1 Guitar');
  const jose='Jose Luis Romanillos inspired Guitar by Rumi';assert.ok(helpers.reelPhotoMatchesProduct(jose,{metadata:{sourceEvidence:evidence(jose,'jose-luis-romanillos-inspired-guitar-by-rumi')}}));assert.equal(helpers.reelPhotoMatchesProduct(jose,{metadata:{sourceEvidence:wrong}}),false);
 });
+test('a creative In Motion suffix does not reject an otherwise exact model and maker',()=>{
+ const title='Meet the Martinez MF-17 in Motion';
+ const mf17=evidence('Martinez MF-17 Flamenco Guitar','martinez-mf-17-flamenco-guitar');
+ assert.equal(helpers.reelPhotoMatchesProduct(title,{metadata:{sourceEvidence:mf17}}),true);
+ assert.equal(helpers.reelPhotoMatchesProduct(title,{metadata:{sourceEvidence:evidence('Martinez MS-14R','martinez-ms-14r')}}),false);
+ assert.equal(helpers.reelPhotoMatchesProduct(title,{metadata:{sourceEvidence:evidence('Another Maker MF-17','another-maker-mf-17')}}),false);
+ assert.equal(helpers.reelPhotoMatchesProduct('In Motion A1',{metadata:{sourceEvidence:evidence('Another Maker A1','another-maker-a1')}}),false);
+});
 test('generic service and collection posts retain semantic planning; prompts cannot verify named products',()=>{
  assert.equal(helpers.reelProductSubject({headline:'Notice your breathing'},{name:'Master Mind'}),undefined);assert.equal(helpers.reelProductSubject({headline:'Explore our classical guitars'},brand),undefined);
  assert.equal(helpers.reelPhotoMatchesProduct(post.headline,{url:'saved-photo:unknown',metadata:{label:post.headline,userSelected:true}}),false);
@@ -31,6 +39,12 @@ test('editor loading hides wrong photos and does not automatically select an old
 test('importing another product page is rejected before any image write',async()=>{
  let writes=0;const api=load('app/api/reels/photos/route.ts',{'next/server':{NextResponse:{json}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'org',role:'owner'})},'@/lib/prisma':{prisma:{contentItem:{findFirst:async()=>({...post,campaign:{brand:{...brand,websiteUrl:brand.website,products:[]}}})},mediaAsset:{upsert:async()=>{writes++;}}}},'@/lib/reels/public-fetch':{fetchPublicBytes:async()=>({contentType:'text/html',bytes:Buffer.from('<h1>Martinez Performer MS-14R</h1><div class="woocommerce-product-gallery"><img src="/martinez.jpg"></div>')})}});
  const r=await api.POST({json:async()=>({campaignId:'camp',contentItemId:post.id,url:wrong.sourceUrl})});assert.equal(r.status,400);assert.equal(writes,0);assert.match(r.body.error,/does not match/);
+});
+test('the live-style Martinez post imports its exact gallery despite the In Motion presentation suffix',async()=>{
+ let writes=0;const title='Meet the Martinez MF-17 in Motion';
+ const api=load('app/api/reels/photos/route.ts',{'next/server':{NextResponse:{json}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'org',role:'owner'})},'@/lib/prisma':{prisma:{contentItem:{findFirst:async()=>({...post,headline:title,campaign:{brand:{...brand,websiteUrl:brand.website,products:[]}}})},mediaAsset:{upsert:async()=>{writes++;}}}},'@/lib/reels/public-fetch':{fetchPublicBytes:async()=>({contentType:'text/html',bytes:Buffer.from('<h1>Martinez MF-17 Flamenco Guitar</h1><div class="woocommerce-product-gallery"><img src="/mf17-front.jpg"><img src="/mf17-detail.jpg"></div>')})}});
+ const r=await api.POST({json:async()=>({campaignId:'camp',contentItemId:post.id,url:'https://shop.example/product/martinez-mf-17-flamenco-guitar/'})});
+ assert.equal(r.status,200);assert.equal(writes,2);assert.equal(r.body.sources.length,2);
 });
 
 test('older cached product drafts cannot restore unverified sources',()=>{
