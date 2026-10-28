@@ -92,6 +92,14 @@ function drawFrame(ctx: CanvasRenderingContext2D, project: ReelProject, media: R
     text(ctx, scene.detail, 64, alternate ? titleY + height + 20 : 1560, 36, 952, "#ffffff", 2);
     ctx.fillStyle = accent; ctx.beginPath(); ctx.roundRect(64, 1760, 952, 110, 28); ctx.fill();
     text(ctx, project.cta, 540, 1832, 38, 840, accentInk, 1, "center");
+  } else if (project.style === "footage") {
+    ctx.fillStyle = "#f8f5ef"; ctx.fillRect(0, 0, W, H);
+    picture(ctx, media[frame.index], 0, 0, W, H, frame.progress, true);
+    if (scene.headline.trim() || scene.detail.trim()) {
+      ctx.fillStyle = "rgba(248,245,239,.94)"; ctx.beginPath(); ctx.roundRect(70, 1580, 940, 230, 20); ctx.fill();
+      text(ctx, scene.headline, 105, 1660, 46, 870, "#18362f", 1);
+      text(ctx, scene.detail, 105, 1735, 30, 870, "#18362f", 1);
+    }
   } else if (project.style === "cinematic") {
     picture(ctx, media[frame.index], 0, 0, W, H, frame.progress);
     const shade = ctx.createLinearGradient(0, 800, 0, H); shade.addColorStop(0, "rgba(0,0,0,0)"); shade.addColorStop(.45, "rgba(0,0,0,.58)"); shade.addColorStop(1, "rgba(0,0,0,.92)"); ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);

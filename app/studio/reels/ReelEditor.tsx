@@ -13,7 +13,7 @@ import PhotoLibraryPicker from "./PhotoLibraryPicker";
 import SchedulePostButton from "@/components/SchedulePostButton";
 import { DEFAULT_MUSIC_VOLUME, musicSettings, prepareMusic, type MusicChoice } from "@/lib/reels/music";
 import styles from "./ReelEditor.module.css";
-import { appendScenes, mergeSources, restoreLibrary, uploadSelection, replaceScenePhoto, selectReelSource, hasRoomForReelSource, selectThreeReelPhotos } from "@/lib/reels/source-library";
+import { savedClipPath, appendScenes, mergeSources, restoreLibrary, uploadSelection, replaceScenePhoto, selectReelSource, hasRoomForReelSource, selectThreeReelPhotos } from "@/lib/reels/source-library";
 import {reelDraftKey,selectedPostProject,matchingDraft,type ReelSource} from "@/lib/reels/post-context";
 import { reelOperationIsCurrent, autoPlanMatches, automaticMusic, type AutoReelPlan } from "@/lib/reels/automatic";
 type Source = ReelSource;
@@ -37,6 +37,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const [musicStyle, setMusicStyle] = useState<MusicChoice>("ambient"), [musicVolume, setMusicVolume] = useState(DEFAULT_MUSIC_VOLUME);
   const [loadingPhotos, setLoadingPhotos] = useState(false), [photoMessage, setPhotoMessage] = useState(""), [productUrl, setProductUrl] = useState("");
   const photoController = useRef<AbortController | undefined>(undefined);
+  const [clipUrl, setClipUrl] = useState("");
   const [rendering, setRendering] = useState(false);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [progress, setProgress] = useState(0), [previewing, setPreviewing] = useState(false);
   const [rendered, setRendered] = useState<Blob>(), [downloadUrl, setDownloadUrl] = useState(""), [savedAsset, setSavedAsset] = useState("");
@@ -145,6 +146,28 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     setSources(old => mergeSources(old, added));
     setProject(old => added.reduce((next, source) => selectReelSource(next, source, () => crypto.randomUUID()), old));
     setPhotoMessage(`${added.length} file${added.length === 1 ? "" : "s"} added. Up to 6 scenes can be used in one reel.${invalid > 0 ? " Some files were skipped: choose JPEG, PNG, WebP, MP4 or WebM up to 100 MB each." : ""}${overflow > 0 ? " The photo library holds up to 30 items." : ""}`);
+  }
+  async function importSavedClip() {
+    if (!clipUrl.trim() || busy || !contentItemId) return;
+    const key = selection.current;
+    setBusy(true); setPhotoMessage("Opening your saved clip…");
+    const video = document.createElement("video");
+    try {
+      if (sources.length >= 30) throw new Error("The media library holds up to 30 items.");
+      const src = savedClipPath(clipUrl.trim(), window.location.origin);
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => { video.onloadeddata = null; video.onerror = null; reject(new Error("The clip took too long to open. Check its saved link.")); }, 20000);
+        video.preload = "auto"; video.muted = true;
+        video.onloadeddata = () => { clearTimeout(timer); video.videoWidth > 0 && Number.isFinite(video.duration) && video.duration > 0 ? resolve() : reject(new Error("Choose a saved video with a visible picture.")); };
+        video.onerror = () => { clearTimeout(timer); reject(new Error("This video is not available in your workspace.")); };
+        video.src = src; video.load();
+      });
+      if (!reelOperationIsCurrent(key, selection.current)) return;
+      const source: Source = { id: crypto.randomUUID(), src, kind: "video", contentItemId, label: `Saved clip ${sources.filter(s=>s.kind === "video").length + 1}`, seconds: Math.max(1, Math.min(5, Math.round(video.duration))) };
+      setSources(old=>mergeSources(old,[source])); setProject(old=>selectReelSource(old,source,()=>crypto.randomUUID())); setClipUrl("");
+      setPhotoMessage("Saved clip added. Review its picture and scene length below.");
+    } catch (error) { if (reelOperationIsCurrent(key, selection.current)) setPhotoMessage(error instanceof Error ? error.message : "Could not open this clip."); }
+    finally { video.onloadeddata = null; video.onerror = null; video.pause(); video.removeAttribute("src"); video.load(); setBusy(false); }
   }
   async function loadProductPhotos() {
     photoController.current?.abort();
@@ -289,6 +312,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
         <button type="button" disabled={loadingPhotos} onClick={loadProductPhotos}>{loadingPhotos ? "Loading photos…" : "Load product photos"}</button>
         <details><summary>Choose a product page</summary><label>Product page address<input type="url" placeholder="https://your-website.com/product/…" value={productUrl} onChange={event => setProductUrl(event.target.value)} /></label><p className={styles.hint}>Use this brand’s website. Leave blank to find the product link in the selected post.</p></details>
         <label>Upload photos or presenter clips<input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={event => { importFiles(event.target.files); event.target.value = ""; }} /></label>
+        <details><summary>Add an existing Rumi video</summary><label>Saved Rumi video link<input type="url" value={clipUrl} onChange={event=>setClipUrl(event.target.value)} placeholder="Paste a video link from Creative Studio or AI Test Lab"/></label><button type="button" disabled={busy || !clipUrl.trim()} onClick={()=>void importSavedClip()}>Add saved clip</button><p className={styles.hint}>Reuse a finished clip without downloading, uploading or generating it again.</p></details>
         <p role="status" className={styles.hint}>{photoMessage}</p>
         <p role="status">{selectedSources.size} photos or clips selected · {project.scenes.length} of 6 scenes</p>
         {project.scenes.length >= 6 && <p className={styles.hint}>{hasSelectionRoom ? "Selecting another photo replaces a repeated picture and keeps the scene’s text and timing." : "All 6 scenes use different photos or clips. Uncheck one to choose another."}</p>}

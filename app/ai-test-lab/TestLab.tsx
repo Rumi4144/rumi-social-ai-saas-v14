@@ -22,10 +22,10 @@ async function request(path: string, body?: object) {
   return result;
 }
 type CampaignOption = { id: string; title: string; items: { id: string; headline: string | null; caption: string | null }[] };
-export default function TestLab({ workspaceName, presenterMode = false, campaigns = [], initialCampaignId = "", initialContentItemId = "", initialModel }: { initialModel?: "flare-medium"|"flare-high"|"flux"|"infinitetalk"|"kling"|"veo"; workspaceName: string; presenterMode?: boolean; campaigns?: CampaignOption[]; initialCampaignId?: string; initialContentItemId?: string }) {
+export default function TestLab({ workspaceName, presenterMode = false, campaigns = [], initialCampaignId = "", initialContentItemId = "", initialModel, initialVeoMode = "presenter" }: { initialVeoMode?: "presenter"|"scene"; initialModel?: "flare-medium"|"flare-high"|"flux"|"infinitetalk"|"kling"|"veo"; workspaceName: string; presenterMode?: boolean; campaigns?: CampaignOption[]; initialCampaignId?: string; initialContentItemId?: string }) {
   const veoDirection = 'The presenter stands holding the product from reference image 2. Friendly, natural English delivery. Say: "Discover something special. Take a closer look at the details, and find out more today."';
   const veoSceneDirection = "A slow camera push-in on this exact guitar, securely supported beside a bright window. Warm natural daylight, pale neutral surroundings, soft open shadows and inviting wood tones. Preserve the whole instrument and its details. No people, hands or text.";
-  const [veoMode, setVeoMode] = useState<"presenter" | "scene">("presenter");
+  const [veoMode, setVeoMode] = useState<"presenter" | "scene">(presenterMode ? "presenter" : initialVeoMode);
   const initialCampaign = campaigns.find(item => item.id === initialCampaignId);
   const initialPost = initialCampaign?.items.find(item => item.id === initialContentItemId);
   const [campaignId, setCampaignId] = useState(initialCampaign?.id || "");
@@ -34,7 +34,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
   const campaignContext = presenterMode && campaignId && postId ? { campaignId, contentItemId: postId } : {};
   const [lab, setLab] = useState<Lab | null>(null), [model, setModel] = useState<Model["id"]>(initialModel || (presenterMode ? "infinitetalk" : "flux"));
   const sceneMode = model === "veo" && veoMode === "scene";
-  const [prompt, setPrompt] = useState(initialModel === "veo" ? veoDirection : presenterMode || initialModel === "infinitetalk" || initialModel === "kling" ? DEFAULT_PRESENTER_DIRECTION : ""), [quote, setQuote] = useState<Quote | null>(null);
+  const [prompt, setPrompt] = useState(initialModel === "veo" ? (veoMode === "scene" ? veoSceneDirection : veoDirection) : presenterMode || initialModel === "infinitetalk" || initialModel === "kling" ? DEFAULT_PRESENTER_DIRECTION : ""), [quote, setQuote] = useState<Quote | null>(null);
   const [image, setImage] = useState<PhotoInput | null>(null), [audio, setAudio] = useState<{ id: string; name: string } | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [acknowledge, setAcknowledge] = useState(false);
   const [voiceMode, setVoiceMode] = useState<"text" | "upload">("text");
@@ -46,6 +46,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
   const [voiceSpeed, setVoiceSpeed] = useState(1);
   const [gallerySelection,setGallerySelection]=useState<number|null>(null);
   const [product, setProduct] = useState<PhotoInput | null>(null);
+  const [productUrl, setProductUrl] = useState("");
   const [presenterSource,setPresenterSource]=useState<PhotoInput|null>(null);
   const [holdingPose,setHoldingPose]=useState<"guitar"|"guitar-standing-strum"|"reference">("guitar");
   const [besideProduct,setBesideProduct]=useState(false);
@@ -143,6 +144,16 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
     } catch (error) { setMessage((error as Error).message); return false; }
     finally { setBusy(false); }
   }
+  async function importProduct() {
+    if (!lab || busy) return;
+    invalidate(); setBusy(true); setMessage("Importing the original product photo…");
+    try {
+      const result = await request("/api/ai-lab/upload", { action: "import", organizationId: lab.organizationId, url: productUrl.trim() });
+      setProduct({ id: result.assetId, name: result.name }); resetPreparedProduct(); await reload();
+      setMessage("Original product photo ready. No paid generation has started.");
+    } catch (error) { setMessage((error as Error).message); }
+    finally { setBusy(false); }
+  }
   async function estimate(target: Model["id"] = model) {
     if (!lab) return; if(target === "speech" && !voiceId){setMessage("Choose a female or male voice before getting an estimate.");return;} setBusy(true); setMessage(""); invalidate();
     try {
@@ -216,7 +227,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
         {selected && !selected.configured && <div className={styles.setup}><strong>Connect this provider first</strong><p>Your administrator needs to add this provider’s API key and enable private sample storage. A website subscription alone does not connect the API.</p><details><summary>Administrator setup</summary><p>Add <code>{model === "flux" ? "BFL_API_KEY" : isFlare(model) ? "OPENAI_API_KEY" : "WAVESPEED_API_KEY"}</code> and <code>BLOB_READ_WRITE_TOKEN</code> in the hosting settings. Never paste keys into this page or a prompt.</p></details></div>}
         {presenterMode && <><label htmlFor="presenter-engine">Presenter video model</label><select id="presenter-engine" value={model} disabled={busy} onChange={e=>chooseModel(e.target.value as Model["id"])}>{(lab?.models || []).filter(item=>item.kind === "video").map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>{model === "kling" && <p>Kling Avatar comparison · published video estimate $0.75 for 15 seconds, voice extra. The live estimate uses your recording length. Quality and guitar accuracy need review; this animates one prepared photo and does not combine separate presenter and guitar references.</p>}</>}
         {model === "veo" && <div className={styles.uploads}>
-          {!presenterMode && <><label htmlFor="veo-mode">Veo video style</label><select id="veo-mode" value={veoMode} disabled={busy} onChange={e=>{const next=e.target.value as "presenter"|"scene";setVeoMode(next);setPrompt(next === "scene" ? veoSceneDirection : veoDirection);invalidate();}}><option value="presenter">Presenter holding a product</option><option value="scene">Cinematic product scene · no people</option></select></>}
+          {!presenterMode && <><label htmlFor="veo-mode">Veo video style</label><select id="veo-mode" value={veoMode} disabled={busy} onChange={e=>{const next=e.target.value as "presenter"|"scene";setVeoMode(next);setPrompt(next === "scene" ? veoSceneDirection : veoDirection);invalidate();const url=new URL(window.location.href);url.searchParams.set("model","veo");url.searchParams.set("veoMode",next);window.history.replaceState(null,"",url);}}><option value="presenter">Presenter holding a product</option><option value="scene">Cinematic product scene · no people</option></select></>}
           <h2>2. {sceneMode ? "Original product photo" : "Original presenter and product photos"}</h2>
           {sceneMode ? <p>One silent 8-second, 720p vertical product scene. Use an original product photo and describe the camera movement and light. Add the same music to your comparison reels during editing. Review the guitar details before using the result.</p> : <>
           <p>One 8-second, 720p vertical video with generated speech and sound. Both original photos go directly to Veo; no holding-photo generation is needed. Product accuracy, hands and pronunciation need review. Your saved voice is not used.</p>
@@ -225,6 +236,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
           <label htmlFor="veo-presenter">Saved original presenter</label><select id="veo-presenter" value={image?.needsReview ? "" : image?.id || ""} disabled={busy} onChange={e=>{setImage(lab?.inputs?.find(item=>item.id===e.target.value)||null);setGallerySelection(null);invalidate();}}><option value="">Choose original presenter</option>{lab?.inputs?.filter(item=>!item.needsReview).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>
           </>}
           <label>Original product photo<input aria-label="Original product photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || !selected?.configured} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file,"product");}}/><small>{product?.name || "JPEG, PNG or WebP · up to 10 MB"}</small></label>
+          <label htmlFor="product-photo-url">Or import a photo from your website</label><input id="product-photo-url" type="url" value={productUrl} placeholder="https://your-website.com/product-photo.jpg" disabled={busy} onChange={e=>setProductUrl(e.target.value)}/><button type="button" disabled={busy || !selected?.configured || !productUrl.trim()} onClick={()=>void importProduct()}>Import original photo</button><small>Paste a direct image link from your brand website. Importing does not start a paid generation.</small>
           <label htmlFor="veo-product">Saved original product</label><select id="veo-product" value={product?.needsReview ? "" : product?.id || ""} disabled={busy} onChange={e=>{setProduct(lab?.inputs?.find(item=>item.id===e.target.value)||null);invalidate();}}><option value="">Choose original product</option>{lab?.inputs?.filter(item=>!item.needsReview).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>
         </div>}
         {(model === "infinitetalk" || model === "kling") && <div className={styles.uploads}>

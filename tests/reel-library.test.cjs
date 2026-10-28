@@ -89,3 +89,11 @@ test('library marks flagged photos for manual review and automatic three-photo s
  const lib=load('lib/reels/source-library.ts');const project={scenes:[],closingSeconds:3};
  const chosen=lib.selectThreeReelPhotos(project,response.body.sources,()=>Math.random().toString());assert.ok(chosen.scenes.every(scene=>scene.src!==response.body.sources[0].src));
 });
+
+test('saved clip links are restricted to private Rumi video endpoints and strip download parameters',()=>{
+ const {savedClipPath}=load('lib/reels/source-library.ts');
+ assert.equal(savedClipPath('https://app.test/api/video/file?jobId=abc-123&download=1','https://app.test'),'/api/video/file?jobId=abc-123');
+ assert.equal(savedClipPath('/api/ai-lab/file?jobId=veo1','https://app.test'),'/api/ai-lab/file?jobId=veo1');
+ assert.equal(savedClipPath('/api/video/media/saved1?download=1','https://app.test'),'/api/video/media/saved1');
+ for(const url of ['https://evil.test/api/video/file?jobId=x','https://a:b@app.test/api/video/file?jobId=x','/api/video/file','/api/video/file?jobId=../secret','/api/admin','javascript:alert(1)','/api/reels/media?assetId=x'])assert.throws(()=>savedClipPath(url,'https://app.test'));
+});

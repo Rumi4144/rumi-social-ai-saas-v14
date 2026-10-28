@@ -1,4 +1,5 @@
 export const REEL_STYLES = [
+  { value: "footage", label: "Clean moving footage", description: "Keep the whole clip visible with its original light and color. Small captions appear only when you add them." },
   { value: "showcase", label: "Cinematic Showcase", description: "Layered photo frames, elegant animated titles, fine accents and smooth transitions. Optional close-ups use the current photo." },
   { value: "boutique", label: "Luxury brand story", description: "Elegant photo frames, oversized editorial headlines and varied scene compositions." },
   { value: "bold", label: "Bold brand story", description: "Strong color panels, large animated headlines and alternating photo layouts." },

@@ -2,6 +2,16 @@ import type { ReelSource } from "./post-context";
 import type { ReelDraft } from "./drafts";
 import type { ReelProject } from "./timeline";
 
+/** Only private Rumi video routes; their endpoints enforce workspace access. */
+export function savedClipPath(value: string, origin: string) {
+  const url = new URL(value, origin);
+  if (url.origin !== new URL(origin).origin || url.username || url.password) throw new Error("Use a saved Rumi video link.");
+  if (/^\/api\/video\/media\/[\w-]{1,150}$/.test(url.pathname)) return url.pathname;
+  const id = url.searchParams.get("jobId");
+  if (!["/api/video/file", "/api/ai-lab/file"].includes(url.pathname) || !id || !/^[\w-]{1,150}$/.test(id)) throw new Error("Use a saved Rumi video link.");
+  return `${url.pathname}?jobId=${encodeURIComponent(id)}`;
+}
+
 export function uploadSelection<T extends { size: number; type: string }>(files: T[], currentCount: number) {
   const valid = files.filter(file => file.size <= 100_000_000 && ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"].includes(file.type));
   const selected = valid.slice(0, Math.max(0, 30 - currentCount));
