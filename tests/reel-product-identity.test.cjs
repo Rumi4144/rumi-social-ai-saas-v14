@@ -46,6 +46,30 @@ test('the live-style Martinez post imports its exact gallery despite the In Moti
  const r=await api.POST({json:async()=>({campaignId:'camp',contentItemId:post.id,url:'https://shop.example/product/martinez-mf-17-flamenco-guitar/'})});
  assert.equal(r.status,200);assert.equal(writes,2);assert.equal(r.body.sources.length,2);
 });
+test('website outages reuse only the exact product page’s saved website gallery',()=>{
+ const {cachedProductGallery}=load('lib/reels/product-photo-cache.ts');
+ const page='https://shop.example/product/martinez-mf-17/';
+ const mf17={imageUrl:'https://shop.example/mf17.jpg',sourceUrl:page,title:'Martinez MF-17'};
+ const cached={kind:'product_photo',url:mf17.imageUrl,metadata:{sourceEvidence:mf17}};
+ assert.equal(cachedProductGallery(page,'Martinez MF-17',[],[cached]).images[0],mf17.imageUrl);
+ assert.equal(cachedProductGallery(page,'Martinez MF-17',[],[{...cached,kind:'ai_image'}]),null);
+ assert.equal(cachedProductGallery(page,'Martinez MS-14R',[],[cached]),null);
+ assert.equal(cachedProductGallery('https://shop.example/product/other/','Martinez MF-17',[],[cached]),null);
+ assert.equal(cachedProductGallery(page,'Martinez MF-17',[{name:'Another Maker MF-17',sourceUrl:page,imageUrl:mf17.imageUrl}],[]),null);
+ assert.equal(cachedProductGallery(page,'Martinez MF-17',[{name:'Martinez MF-17',sourceUrl:page.replace(/\/$/,''),imageUrl:mf17.imageUrl}],[]).productName,'Martinez MF-17');
+});
+test('transient website errors retry once before importing, without reading unrelated cached assets',async()=>{
+ let reads=0,writes=0;
+ const api=load('app/api/reels/photos/route.ts',{'next/server':{NextResponse:{json}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'org',role:'owner'})},'@/lib/prisma':{prisma:{contentItem:{findFirst:async()=>({...post,campaign:{brand:{...brand,websiteUrl:brand.website,products:[]}}})},mediaAsset:{upsert:async()=>{writes++;},findMany:async()=>{throw Error('must not read cache after successful retry');}}}},'@/lib/reels/public-fetch':{fetchPublicBytes:async()=>{if(++reads===1)throw Object.assign(Error('connection reset'),{code:'ECONNRESET'});return {contentType:'text/html',bytes:Buffer.from('<h1>Ramirez Inspired A1 Guitar</h1><div class="woocommerce-product-gallery"><img src="/a1.jpg"></div>')};}}});
+ const r=await api.POST({json:async()=>({campaignId:'camp',contentItemId:post.id,url:correct.sourceUrl})});
+ assert.equal(r.status,200);assert.equal(reads,2);assert.equal(writes,1);assert.equal(r.body.notice,undefined);
+});
+test('a blocked website can use its exact saved catalog photo and visibly reports that fallback',async()=>{
+ let writes=0;const page=correct.sourceUrl;
+ const api=load('app/api/reels/photos/route.ts',{'next/server':{NextResponse:{json}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'org',role:'owner'})},'@/lib/prisma':{prisma:{contentItem:{findFirst:async()=>({...post,campaign:{brand:{...brand,websiteUrl:brand.website,products:[{name:'Ramirez Inspired A1 Guitar',sourceUrl:page,imageUrl:correct.imageUrl}]}}})},mediaAsset:{upsert:async()=>{writes++;},findMany:async()=>{throw Error('catalog source already available');}}}},'@/lib/reels/public-fetch':{fetchPublicBytes:async()=>{throw Error('The website image or page is unavailable.');}}});
+ const r=await api.POST({json:async()=>({campaignId:'camp',contentItemId:post.id,url:page})});
+ assert.equal(r.status,200);assert.equal(writes,1);assert.match(r.body.notice,/saved website photos/);
+});
 
 test('older cached product drafts cannot restore unverified sources',()=>{
  const {matchingDraft}=load('lib/reels/post-context.ts');const old={contentItemId:post.id,project:{scenes:[{src:'wrong-photo'}]}};

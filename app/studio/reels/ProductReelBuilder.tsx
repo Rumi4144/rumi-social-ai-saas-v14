@@ -67,7 +67,7 @@ export default function ProductReelBuilder({ campaignId, contentItemId, disabled
       const data = await planned.json();
       if (!planned.ok) throw new Error(data.error || "Could not prepare the shots.");
       if (!alive.current || active.signal.aborted) return;
-      accept(data.job); setMessage("Product found. Review the photos and generation cost below.");
+      accept(data.job); setMessage(photos.notice || "Product found. Review the photos and generation cost below.");
     } catch (error) { if (alive.current) setMessage(active.signal.aborted ? "Preparing took too long. Check saved status before trying again." : error instanceof Error ? error.message : "Could not prepare this reel."); }
     finally { clearTimeout(timer); if (alive.current) { setWorking(false); onBusy(false); } }
   }
