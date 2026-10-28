@@ -18,6 +18,7 @@ export function labSummary(job: Job) {
   const detached = (job.result as {campaignAttached?:boolean}|null)?.campaignAttached === false;
   return { id: job.id, status: job.status, model: payload.model, prompt: payload.prompt, kind: labModels[payload.model].kind,
     estimateUsd: payload.estimateUsd, usageCostUsd: payload.photoUsage ? photoUsageCost(payload.photoUsage) : null, photoSettings: payload.photoSettings, elapsedMs: payload.elapsedMs, error: job.error, createdAt: job.createdAt,
+    veoMode: payload.model === "veo" ? payload.veoMode ?? "presenter" : undefined,
     productLayout: payload.productLayout, productAssetId: payload.productLayout === "beside" ? payload.productAssetId : undefined,
     voiceId: payload.voiceId, voiceAccent: payload.voiceAccent ?? "original", accentSpeaker: payload.accentSpeaker || null, voiceEmotion: payload.voiceEmotion ?? "neutral", voiceSpeed: payload.voiceSpeed ?? 1,
     imageAssetId: payload.model === "holding" && job.status === "succeeded" ? job.id : null,

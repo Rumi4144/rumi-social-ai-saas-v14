@@ -21,6 +21,10 @@ export function holdingInputs(input: LabInput, media?: LabMedia) {
 }
 
 export function veoInputs(input: LabInput, media?: LabMedia) {
+  if (input.veoMode === "scene") {
+    if (!media?.product) throw new Error("Choose an original product photo.");
+    return { images: [media.product], prompt: `Create one continuous 8-second vertical product scene using the reference photo. Preserve the product's geometry, proportions, finish, markings and visible hardware. Keep the product securely supported. Follow the requested lighting, setting and camera motion. No people, hands, speech, captions or added text. Scene direction: ${input.prompt}`, aspect_ratio: "9:16", resolution: "720p", generate_audio: false, negative_prompt: "people, hands, playing instruments, different product, distorted product, changed logo, invented hardware, floating objects, morphing, subtitles, added text" };
+  }
   if (!media?.image || !media.product || media.image === media.product) throw new Error("Choose separate original presenter and product photos.");
   return { images: [media.image, media.product], prompt: `Create one 8-second vertical product-presenter video. Reference image 1 supplies the presenter identity. Reference image 2 supplies the actual product. Show that presenter naturally holding and presenting that product. Preserve the product's shape, proportions, color, branding and visible hardware. Frame the entire product and both hands clearly. Use anatomically natural hands and believable product scale. Do not substitute another product. Follow the supplied dialogue and delivery instructions: ${input.prompt}`, aspect_ratio: "9:16", resolution: "720p", generate_audio: true, negative_prompt: "different product, changed logo, distorted product, miniature product, malformed hands, extra fingers, missing fingers, subtitles, added text" };
 }

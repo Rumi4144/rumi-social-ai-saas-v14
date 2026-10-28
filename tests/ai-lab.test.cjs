@@ -316,3 +316,32 @@ test('purchased Flare photo recovers from private storage failure without any pr
  const summary=jobs.labSummary(job);assert.equal(summary.photoSettings.quality,'high');assert.equal(summary.usageCostUsd,.0458);assert.match(summary.url,/api\/ai-lab\/file/);
  await jobs.labRefresh(job);assert.equal(stores,2);
 });
+
+test('Veo product scenes quote and submit one identical reference with audio disabled',async()=>{
+ const calls=[];const adapter=load('lib/ai-lab/providers.ts',{'./catalog':catalog},{fetch:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>url.endsWith('/model/price')?{code:200,data:{currency:'USD',discounted_price:.64}}:{code:200,data:{id:'scene-one'}}};}});
+ const input={model:'veo',veoMode:'scene',prompt:'Slow slide across the guitar in warm daylight.'},media={image:'https://media.test/unused-person',product:'https://media.test/guitar'};
+ assert.equal(await adapter.labQuote(input,media),.64);assert.equal((await adapter.labSubmit(input,media)).taskId,'scene-one');
+ assert.deepEqual(calls[0].body.inputs,calls[1].body);const body=calls[1].body;
+ assert.deepEqual(Array.from(body.images),[media.product]);assert.equal(body.generate_audio,false);assert.equal(body.resolution,'720p');assert.equal(body.aspect_ratio,'9:16');assert.ok(body.prompt.includes(input.prompt));assert.doesNotMatch(body.prompt,/presenter identity|supplied dialogue/);
+ assert.throws(()=>adapter.veoInputs(input,{image:media.image}),/original product/);
+});
+test('Veo scenes require an owned current original product and reject stale inputs before charging',async()=>{
+ const f=fixture(),input={model:'veo',veoMode:'scene',productAssetId:'guitar',prompt:'Slow slide across the guitar in warm daylight.'};
+ const photo={id:'guitar',organizationId:'own',kind:'ai_lab_input',status:'ready',createdAt:new Date(),metadata:{kind:'image'},url:'https://media.test/guitar'};
+ for(const patch of [{organizationId:'other'},{createdAt:new Date(Date.now()-7*86400000)},{status:'deleted'},{metadata:{kind:'audio'}},{metadata:{kind:'image',source:'generated_holding'}}]){f.state.assets=[{...photo,...patch}];assert.equal((await f.post({action:'quote',input})).status,422);}
+ f.state.assets=[photo];f.state.quoteCost=.64;
+ for(const patch of [{productAssetId:undefined},{imageAssetId:'person'},{audioAssetId:'audio'},{veoMode:'invalid'},{model:'flux'},{campaignId:'campaign',contentItemId:'post'}])assert.equal((await f.post({action:'quote',input:{...input,...patch}})).status,400);
+ const q=await f.post({action:'quote',input});assert.equal(q.status,200);assert.equal(f.state.jobs.get(q.body.quoteId).payload.veoMode,'scene');
+ photo.organizationId='other';assert.notEqual((await f.post(f.generate(q.body.quoteId))).status,200);assert.equal(f.state.calls,0);
+ photo.organizationId='own';assert.equal((await f.post(f.generate(q.body.quoteId))).status,200);assert.equal(f.state.calls,1);
+});
+test('three silent Veo scenes fit the existing allowance while duplicate and excess spending remain blocked',async()=>{
+ const f=fixture(),input={model:'veo',veoMode:'scene',productAssetId:'guitar',prompt:'Slow slide across the guitar in warm daylight.'};
+ f.state.quoteCost=.64;f.state.assets=[{id:'guitar',organizationId:'own',kind:'ai_lab_input',status:'ready',createdAt:new Date(),metadata:{kind:'image'},url:'https://media.test/guitar'}];
+ for(let i=0;i<3;i++){
+  const q=await f.post({action:'quote',input});const body={...f.generate(q.body.quoteId),requestId:`12345678-1234-4234-8234-123456789ab${i}`};
+  const r=await f.post(body);assert.equal(r.status,200);assert.equal((await f.post(body)).status,200);assert.equal(f.state.calls,i+1);f.state.jobs.get(r.body.job.id).status='succeeded';
+ }
+ const q=await f.post({action:'quote',input});const r=await f.post({...f.generate(q.body.quoteId),requestId:'12345678-1234-4234-8234-123456789ab4'});
+ assert.equal(r.status,409);assert.match(r.body.error,/allowance/);assert.equal(f.state.calls,3);
+});

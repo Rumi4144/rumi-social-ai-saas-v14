@@ -131,6 +131,22 @@ fixture.models.push({id:'kling',name:'Kling Avatar Standard',provider:'WaveSpeed
  assert.equal(await locked.getByLabel('Or choose a saved presenter photo',{exact:true}).inputValue(),'presenter-photo');
  assert.equal(await locked.getByRole('button',{name:'Get cost estimate',exact:true}).isDisabled(),true);
  assert.equal(calls.filter(c=>c.action==='generate').length,beforeSettings);await locked.close();
+ // Product scenes use one product reference, invalidate approval on mode changes, and preserve presenter behavior.
+ const scene=await browser.newPage({viewport:{width:390,height:844}});await scene.goto(base);
+ await scene.getByLabel('Video or image model',{exact:true}).selectOption('veo');
+ await scene.getByLabel('Veo video style',{exact:true}).selectOption('scene');
+ assert.equal(await scene.getByLabel('Original presenter photo',{exact:true}).count(),0);
+ assert.equal(await scene.getByRole('button',{name:'Get cost estimate',exact:true}).isDisabled(),true);
+ await scene.getByLabel('Saved original product',{exact:true}).selectOption('guitar-photo');
+ await scene.getByLabel('Camera movement and setting',{exact:true}).fill('Slow slide across the guitar in warm daylight.');
+ const beforeScene=calls.filter(c=>c.action==='generate').length;
+ await scene.getByRole('button',{name:'Get cost estimate',exact:true}).click();await scene.getByRole('button',{name:/^Approve .* and create video$/}).waitFor();
+ assert.equal(calls.at(-1).input.veoMode,'scene');assert.equal(calls.at(-1).input.productAssetId,'guitar-photo');assert.equal(calls.at(-1).input.imageAssetId,undefined);assert.equal(calls.at(-1).input.audioAssetId,undefined);
+ await scene.getByLabel('Veo video style',{exact:true}).selectOption('presenter');
+ assert.equal(await scene.getByRole('button',{name:/^Approve .* and create video$/}).count(),0);assert.equal(await scene.getByRole('button',{name:'Get cost estimate',exact:true}).isDisabled(),true);
+ await scene.getByLabel('Veo video style',{exact:true}).selectOption('scene');
+ await scene.getByRole('button',{name:'Get cost estimate',exact:true}).click();await scene.getByRole('button',{name:/^Approve .* and create video$/}).click();
+ assert.equal(calls.filter(c=>c.action==='generate').length,beforeScene+1);assert.ok(await scene.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await scene.close();
  // Veo sends both originals directly, with no speech or holding-photo generation.
  const veo=await browser.newPage({viewport:{width:390,height:844}});await veo.goto(base);
  await veo.getByLabel('Video or image model',{exact:true}).selectOption('veo');assert.equal(await veo.getByLabel('Video or image model',{exact:true}).inputValue(),'veo');const veoBefore=calls.filter(c=>c.action==='generate').length;
