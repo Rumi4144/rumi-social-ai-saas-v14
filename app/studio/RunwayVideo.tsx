@@ -38,6 +38,13 @@ export default function RunwayVideo() {
     }, 16000);
     return () => clearTimeout(timer);
   }, [jobs]);
+  const refresh = async () => {
+    for (const job of jobs.filter(active)) {
+      const res = await fetch(`/api/video/queue?jobId=${job.id}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Could not check video progress. Try Refresh status again.");
+    }
+    await load();
+  };
   const generate = async () => {
     if (busy || starting || blockedByUncertainty || !consent) return;
     setBusy(true); setMessage("");
@@ -86,7 +93,7 @@ export default function RunwayVideo() {
       </div>}
       <button className="button" onClick={generate} disabled={!configured || !consent || busy || starting || blockedByUncertainty || credits < cost || prompt.trim().length < 10 || !(source === "library" ? assetId : imageUrl)}>{busy ? "Starting video…" : requestId.current ? "Check the same generation request" : `Generate video · ${cost} Rumi credits`}</button>
       {message && <p role="status">{message}</p>}
-      <button onClick={() => load().catch(error => setMessage(error.message))}>Refresh status</button>
+      <button onClick={() => refresh().catch(error => setMessage(error.message))}>Refresh status</button>
     </div>
     {jobs.length > 0 && <div style={{ display: "grid", gap: 20, marginTop: 28 }}><h3>Your generated videos</h3>{jobs.map(job => <article key={job.id}>
       <strong>{job.duration} second video · {job.status === "succeeded" ? "Ready" : job.status === "saving" ? "Saving video" : job.status === "running" ? `Generating · ${job.progress}%` : job.status}</strong>
