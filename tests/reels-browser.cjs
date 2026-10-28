@@ -89,6 +89,9 @@ async function verifyAutomaticPhotoDefault(browser, baseUrl) {
   });
   await page.getByLabel('Campaign',{exact:true}).selectOption('demo');
   await page.getByLabel('Music style').first().waitFor();
+  // The sound controls mount before the scene image finishes decoding.
+  // Wait for actual preview readiness rather than sampling that loading state.
+  await page.getByRole('button',{name:'Preview reel with sound',exact:true,disabled:false}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Preview reel with sound',exact:true}).isEnabled(),true,'Existing campaign photos must be usable without running the planner');
   await page.getByText('Adjust photos, captions and branding',{exact:true}).click();
   await page.getByLabel('Supporting caption').fill('Manual edit before automatic planning');
@@ -108,6 +111,7 @@ async function verifyAutomaticPhotoDefault(browser, baseUrl) {
   await page.reload();
   await page.getByLabel('Campaign',{exact:true}).selectOption('demo');
   await page.getByRole('status').filter({hasText:'Your saved draft was restored'}).waitFor();
+  await page.getByRole('button',{name:'Preview reel with sound',exact:true,disabled:false}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Preview reel with sound',exact:true}).isEnabled(),true,'Restored automatic draft must be playable without creating it again');
   assert.equal(await page.getByRole('button',{name:'Export finished reel',exact:true}).isEnabled(),true,'Restored automatic draft must be exportable');
   assert.equal(await page.getByLabel('Music style').first().inputValue(),'classical');
