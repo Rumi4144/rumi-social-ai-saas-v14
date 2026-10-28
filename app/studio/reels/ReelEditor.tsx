@@ -10,6 +10,7 @@ import MusicControls from "./MusicControls";
 import ClipPreview from "./ClipPreview";
 import ScenePhotoControls from "./ScenePhotoControls";
 import PhotoLibraryPicker from "./PhotoLibraryPicker";
+import ProductReelBuilder from "./ProductReelBuilder";
 import SchedulePostButton from "@/components/SchedulePostButton";
 import { DEFAULT_MUSIC_VOLUME, musicSettings, prepareMusic, type MusicChoice } from "@/lib/reels/music";
 import styles from "./ReelEditor.module.css";
@@ -39,6 +40,7 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const photoController = useRef<AbortController | undefined>(undefined);
   const [clipUrl, setClipUrl] = useState("");
   const [rendering, setRendering] = useState(false);
+  const [loadingMedia, setLoadingMedia] = useState(false);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [progress, setProgress] = useState(0), [previewing, setPreviewing] = useState(false);
   const [rendered, setRendered] = useState<Blob>(), [downloadUrl, setDownloadUrl] = useState(""), [savedAsset, setSavedAsset] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null), media = useRef<ReelMedia[]>([]), logo = useRef<HTMLImageElement | undefined>(undefined), playTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
@@ -117,7 +119,8 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
     finishPreview();
     let disposed = false; media.current = []; logo.current = undefined;
     if (canvas.current) canvas.current.getContext("2d")?.clearRect(0, 0, 1080, 1920);
-    if (project.scenes.length) loadReelMedia(project).then(loaded => { if (disposed) { loaded.media.forEach(item => { if (item instanceof HTMLVideoElement) { item.pause(); item.removeAttribute("src"); item.load(); } }); return; } media.current = loaded.media; logo.current = loaded.logo; if (canvas.current) drawReel(canvas.current.getContext("2d")!, project, loaded.media, 0.8, loaded.logo); }).catch(error => { if (!disposed) setMessage(error.message); });
+    setLoadingMedia(project.scenes.length > 0);
+    if (project.scenes.length) loadReelMedia(project).then(loaded => { if (disposed) { loaded.media.forEach(item => { if (item instanceof HTMLVideoElement) { item.pause(); item.removeAttribute("src"); item.load(); } }); return; } media.current = loaded.media; logo.current = loaded.logo; if (canvas.current) drawReel(canvas.current.getContext("2d")!, project, loaded.media, 0.8, loaded.logo); }).catch(error => { if (!disposed) setMessage(error.message); }).finally(() => { if (!disposed) setLoadingMedia(false); });
     return () => { disposed = true; };
   }, [sourceKey, project.logo]);
   useEffect(() => {
@@ -287,9 +290,9 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
   const readyAsset = !project.scenes.length ? undefined : savedAsset && rendered?.type === "video/mp4" ? savedAsset : !rendered && !rendering && !planning ? savedReels.find(asset => asset.contentItemId === contentItemId)?.id : undefined;
   // Readiness belongs to the current reel, including restored and manually edited
   // drafts. It must not depend on running the automatic planner in this visit.
-  const reelBlockReason = loadingProject ? "Opening your reel…" : planning ? "Arranging your reel…" : loadingPhotos ? "Loading product photos…" : busy ? (rendering ? "Exporting your reel…" : "Finishing your current change…") : !project.scenes.length ? "Add a photo or clip to preview and export your reel." : "";
+  const reelBlockReason = loadingProject ? "Opening your reel…" : planning ? "Arranging your reel…" : loadingPhotos ? "Loading product photos…" : loadingMedia ? "Opening your scene media…" : busy ? (rendering ? "Exporting your reel…" : "Finishing your current change…") : !project.scenes.length ? "Add a photo or clip to preview and export your reel." : "";
   const exportBlockReason = reelBlockReason || (!project.brand.trim() ? "Add your brand name under Closing screen to export." : "");
-  return <div className={styles.editor}><div className="eyebrow">{quick ? "AUTOMATIC REEL" : "REEL EDITOR"}</div>{embedded ? <h3>Create and post your reel</h3> : <h1>Make a finished reel.</h1>}{quick ? <p>Choose a campaign post. We select up to 3 different saved photos and arrange a 15-second reel with captions, music and branding. Review it, export it, then choose your accounts and posting time here. No subscription or AI credits needed.</p> : <><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p><p><a href="/studio/reels/quick">Create reel automatically</a></p></>}
+  return <div className={styles.editor}><div className="eyebrow">{quick ? "AUTOMATIC REEL" : "REEL EDITOR"}</div>{embedded ? <h3>Create and post your reel</h3> : <h1>Make a finished reel.</h1>}{quick ? <p>Choose a campaign post. Arrange saved photos for free, or create three moving scenes from a product website using the generation option below. Review your reel, export it, then choose your accounts and posting time here.</p> : <><p>Combine real photos, presenter clips or AI scenes with captions, transitions, music and your brand’s closing screen. Editing and export use no AI credits.</p><p><a href="/studio/reels/quick">Create reel automatically</a></p></>}
     {!embedded && <label>Campaign<select aria-label="Campaign" value={campaignId} disabled={busy || loadingPhotos || loadingCampaigns} onChange={event => {setRequestedPostId("");setCampaignId(event.target.value);}}><option value="">{loadingCampaigns ? "Loading campaigns…" : "Choose campaign"}</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select></label>}
     {!organizationId && <p role="status">{loadingCampaigns ? "Loading your campaigns…" : loadingProject ? "Opening campaign…" : message}</p>}
     {!loadingCampaigns && !campaigns.length && <section className="card"><h2>No campaigns available in this workspace</h2><p>Open an existing campaign from the Campaigns page, or create a campaign first to use its photos and save your reel.</p><a href="/campaigns">Open Campaigns</a> · <a href="/create">Create a campaign</a></section>}
@@ -298,6 +301,13 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       <label>Campaign post<select aria-label="Campaign post" value={contentItemId} disabled={busy || loadingProject || loadingPhotos} onChange={event => setRequestedPostId(event.target.value)}>{posts.map(post => <option key={post.id} value={post.id}>{post.headline || "Untitled post"}</option>)}</select></label>
       {quick && <><button type="button" disabled={busy || loadingProject || planning || !contentItemId} onClick={createAutomatically}>{planning ? "Creating draft…" : "Create reel draft"}</button>{planning && <button type="button" onClick={() => planController.current?.abort()}>Cancel draft creation</button>}<p>Uses only saved photos and existing captions. Review your media rights before export. Saving keeps the reel private until you choose to publish it.</p></>}
     </section>}
+    {campaignId && organizationId && contentItemId && !loadingProject && <ProductReelBuilder key={`${organizationId}:${campaignId}:${contentItemId}`} campaignId={campaignId} contentItemId={contentItemId} disabled={busy || planning || loadingPhotos || previewing || loadingProject} onBusy={setBusy} onReady={job => {
+      if (!job.project || !job.sources || job.campaignId !== campaignId || job.contentItemId !== contentItemId) return;
+      finishPreview(); setProject(job.project); setSources(old => mergeSources(old, job.sources!));
+      setMusic(true); setMusicStyle(job.musicStyle || "ambient"); setOriginalAudio(false); setMusicFile(undefined); setVoiceFile(undefined);
+      setRendered(undefined); setSavedAsset(""); request.current = undefined;
+      setMessage("Three moving product shots arranged with music. Preview the reel and check the product details. Export keeps this tab active for 15 seconds; save the finished reel to this post afterward.");
+    }} />}
     {campaignId && organizationId && <div className={styles.layout}>
       <section className="card">{quick && <><h2>Your automatic draft</h2><p>{project.scenes.length ? `${project.scenes.length} scenes ready to preview. You can adjust them below or create a new automatic draft.` : "Create a draft above or add photos and clips below."}</p><label>Reel design<select value={project.style} disabled={busy || previewing || planning} onChange={event=>setProject({...project,style:event.target.value as ReelStyle})}>{REEL_STYLES.map(style=><option key={style.value} value={style.value}>{style.label}</option>)}</select></label><h3>Sound</h3><MusicControls music={music} musicStyle={musicStyle} musicVolume={musicVolume} musicFile={musicFile} disabled={busy || previewing || planning} onMusic={setMusic} onStyle={setMusicStyle} onVolume={setMusicVolume} onFile={setMusicFile} /></>}<details open={quick ? undefined : true}><summary>{quick ? "Adjust photos, captions and branding" : "Your scenes"}</summary>{campaignScenePlan && <><p>The campaign’s scene timings and short on-screen text are available. Photos are placeholders until you choose matching media.</p><button type="button" disabled={busy || previewing || loadingPhotos || planning} onClick={()=>{setProject(campaignScenePlan);setRendered(undefined);setSavedAsset("");request.current=undefined;setMessage("Campaign scene plan applied. Review each photo or clip before export.");}}>Use campaign scene plan</button></>}<fieldset disabled={busy || previewing || loadingPhotos || planning} style={{ border: 0, padding: 0 }}>
         <label>Visual style<select value={project.style} onChange={event => setProject({ ...project, style: event.target.value as ReelStyle })}>{REEL_STYLES.map(style => <option key={style.value} value={style.value}>{style.label}</option>)}</select></label>

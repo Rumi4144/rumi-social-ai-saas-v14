@@ -49,7 +49,7 @@ export async function refreshVideo(job: Job) {
         const done = await tx.job.updateMany({ where: { id: job.id, status: { in: ["running", "saving"] } }, data: { status: "succeeded", progress: 100, error: null, result: { pathname } } });
         if (done.count) await tx.mediaAsset.upsert({ where: { id: job.id }, update: {}, create: {
           id: job.id, organizationId: job.organizationId, campaignId: p.campaignId, contentItemId: p.contentItemId, kind: p.contentItemId ? "campaign_video" : "ai_video", provider: "runway", status: "ready",
-          url: `/api/video/file?jobId=${job.id}`, prompt: p.prompt, metadata: { pathname, duration: p.duration, model: p.model, taskId: p.taskId, requiresProductReview: (p as {mode?:string}).mode === "presenter" },
+          url: `/api/video/file?jobId=${job.id}`, prompt: p.prompt, metadata: { pathname, duration: p.duration, model: p.model, taskId: p.taskId, requiresProductReview: ["presenter", "product_reel_scene"].includes((p as {mode?:string}).mode || "") },
         } });
       });
       console.log("RUNWAY_VIDEO_READY", JSON.stringify({ jobId: job.id, taskId: p.taskId }));

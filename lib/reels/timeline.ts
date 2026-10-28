@@ -1,4 +1,5 @@
 export const REEL_STYLES = [
+  { value: "product-film", label: "Full-screen product film", description: "Three moving shots fill the screen, with small captions and branding over the final shot." },
   { value: "footage", label: "Clean moving footage", description: "Keep the whole clip visible with its original light and color. Small captions appear only when you add them." },
   { value: "showcase", label: "Cinematic Showcase", description: "Layered photo frames, elegant animated titles, fine accents and smooth transitions. Optional close-ups use the current photo." },
   { value: "boutique", label: "Luxury brand story", description: "Elegant photo frames, oversized editorial headlines and varied scene compositions." },
@@ -19,7 +20,7 @@ export const REEL_ANIMATIONS = [
 ] as const;
 export type ReelAnimation = typeof REEL_ANIMATIONS[number]["value"];
 export type ReelScene = { id: string; src: string; kind: "image" | "video"; headline: string; detail: string; seconds: number; direction?: string };
-export type ReelProject = { brand: string; website: string; cta: string; color: string; accent: string; style: ReelStyle; animation?: ReelAnimation; showcaseDetails?: boolean; productSubject?: string; logo?: string; logoThroughout?: boolean; logoPosition?: import("../video/logo").LogoPosition; logoSize?: number; scenes: ReelScene[]; closingSeconds: number };
+export type ReelProject = { brand: string; website: string; cta: string; color: string; accent: string; style: ReelStyle; animation?: ReelAnimation; showcaseDetails?: boolean; endingOverlay?: boolean; productSubject?: string; logo?: string; logoThroughout?: boolean; logoPosition?: import("../video/logo").LogoPosition; logoSize?: number; scenes: ReelScene[]; closingSeconds: number };
 export const REEL_WIDTH = 1080, REEL_HEIGHT = 1920;
 export function distinctSceneIndexes(scenes: ReelScene[], current: number, limit = 3) {
   const seen = new Set<string>(), indexes: number[] = [];

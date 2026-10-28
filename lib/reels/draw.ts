@@ -37,6 +37,21 @@ function drawFrame(ctx: CanvasRenderingContext2D, project: ReelProject, media: R
   const accentInk = accentLight ? "#17212c" : "#ffffff";
   const scene = project.scenes[frame.index];
   ctx.clearRect(0, 0, W, H); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  if (project.style === "product-film") {
+    picture(ctx, media[frame.index], 0, 0, W, H, frame.progress);
+    const ending = frame.closing || (project.endingOverlay && frame.index === project.scenes.length - 1 && frame.elapsed >= scene.seconds - 2.5);
+    const caption = ending ? project.cta : scene.headline;
+    if (caption.trim() || ending) {
+      const shade = ctx.createLinearGradient(0, 1390, 0, H);
+      shade.addColorStop(0, "rgba(0,0,0,0)"); shade.addColorStop(1, "rgba(0,0,0,.6)");
+      ctx.fillStyle = shade; ctx.fillRect(0, 1390, W, H - 1390);
+      // Keep captions inside the lower social-video safe area, over the image.
+      if (ending) text(ctx, project.brand, 80, 1550, 30, 900, "#ffffff", 1);
+      text(ctx, caption, 80, ending ? 1630 : 1610, 46, 900, "#ffffff", 2);
+      if (ending) text(ctx, project.website.replace(/^https?:\/\//i, "").replace(/\/$/, ""), 80, 1760, 30, 900, "#ffffff", 1);
+    }
+    return;
+  }
   if (project.style === "showcase") {
     drawShowcase(ctx, project, scene, frame.closing ? logo || media[frame.index] : media[frame.index], frame, bg, accent, picture, text);
     return;
