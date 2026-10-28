@@ -21,7 +21,7 @@ type Source = ReelSource;
 type Post = { status?: string; id: string; headline: string | null; caption: string | null; visualDirection?: string | null };
 const empty: ReelProject = { brand: "", website: "", cta: "Explore more", color: "#132342", accent: "#dec184", style: "editorial", scenes: [], closingSeconds: 3 };
 
-export default function ReelEditor({ initialCampaignId, initialContentItemId, initialCampaigns, quick = false, embedded = false }: { embedded?: boolean; quick?: boolean; initialCampaignId: string; initialContentItemId: string; initialCampaigns?: { id: string; title: string }[] }) {
+export default function ReelEditor({ initialCampaignId, initialContentItemId, initialCampaigns, initialClips = [], quick = false, embedded = false }: { initialClips?: ReelSource[]; embedded?: boolean; quick?: boolean; initialCampaignId: string; initialContentItemId: string; initialCampaigns?: { id: string; title: string }[] }) {
   const [planning, setPlanning] = useState(false);
   const planController = useRef<AbortController | undefined>(undefined);
   const selection = useRef("");
@@ -96,7 +96,11 @@ export default function ReelEditor({ initialCampaignId, initialContentItemId, in
       const draft=matchingDraft(stored,context.post.id,context.post.productSubject);
       if(oldDraft && !draft)setMessage("The older draft has unverified product photos and was not restored. Create a new reel draft using this product’s matching photos.");
       localFiles.current.clear(); setMusicFile(undefined); setVoiceFile(undefined); setMusic(true); setMusicStyle(quick ? automaticMusic(data.brand.name, data.brand.industry) : "ambient"); setMusicVolume(DEFAULT_MUSIC_VOLUME); setOriginalAudio(false);
-      if (draft) {
+      if (initialClips.length) {
+        library = mergeSources(library, initialClips.map(clip => ({ ...clip, contentItemId: context.post.id })));
+        next = { ...context.project, style: "product-film", closingSeconds: 0, endingOverlay: true, scenes: initialClips.map((clip, index) => ({ id: crypto.randomUUID(), src: clip.src, kind: "video", seconds: 5, headline: index === 0 ? (context.post.headline || data.brand.name).replace(/^Meet the /i, "").replace(/ in Motion$/i, "") : index === initialClips.length - 1 ? context.project.cta : "A closer look", detail: "" })) };
+        setMessage("Your selected saved clips are arranged in order. Preview them, then export and save your reel.");
+      } else if (draft) {
         const restored = new Map<string, string>();
         draft.files.forEach(([old, file]) => { const url = ownUrl(file); restored.set(old, url); localFiles.current.set(url, file); });
         next = { ...draft.project, scenes: draft.project.scenes.map(scene => ({ ...scene, src: restored.get(scene.src) || scene.src })), logo: restored.get(draft.project.logo || "") || draft.project.logo };
