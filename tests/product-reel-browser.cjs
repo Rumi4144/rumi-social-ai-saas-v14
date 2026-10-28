@@ -29,7 +29,8 @@ function json(res,data,status=200){res.writeHead(status,{'Content-Type':'applica
  if(['/app.js','/app.css'].includes(u.pathname)){res.writeHead(200,{'Content-Type':u.pathname.endsWith('.js')?'text/javascript':'text/css'});res.end(fs.readFileSync(path.join(out,u.pathname.slice(1))));return;}
  res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/app.css"></head><body class="public-page"><main id="root"></main><script src="/app.js"></script></body></html>');
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));
- browser=await chromium.launch({headless:true,executablePath:process.env.REEL_BROWSER_EXECUTABLE||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+ const localChrome='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+ browser=await chromium.launch({headless:true,executablePath:process.env.REEL_BROWSER_EXECUTABLE||(fs.existsSync(localChrome)?localChrome:undefined)});
  const page=await browser.newPage({viewport:{width:1440,height:1080},acceptDownloads:true});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:'+server.address().port);
  const card=page.getByRole('region',{name:'Create a moving product reel'});
