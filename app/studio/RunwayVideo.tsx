@@ -12,6 +12,11 @@ export default function RunwayVideo() {
   const [prompt, setPrompt] = useState("Slow cinematic camera movement, soft lighting, subtle parallax, preserve the original subject accurately.");
   const [consent, setConsent] = useState(false), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
   const requestId = useRef<string | null>(null);
+  const [newRequestConsent, setNewRequestConsent] = useState(false);
+  const uncertainIds = jobs.filter(job => job.status === "uncertain").map(job => job.id).sort().join(",");
+  const starting = jobs.some(job => job.status === "starting");
+  const blockedByUncertainty = Boolean(uncertainIds) && !newRequestConsent && !requestId.current;
+  useEffect(() => { setNewRequestConsent(false); }, [uncertainIds, source, imageUrl, assetId, prompt, duration, ratio]);
   const cost = duration === 10 ? 80 : 40;
   const load = async () => {
     const res = await fetch("/api/video/queue", { cache: "no-store" });
@@ -34,7 +39,7 @@ export default function RunwayVideo() {
     return () => clearTimeout(timer);
   }, [jobs]);
   const generate = async () => {
-    if (busy) return;
+    if (busy || starting || blockedByUncertainty || !consent) return;
     setBusy(true); setMessage("");
     requestId.current ||= crypto.randomUUID();
     try {
@@ -44,14 +49,13 @@ export default function RunwayVideo() {
       const data = await res.json();
       if (data.job) {
         setJobs(old => [data.job, ...old.filter(job => job.id !== data.job.id)]);
-        requestId.current = null; setConsent(false);
+        requestId.current = null; setConsent(false); setNewRequestConsent(false);
         setMessage(data.job.error || "Your video is generating. You can return to Studio to check progress.");
         await load();
       } else throw new Error(data.error || "Could not confirm generation. Retry checks the same request.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not confirm generation. Retry checks the same request."); }
     finally { setBusy(false); }
   };
-  const uncertain = jobs.some(job => job.status === "uncertain" || job.status === "starting");
   return <section className="card" style={{ marginTop: 28 }}>
     <div className="eyebrow">AI VIDEO</div><h2>Bring your image to life.</h2>
     <p><a href="https://runwayml.com" target="_blank" rel="noreferrer">Powered by Runway</a> · Choose an opening image and describe the motion.</p>
@@ -76,7 +80,11 @@ export default function RunwayVideo() {
       <label>Video shape<select value={ratio} disabled={busy} onChange={e => { setRatio(e.target.value); setConsent(false); }}><option value="720:1280">Vertical 9:16 · Reels / Shorts</option><option value="1280:720">Landscape 16:9 · YouTube</option></select></label>
       <p>Workspace balance: {credits} Rumi credits. Completed videos are saved privately in your workspace. Generation does not publish them.</p>
       <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}><input type="checkbox" checked={consent} disabled={busy} onChange={e => setConsent(e.target.checked)} style={{ appearance: "auto", width: 18, height: 18, padding: 0, flex: "0 0 auto" }} />I have permission to use this image and authorize sending it and this prompt to Runway to generate a video for {cost} Rumi credits.</label>
-      <button className="button" onClick={generate} disabled={!configured || !consent || busy || uncertain || credits < cost || prompt.trim().length < 10 || !(source === "library" ? assetId : imageUrl)}>{busy ? "Starting video…" : requestId.current ? "Check the same generation request" : `Generate video · ${cost} Rumi credits`}</button>
+      {uncertainIds && <div role="note" style={{ border: "1px solid #c99a45", borderRadius: 12, padding: 16 }}>
+        <p>An earlier video request is unresolved. Its charge may still apply. Starting another video creates a separate paid request; it does not retry or resolve the earlier one.</p>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}><input type="checkbox" checked={newRequestConsent} disabled={busy} onChange={e => setNewRequestConsent(e.target.checked)} style={{ appearance: "auto", width: 18, height: 18, padding: 0, flex: "0 0 auto" }} />I understand the earlier charge is unresolved and authorize a separate video for {cost} additional Rumi credits.</label>
+      </div>}
+      <button className="button" onClick={generate} disabled={!configured || !consent || busy || starting || blockedByUncertainty || credits < cost || prompt.trim().length < 10 || !(source === "library" ? assetId : imageUrl)}>{busy ? "Starting video…" : requestId.current ? "Check the same generation request" : `Generate video · ${cost} Rumi credits`}</button>
       {message && <p role="status">{message}</p>}
       <button onClick={() => load().catch(error => setMessage(error.message))}>Refresh status</button>
     </div>
