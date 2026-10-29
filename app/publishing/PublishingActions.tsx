@@ -3,6 +3,7 @@
 import { useState } from "react";
 import PostDeliveryStatus from "@/components/PostDeliveryStatus";
 import { deliveryMessage, deliveryUrl, type ExistingDelivery } from "@/lib/publishing/eligibility";
+import XCaptionReview, { useXCaptionReview } from "@/components/XCaptionReview";
 
 export default function PublishingActions({
   contentItemId,
@@ -26,9 +27,11 @@ export default function PublishingActions({
   const [scheduledFor, setScheduledFor] = useState("");
   const [postUrl, setPostUrl] = useState("");
   const [watchDelivery, setWatchDelivery] = useState(false);
+  const xCaption = useXCaptionReview(contentItemId, isX && !existingDelivery && !completed);
 
   async function publishNow() {
     if (busy || completed) return;
+    if (isX && !xCaption.ready) { setMessage("Review a valid X caption before posting."); return; }
     if (isYouTube && !certified) { setMessage("Confirm YouTube upload settings first."); return; }
     if (
       !confirm(
@@ -49,6 +52,7 @@ export default function PublishingActions({
         },
         body: JSON.stringify({
           contentItemId, youtube,
+          ...(isX ? { x: xCaption.review } : {}),
           socialConnectionId: connectionId,
         }),
       });
@@ -78,6 +82,7 @@ export default function PublishingActions({
 
   async function schedulePost() {
     if (busy || completed) return;
+    if (isX && !xCaption.ready) { setMessage("Review a valid X caption before scheduling."); return; }
     if (isYouTube && !certified) { setMessage("Confirm YouTube upload settings first."); return; }
     if (!scheduledFor) {
       setMessage("Choose a future date and time.");
@@ -102,6 +107,7 @@ export default function PublishingActions({
         },
         body: JSON.stringify({
           contentItemId, youtube,
+          ...(isX ? { x: xCaption.review } : {}),
           socialConnectionIds: [connectionId],
           scheduledFor: date.toISOString(),
         }),
@@ -136,7 +142,8 @@ export default function PublishingActions({
 
   return (
     <div style={{ marginTop: "16px" }}>
-      {isX && <p>X will receive the approved text and photo or reel shown above. X may charge your developer balance for publishing.</p>}
+      {isX && !completed && <XCaptionReview state={xCaption} disabled={busy} />}
+      {isX && <p>X will receive the caption reviewed here and the selected photo or reel. X may charge your developer balance for publishing.</p>}
       {isYouTube && <div style={{ display: "grid", gap: 16, marginBottom: 16 }}>
         <p>Uses this post’s selected video, headline and caption.</p>
         <label style={{ display: "grid", gap: 8 }}>Visibility <select aria-label="Visibility" disabled={busy || completed} value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label>
@@ -146,10 +153,10 @@ export default function PublishingActions({
       </div>}
       <button
         type="button"
-        disabled={busy || completed}
+        disabled={busy || completed || (isX && !xCaption.ready)}
         onClick={publishNow}
       >
-        {busy ? "Working..." : `${isYouTube ? "Upload to" : "Publish to"} ${destination}`}
+        {busy ? "Working..." : `${isYouTube ? "Upload to" : isX ? "Approve and publish to" : "Publish to"} ${destination}`}
       </button>
 
       <div style={{ marginTop: "12px" }}>
@@ -164,11 +171,11 @@ export default function PublishingActions({
 
         <button
           type="button"
-          disabled={busy || completed || !scheduledFor}
+          disabled={busy || completed || !scheduledFor || (isX && !xCaption.ready)}
           onClick={schedulePost}
           style={{ marginLeft: "8px" }}
         >
-          Schedule
+          {isX ? "Approve and schedule" : "Schedule"}
         </button>
       </div>
 

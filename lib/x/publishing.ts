@@ -5,10 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/security/crypto";
 import { xAccount, xBasic, xCanPublish, xCredentials, xId, type XGrant } from "./connection";
 import { xHash, xMediaBytes, xMediaReference, type XMedia } from "./media";
+import type { XCaptionReview } from "./caption";
 
-export type XPost = { contentItemId: string; connectionId: string; accountId: string; text: string; mediaUrl: string | null; media: XMedia | null; fingerprint: string };
+export type XPost = { contentItemId: string; connectionId: string; accountId: string; text: string; sourceText?: string; mediaUrl: string | null; media: XMedia | null; fingerprint: string };
 // PostgreSQL JSON objects do not preserve insertion order.
-export function xPostFingerprint(post: Omit<XPost, "fingerprint">) { return xHash(JSON.stringify([post.contentItemId, post.connectionId, post.accountId, post.text, post.mediaUrl, post.media ? [post.media.assetId, post.media.kind, post.media.hash] : null])); }
+export function xPostFingerprint(post: Omit<XPost, "fingerprint">) { return xHash(JSON.stringify([post.contentItemId, post.connectionId, post.accountId, post.text, post.mediaUrl, post.media ? [post.media.assetId, post.media.kind, post.media.hash] : null, ...(post.sourceText !== undefined ? [post.sourceText] : [])])); }
 export const X_RECONNECT = "Open Settings → X and select Enable X posting, then authorize this account again.";
 type XRequestStage = "initialize" | "append" | "finalize" | "status" | "post";
 export class XPublishError extends Error { constructor(message: string, public code?: number, public stage?: XRequestStage) { super(message); } }
@@ -27,14 +28,16 @@ export function xGrant(connection: Pick<SocialConnection, "encryptedToken" | "st
     return grant;
   } catch { throw new XPublishError(X_RECONNECT); }
 }
-export async function prepareXPost(org: string, item: { id: string; caption: string | null; headline: string | null; mediaUrl: string | null }, connection: SocialConnection): Promise<XPost> {
+export async function prepareXPost(org: string, item: { id: string; caption: string | null; headline: string | null; mediaUrl: string | null }, connection: SocialConnection, review?: XCaptionReview): Promise<XPost> {
   if (connection.organizationId !== org || connection.provider !== "x" || !/^\d+$/.test(connection.externalId || "")) throw new XPublishError(X_RECONNECT);
   xGrant(connection);
-  const text = xCaption(item.caption || item.headline || "", Boolean(item.mediaUrl));
+  const sourceText = item.caption || item.headline || "";
+  if (review && (review.approved !== true || review.sourceText !== sourceText)) throw new XPublishError("The original caption changed. Review the updated X caption before posting.");
+  const text = xCaption(review ? review.text : sourceText, Boolean(item.mediaUrl));
   try {
     const ref = xMediaReference(item.mediaUrl);
     const media = ref ? { ...ref, hash: xHash((await xMediaBytes(org, item.id, ref)).bytes) } : null;
-    const post = { contentItemId: item.id, connectionId: connection.id, accountId: connection.externalId!, text, mediaUrl: item.mediaUrl, media };
+    const post = { contentItemId: item.id, connectionId: connection.id, accountId: connection.externalId!, text, ...(review ? { sourceText } : {}), mediaUrl: item.mediaUrl, media };
     return { ...post, fingerprint: xPostFingerprint(post) };
   } catch { throw new XPublishError("The selected photo or reel could not be prepared for X. Save a finished MP4 reel (under 100 MB) or a Rumi photo, then approve it again."); }
 }

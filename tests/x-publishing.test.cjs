@@ -73,6 +73,50 @@ function fixture(){
 }
 
 test('X counts URLs, emoji and non-Latin text with the official validator',()=>{const f=fixture();assert.equal(f.prep.xCaption('a'.repeat(280),false).length,280);assert.throws(()=>f.prep.xCaption('a'.repeat(281),false),/281/);assert.doesNotThrow(()=>f.prep.xCaption('a'.repeat(256)+' '+ 'https://example.com/'+'b'.repeat(1000),false));assert.throws(()=>f.prep.xCaption('界'.repeat(141),false),/282/);assert.doesNotThrow(()=>f.prep.xCaption('👨‍👩‍👧‍👦'.repeat(140),false));assert.throws(()=>f.prep.xCaption('',false),/valid text/);});
+
+test('X drafts keep complete URLs and valid graphemes while preserving short originals',()=>{
+ const {suggestXCaption,xCaptionMetrics}=fixture().load('lib/x/caption.ts');
+ for(const text of ['Meet the Martinez MF-17. '+ 'Explore the collection and find your next instrument. '.repeat(9)+'https://rumiguitars.com/product/martinez-mf-17-flamenco-guitar/','界'.repeat(200),'👨‍👩‍👧‍👦'.repeat(150),'e\u0301'.repeat(350),'a'.repeat(400)]){
+  const result=suggestXCaption(text);assert.equal(xCaptionMetrics(result).valid,true);assert.ok(xCaptionMetrics(result).weightedLength<=280);
+  if(text.includes('https://'))assert.ok(result.includes('https://rumiguitars.com/product/martinez-mf-17-flamenco-guitar/'));
+  assert.ok(!/[\ud800-\udbff]$/.test(result));
+ }
+ assert.equal(suggestXCaption('Already short. #Rumi'),'Already short. #Rumi');assert.equal(suggestXCaption(''),'');
+});
+
+test('X caption preview is read-only and scoped to the current workspace',async()=>{
+ const f=fixture();f.item.caption='A useful first sentence. '+'More detail about this business. '.repeat(20);
+ const route=f.load('app/api/content-items/[id]/x-caption/route.ts');
+ const response=await route.GET(new Request(origin),{params:Promise.resolve({id:'post'})});
+ assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
+ const body=await response.json();assert.equal(body.sourceText,f.item.caption);assert.equal(body.text,'A useful first sentence. More detail about this business. More detail about this business. More detail about this business. More detail about this business. More detail about this business. More detail about this business. More detail about this business.');
+ assert.equal(f.calls.length,0);assert.equal(f.tables.job.size,0);f.ctx.organizationId='foreign';
+ assert.equal((await route.GET(new Request(origin),{params:Promise.resolve({id:'post'})})).status,404);
+});
+
+test('reviewed X variant sends only the short text and leaves the shared caption unchanged',async()=>{
+ for(const route of ['now','schedule']){
+  const f=fixture();const original='Meet Rumi Guitars. '+'The longer caption is for other platforms. '.repeat(12);f.item.caption=original;
+  const response=await f.route(route,{contentItemId:'post',socialConnectionId:'conn',socialConnectionIds:['conn'],scheduledFor:new Date(Date.now()+60000).toISOString(),x:{text:'Meet Rumi Guitars. Explore our collection.',sourceText:original,approved:true}});
+  assert.ok(response.status<300);assert.equal(f.item.caption,original);
+  if(route==='schedule'){const body=await response.json();f.tables.publishJob.get(body.jobs[0].id).status='publishing';assert.equal((await f.publish(body.jobs[0].id)).ok,true);}
+  assert.equal(JSON.parse(f.posts()[0].options.body).text,'Meet Rumi Guitars. Explore our collection.');
+ }
+});
+
+test('stale, invalid or unapproved X variants cannot queue any destination',async()=>{
+ for(const route of ['now','schedule'])for(const review of [{text:'Short.',sourceText:'stale',approved:true},{text:'a'.repeat(281),sourceText:'Meet Rumi Guitars.',approved:true},{text:'Short.',sourceText:'Meet Rumi Guitars.',approved:false}]){
+  const f=fixture();const response=await f.route(route,{contentItemId:'post',socialConnectionId:'conn',socialConnectionIds:['conn'],scheduledFor:new Date(Date.now()+60000).toISOString(),x:review});
+  assert.ok(response.status>=400);assert.equal(f.calls.length,0);assert.equal(f.tables.publishJob.size,0);
+ }
+});
+
+test('scheduled X variant is invalidated by a source edit even if its short text still matches',async()=>{
+ const f=fixture();const source='Meet Rumi Guitars. '+'Longer details. '.repeat(30);f.item.caption=source;
+ const response=await f.route('schedule',{contentItemId:'post',socialConnectionIds:['conn'],scheduledFor:new Date(Date.now()+60000).toISOString(),x:{text:'Meet Rumi Guitars.',sourceText:source,approved:true}});
+ const body=await response.json();assert.equal(response.status,201);f.tables.publishJob.get(body.jobs[0].id).status='publishing';f.item.caption=source+'New terms.';
+ assert.equal((await f.publish(body.jobs[0].id)).ok,false);assert.equal(f.posts().length,0);
+});
 test('X text publishing returns a real receipt and deduplicates retries and separate jobs',async()=>{const f=fixture();await f.queue();assert.equal((await f.publish()).externalId,'555');assert.equal((await f.publish()).externalId,'555');await f.queue('second');assert.equal((await f.publish('second')).externalId,'555');assert.equal(f.posts().length,1);assert.deepEqual(JSON.parse(f.posts()[0].options.body),{text:'Meet Rumi Guitars.'});});
 test('concurrent X submissions claim a single public write',async()=>{const f=fixture();await f.queue();await f.queue('second');const results=await Promise.all([f.publish(),f.publish('second')]);assert.equal(results.filter(r=>r.ok).length,1);assert.equal(results.filter(r=>r.pending).length,1);assert.equal(f.posts().length,1);});
 test('X video uploads approved bytes once, polls processing, then publishes with the same media ID',async()=>{const f=fixture();f.item.mediaUrl='/api/video/media/media';f.setProcessing(true);await f.queue();assert.equal((await f.publish()).pending,true);assert.equal(f.posts().length,0);f.advance(300000);f.setProcessing(false);assert.equal((await f.publish()).ok,true);assert.equal(f.calls.filter(c=>c.url.endsWith('/initialize')).length,1);const append=f.calls.find(c=>c.url.endsWith('/append'));assert.equal(await append.options.body.get('media').text(),'approved-media');assert.deepEqual(JSON.parse(f.posts()[0].options.body).media,{media_ids:['900']});});

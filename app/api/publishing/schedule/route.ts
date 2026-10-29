@@ -14,6 +14,7 @@ import { approvedContentStatuses, reservedDeliveryStatuses, deliveryMessage } fr
 export const maxDuration = 60;
 
 const S = z.object({
+  x: z.object({ text: z.string().max(5000), sourceText: z.string().max(5000), approved: z.literal(true) }).optional(),
   tiktok:TikTokOptions.optional(),
   organizationId: z.string().optional(),
   contentItemId: z.string(),
@@ -84,7 +85,7 @@ export async function POST(req: Request) {
     const xSelected = await prisma.socialConnection.findMany({ where: { id: { in: p.data.socialConnectionIds }, organizationId: ctx.organizationId, provider: "x" } });
     const xPosts = new Map<string, XPost>();
     for (const connection of xSelected) {
-      try { xPosts.set(connection.id, await prepareXPost(ctx.organizationId, item, connection)); }
+      try { xPosts.set(connection.id, await prepareXPost(ctx.organizationId, item, connection, p.data.x)); }
       catch (error) { return NextResponse.json({ submitted: false, error: error instanceof XPublishError ? error.message : "Rumi could not prepare this post for X. Please try again." }, { status: 400 }); }
     }
     const jobs = [];

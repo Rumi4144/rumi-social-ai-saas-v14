@@ -14,12 +14,14 @@ let browser, server;
   fs.writeFileSync(path.join(out, 'entry.tsx'), `import React from 'react';import {createRoot} from 'react-dom/client';import Actions from ${JSON.stringify(repo + '/app/publishing/PublishingActions')};import ${JSON.stringify(repo + '/app/globals.css')};createRoot(document.getElementById('root')!).render(location.pathname.startsWith('/youtube')?<article className="card" style={{maxWidth:430,margin:12}}><Actions contentItemId="post" connectionId="x" destination="X · @Rumiguitars1" existingDelivery={{status:'published',externalPostId:'123456'}}/><Actions contentItemId="post" connectionId="youtube" destination="YouTube · Rumi Guitars" existingDelivery={location.pathname.endsWith('/done')?{status:'published',externalPostId:'yt-video'}:undefined}/></article>:<Actions contentItemId="post" connectionId="x" destination="X · @Rumiguitars1"/>);`);
   await esbuild.build({ entryPoints: [path.join(out, 'entry.tsx')], bundle: true, outfile: path.join(out, 'app.js'), nodePaths: [repo + '/node_modules'], jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
   const writes = [], errors = [], unexpected = [];
+  const sourceCaption = 'Meet Rumi Guitars. ' + 'Longer details for other social platforms. '.repeat(10);
   let code = 400, response = { submitted: false, error: 'Shorten this caption.' }, jobs = [], delay = 0;
   server = http.createServer(async (req, res) => {
     if (req.url === '/app.js') { res.setHeader('Content-Type', 'application/javascript'); return res.end(fs.readFileSync(path.join(out, 'app.js'))); }
     if (req.url === '/app.css') { res.setHeader('Content-Type', 'text/css'); return res.end(fs.readFileSync(path.join(out, 'app.css'))); }
     res.setHeader('Content-Type', 'application/json');
     if (req.url.startsWith('/api/publishing/status?')) return res.end(JSON.stringify({ jobs }));
+    if (req.url === '/api/content-items/post/x-caption') return res.end(JSON.stringify({ contentItemId:'post', sourceText:sourceCaption, text:'Meet Rumi Guitars. Explore the collection.', hasMedia:true }));
     if (['/api/publishing/now', '/api/publishing/schedule'].includes(req.url)) {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
       writes.push({ route: req.url, ...JSON.parse(Buffer.concat(chunks)) });
@@ -37,9 +39,15 @@ let browser, server;
   page.on('dialog', dialog => dialog.accept());
   const base = 'http://127.0.0.1:' + server.address().port;
   await page.goto(base);
-  const publish = page.getByRole('button', { name: 'Publish to X · @Rumiguitars1', exact: true });
+  const publish = page.getByRole('button', { name: 'Approve and publish to X · @Rumiguitars1', exact: true });
   const receipt = page.getByRole('link', { name: 'View X post', exact: true });
 
+  const xCaption = page.getByLabel('Edit X caption', {exact:true});
+  await xCaption.waitFor();
+  assert.equal(await xCaption.inputValue(),'Meet Rumi Guitars. Explore the collection.');
+  await xCaption.fill('a'.repeat(281));
+  assert.equal(await publish.isDisabled(),true);assert.equal(writes.length,0);
+  await xCaption.fill('Reviewed caption for X.');
   await publish.click();
   await page.getByText('Not sent to X. Shorten this caption.', { exact: true }).waitFor();
   assert.equal(await publish.isEnabled(), true);
@@ -60,6 +68,7 @@ let browser, server;
   assert.equal(await publish.isDisabled(), true);
   assert.equal(writes.length, 3);
   assert.equal(writes.every(write => write.contentItemId === 'post' && write.socialConnectionId === 'x'), true);
+  assert.ok(writes.every(write=>write.x.text==='Reviewed caption for X.' && write.x.sourceText===sourceCaption && write.x.approved===true));
 
   await page.goto(base);
   await page.clock.install();
@@ -78,11 +87,11 @@ let browser, server;
   await page.goto(base);
   code = 400; response = { submitted: false, error: 'Shorten this caption.' }; jobs = [];
   await page.locator('input[type=datetime-local]').fill('2099-01-01T12:00');
-  await page.getByRole('button', { name: 'Schedule', exact: true }).click();
+  await page.getByRole('button', { name: 'Approve and schedule', exact: true }).click();
   await page.getByText('Not scheduled. Shorten this caption.', { exact: true }).waitFor();
   code = 201; response = { scheduled: 1 };
   jobs = [{ id: 'scheduled', platform: 'x', status: 'scheduled', scheduledFor: '2099-01-01T12:00:00Z', socialConnection: { accountName: 'Rumiguitars1' } }];
-  await page.getByRole('button', { name: 'Schedule', exact: true }).click();
+  await page.getByRole('button', { name: 'Approve and schedule', exact: true }).click();
   await page.getByText(/Schedule saved for/).waitFor();
   await page.getByText(/Scheduled ·/).waitFor();
   assert.equal(await receipt.count(), 0);
@@ -93,7 +102,7 @@ let browser, server;
   // The already posted X delivery stays visible while the same reel is available on YouTube.
   await page.setViewportSize({ width: 390, height: 1000 });
   await page.goto(base + '/youtube');
-  assert.equal(await page.getByRole('button', { name: 'Publish to X · @Rumiguitars1' }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Approve and publish to X · @Rumiguitars1' }).count(), 0);
   assert.equal(await receipt.getAttribute('href'), 'https://x.com/i/status/123456');
   const upload = page.getByRole('button', { name: 'Upload to YouTube · Rumi Guitars', exact: true });
   const kids = page.getByLabel('Made for kids', { exact: true });

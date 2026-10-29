@@ -53,7 +53,7 @@ export async function publishX(input: { organizationId?: string; contentItemId?:
     const currentPost = async () => {
       if (!await prisma.publishJob.findFirst({ where: { id: jobId, organizationId: org, platform: "x", status: { in: ["publishing", "retry"] } } })) throw new XPublishError("This X post was cancelled. Review and approve it again before posting.");
       const item = await prisma.contentItem.findFirst({ where: { id: post.contentItemId, campaign: { brand: { organizationId: org } }, status: { in: ["approved", "scheduled", "published"] } } });
-      if (!item || (item.caption || item.headline || "") !== post.text || item.mediaUrl !== post.mediaUrl) throw new XPublishError("This post changed after approval. Review and approve it again before sending it to X.");
+      if (!item || (item.caption || item.headline || "") !== (post.sourceText ?? post.text) || item.mediaUrl !== post.mediaUrl) throw new XPublishError("This post changed after approval. Review and approve it again before sending it to X.");
       const connection = await prisma.socialConnection.findFirst({ where: { id: post.connectionId, organizationId: org, provider: "x", externalId: post.accountId, status: "connected" } });
       if (!connection) throw new XPublishError(X_RECONNECT);
       return connection;

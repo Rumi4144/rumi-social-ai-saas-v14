@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import TikTokPostOptions from "./TikTokPostOptions";
 import type {TikTokPostOptions as TikTokOptions} from "@/lib/tiktok/options";
 import PostDeliveryStatus from "./PostDeliveryStatus";
+import XCaptionReview, { useXCaptionReview } from "./XCaptionReview";
 
 type Connection = {
   id: string;
@@ -152,6 +153,8 @@ export default function SchedulePostButton({
 
   const tikTokSelected=connections.find(connection=>connection.provider==="tiktok"&&selected.includes(connection.id));
   const youtubeSelected = connections.some(c => c.provider === "youtube" && selected.includes(c.id));
+  const xSelected = connections.some(c => c.provider === "x" && selected.includes(c.id));
+  const xCaption = useXCaptionReview(contentItemId, open && xSelected && !completed);
 
   function toggleConnection(id: string) {
     setSelected((current) =>
@@ -173,6 +176,8 @@ export default function SchedulePostButton({
       return;
     }
 
+    if (xSelected && !xCaption.ready) { setError("Review a valid X caption before posting."); return; }
+
     if(tikTokSelected&&!tikTokOptions){setError("Review TikTok visibility, disclosures and music permissions below.");return;}
     if (youtubeSelected && !youtubeCertified) { setError("Confirm the YouTube upload settings."); return; }
     setBusy(true);
@@ -191,6 +196,7 @@ export default function SchedulePostButton({
           contentItemId,
           socialConnectionIds: selected,
           scheduledFor: isoTime,
+          ...(xSelected ? { x: xCaption.review } : {}),
           ...(tikTokSelected?{tiktok:tikTokOptions}:{}),
           ...(youtubeSelected ? { youtube: { certified: youtubeCertified, privacy, madeForKids, containsSyntheticMedia: synthetic } } : {}),
         }),
@@ -291,8 +297,10 @@ export default function SchedulePostButton({
             )}
             {!completed && <button type="button" disabled={busy || loading} onClick={() => setConnectionRefresh(value => value + 1)}>{loading ? "Loading accounts…" : "Refresh accounts"}</button>}
             {connections.some(connection => connection.provider === "x" && connection.status !== "connected") && <p>Enable X posting in the new tab, then return here and refresh accounts. Your post stays open.</p>}
-            {connections.some(connection => connection.provider === "x" && selected.includes(connection.id)) && <p>X will receive this approved caption and photo or reel. X may charge your developer balance for publishing.</p>}
+            {xSelected && <p>X will receive the caption reviewed below and the selected photo or reel. X may charge your developer balance for publishing.</p>}
           </div>
+
+          {xSelected && !completed && <XCaptionReview state={xCaption} disabled={busy} />}
 
           {tikTokSelected&&<TikTokPostOptions connectionId={tikTokSelected.id} contentItemId={contentItemId} assetId={videoAssetId} disabled={busy||completed} onChange={setTikTokOptions}/>}
           {youtubeSelected && <div><p>The selected video, post headline and caption will be uploaded at the scheduled time.</p><label>Visibility <select disabled={busy || completed} value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label><input type="checkbox" disabled={busy || completed} checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> This video is made for kids</label><label><input type="checkbox" disabled={busy || completed} checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Contains realistic altered or synthetic content</label><label><input type="checkbox" disabled={busy || completed} checked={youtubeCertified} onChange={e=>setYoutubeCertified(e.target.checked)} /> I authorize this YouTube upload with the selected visibility, have rights to the video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
@@ -313,9 +321,9 @@ export default function SchedulePostButton({
           <button
             type="button"
             onClick={schedule}
-            disabled={busy || completed || loading || connections.length === 0 || (!!tikTokSelected && !tikTokOptions)}
+            disabled={busy || completed || loading || connections.length === 0 || (!!tikTokSelected && !tikTokOptions) || (xSelected && !xCaption.ready)}
           >
-            {completed ? "✓ Submitted" : busy ? "Preparing your post…" : postNow ? "Approve and post now" : allowPostNow ? "Approve and schedule" : "Schedule Post"}
+            {completed ? "✓ Submitted" : busy ? "Preparing your post…" : postNow ? "Approve and post now" : allowPostNow || xSelected ? "Approve and schedule" : "Schedule Post"}
           </button>
 
           <p role="status" aria-live="polite" style={{minHeight:"3em",marginTop:10}}>{completed ? "Submitted. Delivery status updates above." : ""}</p>

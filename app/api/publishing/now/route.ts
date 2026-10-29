@@ -14,6 +14,7 @@ import { z } from "zod";
 
 export const maxDuration = 60;
 const S = z.object({
+  x: z.object({ text: z.string().max(5000), sourceText: z.string().max(5000), approved: z.literal(true) }).optional(),
   tiktok:TikTokOptions.optional(),
   contentItemId: z.string(),
   socialConnectionId: z.string(),
@@ -88,7 +89,7 @@ export async function POST(req: Request) {
 
     let xPost: XPost | undefined;
     if (connection.provider === "x") {
-      try { xPost = await prepareXPost(ctx.organizationId, item, connection); }
+      try { xPost = await prepareXPost(ctx.organizationId, item, connection, parsed.data.x); }
       catch (error) { return NextResponse.json({ submitted: false, error: error instanceof XPublishError ? error.message : "Rumi could not prepare this post for X. Please try again." }, { status: 400 }); }
     }
 

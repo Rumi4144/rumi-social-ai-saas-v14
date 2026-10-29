@@ -25,6 +25,7 @@ let browser, server;
     }
     res.setHeader('Content-Type','application/json');
     if (url.pathname === '/api/publishing/status') return res.end(JSON.stringify({jobs:deliveries}));
+    if (url.pathname === '/api/content-items/post/x-caption') return res.end(JSON.stringify({contentItemId:'post',sourceText:'My saved reel caption',text:'My saved reel caption',hasMedia:true}));
     if (url.pathname === '/api/social/connections') {
       res.statusCode = fail ? 500 : 200;
       const body = JSON.stringify(fail ? {error:'Test account loading failed'} : {connections:accounts});
@@ -123,12 +124,17 @@ let browser, server;
     assert.equal(await xBox.isDisabled(),false);assert.equal(await xBox.isChecked(),false);
     assert.equal(await page.getByLabel('Reel caption').inputValue(),'Preserve my approved guitar.');
     await xBox.check();
+    await page.getByLabel('Edit X caption').waitFor();
+    await page.getByLabel('Edit X caption').fill('x'.repeat(281));
+    assert.equal(await page.getByRole('button',{name:'Approve and post now',exact:true}).isDisabled(),true);
+    await page.getByLabel('Edit X caption').fill('A reviewed guitar caption for X.');
     const before = writes.length;
     deliveries = [{id:'delivery',platform:'x',status:'published',scheduledFor:new Date().toISOString(),publishedAt:new Date().toISOString(),externalPostId:'123456',socialConnection:{accountName:'RumiGuitars1'}}];
     await page.getByRole('button',{name:'Approve and post now',exact:true}).click();
     const receipt = page.getByRole('link',{name:'View X post',exact:true});await receipt.waitFor();
     assert.equal(await receipt.getAttribute('href'),'https://x.com/i/status/123456');
     assert.equal(writes.length,before+1);assert.deepEqual(writes.at(-1).socialConnectionIds,['x']);
+    assert.deepEqual(writes.at(-1).x,{text:'A reviewed guitar caption for X.',sourceText:'My saved reel caption',approved:true});
   }
   const evidence = process.env.SOCIAL_ACCOUNT_QA_DIR;
   if (evidence) {fs.mkdirSync(evidence, {recursive:true}); await page.screenshot({path:path.join(evidence, 'account-selection.png'), fullPage:true});}
