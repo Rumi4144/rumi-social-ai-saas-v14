@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { superAdminContext } from "@/lib/admin/context";
 import AdminOrganizationGrid from "@/components/AdminOrganizationGrid";
 import AdminCreateOrganization from "@/components/AdminCreateOrganization";
+import AdminTabs from "@/components/AdminTabs";
 
 export default async function AdminPage() {
   try {
@@ -65,6 +66,7 @@ export default async function AdminPage() {
 
   return (
     <>
+      <AdminTabs active="overview" />
       <section className="hero v2">
         <div>
           <div className="eyebrow">MASTER ADMIN · RUMI SOCIAL AI</div>

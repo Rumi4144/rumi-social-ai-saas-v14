@@ -53,6 +53,9 @@ jobs:
         env:
           PRODUCT_REEL_QA_DIR: qa-product-reel
       - run: node tests/creative-template-browser.cjs
+      - run: node tests/admin-design-formats-browser.cjs
+        env:
+          ADMIN_DESIGN_QA_DIR: qa-admin-design-formats
       - run: node tests/tiktok-posting-browser.cjs
       - run: node tests/publishing-position-browser.cjs
       - run: node tests/social-account-selection-browser.cjs
@@ -79,3 +82,4 @@ jobs:
             qa-ai-lab/
             qa-ai-options/
             qa-product-reel/
+            qa-admin-design-formats/

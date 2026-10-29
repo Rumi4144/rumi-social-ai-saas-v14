@@ -2,11 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { superAdminContext } from "@/lib/admin/context";
 import UserActivity from "./UserActivity";
+import AdminTabs from "@/components/AdminTabs";
 
 export default async function ActivityPage() {
   try { await superAdminContext(); }
   catch (error: any) { redirect(error?.message === "UNAUTHENTICATED" ? "/login" : "/dashboard"); }
   return <>
+    <AdminTabs active="activity" />
     <Link href="/admin">← Back to Master Admin</Link>
     <div style={{ margin: "24px 0" }}>
       <div className="eyebrow">MASTER ADMIN</div>
