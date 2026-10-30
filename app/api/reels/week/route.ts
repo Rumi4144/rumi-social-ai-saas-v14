@@ -7,7 +7,7 @@ import { weekDates } from "@/lib/reels/week";
 const S=z.object({requestId:z.string().uuid(),campaignId:z.string().min(1),startDate:z.string(),days:z.array(z.object({headline:z.string().min(1).max(120),caption:z.string().max(2000)})).length(7)});
 export async function POST(req:Request){
  try{
-  const ctx=await tenantContext();if(ctx.role==="viewer")throw new Error("FORBIDDEN");
+  const ctx=await tenantContext();if(!ctx.isSuperAdmin)return NextResponse.json({error:"Create customer weeks from This Week. Advanced draft creation is available in Admin."},{status:403});if(ctx.role==="viewer")throw new Error("FORBIDDEN");
   const parsed=S.safeParse(await req.json());if(!parsed.success)return NextResponse.json({error:"Choose a start date and seven complete daily drafts."},{status:400});
   const p=parsed.data;let dates;try{dates=weekDates(p.startDate);}catch{return NextResponse.json({error:"Choose a valid start date."},{status:400});}
   const campaign=await prisma.campaign.findFirst({where:{id:p.campaignId,brand:{organizationId:ctx.organizationId}}});

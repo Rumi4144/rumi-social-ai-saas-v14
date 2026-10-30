@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { superAdminContext } from "@/lib/admin/context";
 import { z } from "zod";
+import { canonicalPlan } from "@/lib/billing/packages";
 
 const S = z.object({
-  plan: z.enum(["starter", "pro", "business", "enterprise"]),
+  plan: z.enum(["starter", "creator", "business", "agency", "pro", "enterprise"]),
   status: z.enum(["trialing", "active", "past_due", "canceled"]),
   credits: z.number().int().min(0).max(1000000),
 });
@@ -14,7 +15,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await superAdminContext();
+    const admin = await superAdminContext();
 
     const { id: organizationId } = await params;
     const parsed = S.safeParse(await req.json());
@@ -38,19 +39,15 @@ export async function PATCH(
       );
     }
 
-    const subscription = await prisma.subscription.upsert({
-      where: { organizationId },
-      update: {
-        plan: parsed.data.plan,
-        status: parsed.data.status,
-        credits: parsed.data.credits,
-      },
-      create: {
-        organizationId,
-        plan: parsed.data.plan,
-        status: parsed.data.status,
-        credits: parsed.data.credits,
-      },
+    const subscription = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "Subscription" WHERE "organizationId" = ${organizationId} FOR UPDATE`;
+      const before = await tx.subscription.findUnique({ where: { organizationId } });
+      const data = { ...parsed.data, plan: canonicalPlan(parsed.data.plan) };
+      const updated = await tx.subscription.upsert({ where: { organizationId }, update: data, create: { organizationId, ...data } });
+      const delta = updated.credits - (before?.credits || 0);
+      if (delta) await tx.creditLedger.create({ data: { organizationId, delta, balanceAfter: updated.credits, reason: "admin_balance_adjustment", referenceId: updated.id } });
+      await tx.auditLog.create({ data: { organizationId, userId: admin.id, action: "subscription_updated", resource: "subscription", resourceId: updated.id, metadata: { before: before ? { plan: before.plan, status: before.status, credits: before.credits } : null, after: data } } });
+      return updated;
     });
 
     return NextResponse.json({

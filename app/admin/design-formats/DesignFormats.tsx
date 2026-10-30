@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DESIGN_FORMATS, DESIGN_SIZES, designHeadline, renderDesignFormat, type DesignFormat, type DesignSize, type DesignFonts, type MeasureDesignText } from "@/lib/render/design-formats";
+import { WEEKLY_DESIGN_CHOICES, renderWeeklyDesign, type WeeklyDesign } from "@/lib/render/weekly-layouts";
 import styles from "./DesignFormats.module.css";
 
 const dataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
@@ -11,6 +12,7 @@ const loadImage = (src: string) => new Promise<HTMLImageElement>((resolve, rejec
 });
 const svgUrl = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 const faces = { display: "RumiDisplay", editorial: "RumiEditorial", italic: "RumiEditorialItalic", body: "RumiBody" } as const;
+type PreviewFormat = DesignFormat | WeeklyDesign;
 async function bundledImage(path: string) {
   const response = await fetch(path); if (!response.ok) throw new Error("The sample assets could not load. Try again or choose your own images.");
   const source = await dataUrl(await response.blob()); await loadImage(source); return source;
@@ -27,7 +29,7 @@ export default function DesignFormats() {
   const [size, setSize] = useState<DesignSize>("portrait"), [photo, setPhoto] = useState(""), [logo, setLogo] = useState("");
   const [customPhoto, setCustomPhoto] = useState(false), [logoSource, setLogoSource] = useState<"website" | "upload" | "missing">("website");
   const [customAccent, setCustomAccent] = useState(false), [accent, setAccent] = useState("#ef653d"), [fonts, setFonts] = useState<DesignFonts | null>(null);
-  const [selected, setSelected] = useState<DesignFormat | null>(null), [downloading, setDownloading] = useState<DesignFormat | null>(null), [message, setMessage] = useState("");
+  const [selected, setSelected] = useState<PreviewFormat | null>(null), [downloading, setDownloading] = useState<PreviewFormat | null>(null), [message, setMessage] = useState("");
   const [loadingPhoto, setLoadingPhoto] = useState(true), [loadingLogo, setLoadingLogo] = useState(true), [fontError, setFontError] = useState(false), [fontAttempt, setFontAttempt] = useState(0);
   const dialog = useRef<HTMLDialogElement>(null), upload = useRef<HTMLInputElement>(null), logoUpload = useRef<HTMLInputElement>(null), photoRequest = useRef(0), logoRequest = useRef(0);
   async function resetSample() {
@@ -58,7 +60,7 @@ export default function DesignFormats() {
     return context ? (value, pixels, face) => { context.font = `${pixels}px ${faces[face]}`; return context.measureText(value).width; } : undefined;
   }, [fonts]);
   const sample = { brand, headline, cta, photo, logo, detail, website, size, accent: customAccent ? accent : undefined, fonts: fonts || undefined, measure };
-  const previews = useMemo(() => DESIGN_FORMATS.map(format => ({ ...format, svg: renderDesignFormat(sample, format.value) })), [brand, headline, cta, photo, logo, detail, website, size, accent, customAccent, fonts, measure]);
+  const previews = useMemo(() => [...DESIGN_FORMATS.map(format => ({ ...format, svg: renderDesignFormat(sample, format.value) })), ...WEEKLY_DESIGN_CHOICES.map(format => ({ ...format, svg: renderWeeklyDesign({ brand, headline, cta, imageUrl: photo, logoUrl: logo, format: size, accentColor: customAccent ? accent : "#ef653d", primaryColor: "#172846", designFonts: fonts || undefined }, format.value) }))], [brand, headline, cta, photo, logo, detail, website, size, accent, customAccent, fonts, measure]);
   const headlineTooLong = DESIGN_FORMATS.some(format => designHeadline(headline, format.value, measure).overflow);
   const loading = loadingPhoto || loadingLogo || !fonts;
   const canDownload = Boolean(photo && logo && brand.trim() && headline.trim() && cta.trim() && !headlineTooLong && !loading && !downloading);
@@ -81,7 +83,7 @@ export default function DesignFormats() {
       setMessage("Add this brand’s own logo below. The Rumi Guitars logo has been removed from the previews.");
     }
   }
-  async function download(format: DesignFormat) {
+  async function download(format: PreviewFormat) {
     if (!canDownload) return;
     setDownloading(format); setMessage("");
     try {

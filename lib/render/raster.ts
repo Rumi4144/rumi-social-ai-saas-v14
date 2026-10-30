@@ -1,6 +1,17 @@
 import { Resvg } from "@resvg/resvg-js";
 import sharp from "sharp";
 import { join } from "path";
+import { readFile } from "node:fs/promises";
+
+let designFontPromise: Promise<{ display: string; editorial: string; body: string }> | undefined;
+/** The same licensed font bytes travel with SVG previews and raster exports. */
+export function weeklyDesignFonts() {
+  return designFontPromise ||= Promise.all([
+    readFile(join(process.cwd(), "public/design-formats/display.woff2")),
+    readFile(join(process.cwd(), "public/design-formats/editorial.woff2")),
+    readFile(join(process.cwd(), "public/fonts/noto-sans-latin-400-normal.woff")),
+  ]).then(([display, editorial, body]) => ({ display: `data:font/woff2;base64,${display.toString("base64")}`, editorial: `data:font/woff2;base64,${editorial.toString("base64")}`, body: `data:font/woff;base64,${body.toString("base64")}` }));
+}
 
 async function imageBytes(url: string): Promise<Buffer> {
   let bytes: Buffer;
@@ -49,7 +60,7 @@ export async function svgToPublishJpeg(svg: string): Promise<Buffer> {
   const resvg = new Resvg(svg, {
     fitTo: { mode: "original" },
     font: {
-      fontFiles: [fontPath, join(process.cwd(), "public", "fonts", "CormorantGaramond.ttf")],
+      fontFiles: [fontPath, join(process.cwd(), "public", "fonts", "CormorantGaramond.ttf"), join(process.cwd(), "public/fonts/BarlowCondensed-ExtraBold.ttf"), join(process.cwd(), "public/fonts/CormorantGaramond-SemiBold.ttf"), join(process.cwd(), "public/fonts/NotoSans-Regular.ttf")],
       loadSystemFonts: false,
       defaultFontFamily: "Arial",
       sansSerifFamily: "Arial",

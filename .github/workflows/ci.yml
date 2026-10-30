@@ -60,6 +60,12 @@ jobs:
       - run: node tests/publishing-position-browser.cjs
       - run: node tests/social-account-selection-browser.cjs
       - run: node tests/user-activity-browser.cjs
+      - run: node tests/weekly-customer-browser.cjs
+      - run: node tests/onboarding-browser.cjs
+      - run: node tests/weekly-video-browser.cjs
+      - run: node tests/weekly-billing-browser.cjs
+        env:
+          WEEKLY_BILLING_QA_DIR: qa-weekly/billing
       - run: node tests/campaign-photo-browser.cjs
       - run: node tests/photo-review-browser.cjs
       - run: node tests/scene-photo-browser.cjs
@@ -83,3 +89,4 @@ jobs:
             qa-ai-options/
             qa-product-reel/
             qa-admin-design-formats/
+            qa-weekly/

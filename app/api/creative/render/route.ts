@@ -3,9 +3,11 @@ import { z } from "zod";
 import { renderSocialSvg } from "@/lib/render/svg";
 import { businessVisualMode } from "@/lib/ai/visual-plan";
 import { isShowcaseStyle, automaticShowcaseStyle } from "@/lib/render/showcase";
+import { isWeeklyDesign } from "@/lib/render/weekly-layouts";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
-import { imageToJpegDataUrl, logoToPngDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
+import { saveCreativeRevision } from "@/lib/creative/save-revision";
+import { imageToJpegDataUrl, logoToPngDataUrl, svgToPublishJpeg, weeklyDesignFonts } from "@/lib/render/raster";
 
 const S = z.object({
   campaignId: z.string().optional(),
@@ -14,7 +16,7 @@ const S = z.object({
   subheadline: z.string().optional(),
   cta: z.string().optional(),
   imageUrl: z.string().optional(),
-  designStyle: z.string().refine(value=>value==='automatic'||value==='classic'||isShowcaseStyle(value), 'Choose a supported post design.').optional(),
+  designStyle: z.string().refine(value=>value==='automatic'||value==='classic'||isShowcaseStyle(value)||isWeeklyDesign(value), 'Choose a supported post design.').optional(),
   textPosition: z.enum(["left", "right", "top"]).optional(),
   format: z
     .enum(["square", "portrait", "story"])
@@ -26,6 +28,7 @@ const S = z.object({
 export async function POST(req: Request) {
   try {
     const ctx = await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });
 
     const parsed = S.safeParse(await req.json());
 
@@ -57,21 +60,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "INVALID_BROWSER_RASTER" }, { status: 400 });
       }
 
-      const existingAsset = parsed.data.contentItemId
-        ? await prisma.mediaAsset.findFirst({
-            where: {
-              organizationId: ctx.organizationId,
-              contentItemId: parsed.data.contentItemId,
-              kind: "social_creative",
-              provider: { in: ["internal-raster", "internal-svg"] },
-            },
-            orderBy: { createdAt: "desc" },
-          })
-        : null;
-
       const assetData = {
         organizationId: ctx.organizationId,
-        campaignId: parsed.data.campaignId,
+        campaignId: post?.campaignId || parsed.data.campaignId,
         contentItemId: parsed.data.contentItemId,
         kind: "social_creative",
         provider: "internal-raster",
@@ -88,9 +79,8 @@ export async function POST(req: Request) {
         },
       };
 
-      const asset = existingAsset
-        ? await prisma.mediaAsset.update({ where: { id: existingAsset.id }, data: assetData })
-        : await prisma.mediaAsset.create({ data: assetData });
+      // Preserve previously selected and cached artwork when Admin revises a design.
+      const asset = await saveCreativeRevision(assetData, post);
 
       return NextResponse.json({ assetId: asset.id, url: parsed.data.browserRasterDataUrl, format: parsed.data.format });
     }
@@ -127,6 +117,7 @@ export async function POST(req: Request) {
       headingFont: brand.headingFont || undefined,
       bodyFont: brand.bodyFont || undefined,
       designStyle,
+      ...(isWeeklyDesign(designStyle) ? { designFonts: await weeklyDesignFonts() } : {}),
     });
 
     if (parsed.data.prepareOnly) {
@@ -139,23 +130,9 @@ export async function POST(req: Request) {
     const jpeg = await svgToPublishJpeg(svg);
     const dataUrl = `data:image/jpeg;base64,${jpeg.toString("base64")}`;
 
-    const existingAsset = parsed.data.contentItemId
-      ? await prisma.mediaAsset.findFirst({
-          where: {
-            organizationId: ctx.organizationId,
-            contentItemId: parsed.data.contentItemId,
-            kind: "social_creative",
-            provider: { in: ["internal-raster", "internal-svg"] },
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-        })
-      : null;
-
     const assetData = {
       organizationId: ctx.organizationId,
-      campaignId: parsed.data.campaignId,
+      campaignId: post?.campaignId || parsed.data.campaignId,
       contentItemId: parsed.data.contentItemId,
       kind: "social_creative",
       provider: "internal-raster",
@@ -176,14 +153,8 @@ export async function POST(req: Request) {
       },
     };
 
-    const asset = existingAsset
-      ? await prisma.mediaAsset.update({
-          where: { id: existingAsset.id },
-          data: assetData,
-        })
-      : await prisma.mediaAsset.create({
-          data: assetData,
-        });
+    // Preserve previously selected and cached artwork when Admin revises a design.
+    const asset = await saveCreativeRevision(assetData, post);
 
     return NextResponse.json({
       assetId: asset.id,

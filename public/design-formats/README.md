@@ -22,3 +22,8 @@ matches the preview on another device. Fonts are licensed under the SIL OFL:
 These are proposed design treatments, not claims that these fonts are the brand's
 own official fonts. The website logo and product photograph retain their original
 pixels. Curves, color fields, typography and frames are separate SVG elements.
+
+The weekly server renderer uses lossless TTF conversions of the same bundled font
+files (`../fonts/BarlowCondensed-ExtraBold.ttf`, `CormorantGaramond-SemiBold.ttf`,
+and `NotoSans-Regular.ttf`). WOFF/WOFF2 are retained for embedded browser previews;
+the native rasterizer needs the TTF containers. No glyph outlines were changed.

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PACKAGE_KEYS, PACKAGE_CATALOG, TRIAL_PACKAGE } from "@/lib/billing/packages";
 
 export default function AdminCreateOrganization() {
   const router = useRouter();
@@ -9,7 +10,7 @@ export default function AdminCreateOrganization() {
   const [name, setName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [plan, setPlan] = useState("starter");
-  const [credits, setCredits] = useState(100);
+  const [credits, setCredits] = useState<number>(TRIAL_PACKAGE.monthlyCredits);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [inviteUrl, setInviteUrl] = useState("");
@@ -58,7 +59,7 @@ export default function AdminCreateOrganization() {
       setName("");
       setOwnerEmail("");
       setPlan("starter");
-      setCredits(100);
+      setCredits(TRIAL_PACKAGE.monthlyCredits);
 
       router.refresh();
     } catch {
@@ -104,7 +105,7 @@ export default function AdminCreateOrganization() {
       </label>
 
       <label style={{ display: "block", marginTop: 16 }}>
-        <strong>Plan</strong>
+        <strong>Plan after trial</strong>
         <select
           value={plan}
           onChange={(e) => setPlan(e.target.value)}
@@ -114,10 +115,7 @@ export default function AdminCreateOrganization() {
             marginTop: 6,
           }}
         >
-          <option value="starter">Starter</option>
-          <option value="pro">Pro</option>
-          <option value="business">Business</option>
-          <option value="enterprise">Enterprise</option>
+          {PACKAGE_KEYS.map(key => <option key={key} value={key}>{PACKAGE_CATALOG[key].label}</option>)}
         </select>
       </label>
 

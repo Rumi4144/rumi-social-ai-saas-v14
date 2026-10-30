@@ -29,8 +29,15 @@ function fixture(options={}) {
  const changes=[];let transactions=0;
  const item={id:'post',campaignId:'campaign',status:'draft',headline:input.headline,caption:input.caption,...options.item};
  const asset={id:'reel',url:'/api/video/media/reel',metadata:{contentType:'video/mp4'},...options.asset};
- const prisma={$transaction:async fn=>{transactions++;return fn({contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'mind');return item},update:async q=>{changes.push(q);return {...item,...q.data}}},mediaAsset:{findFirst:async q=>{assert.equal(q.where.organizationId,'mind');assert.equal(q.where.campaignId,item.campaignId);assert.equal(q.where.contentItemId,item.id);return options.missingAsset?null:asset}},publishJob:{findFirst:async()=>options.active?{id:'active'}:null}})}};
- const api=load('app/api/reels/prepare-publishing/route.ts',{'next/server':{NextResponse:{json}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'mind',role:options.role||'owner'})},'@/lib/prisma':{prisma}});
+ const prisma={$transaction:async fn=>{
+   transactions++;
+   return fn({
+     contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'mind');return item},update:async q=>{changes.push(q);return {...item,...q.data}}},
+     mediaAsset:{findFirst:async q=>{assert.equal(q.where.organizationId,'mind');assert.equal(q.where.campaignId,item.campaignId);assert.equal(q.where.contentItemId,item.id);return options.missingAsset?null:asset}},
+     publishJob:{findFirst:async q=>{assert.equal(q.where.organizationId,'mind');assert.ok(q.where.status.in.includes('processing'));assert.ok(q.where.status.in.includes('verification_pending'));return options.active?{id:'active'}:null}},
+   });
+ }};
+ const api=load('app/api/reels/prepare-publishing/route.ts',{'next/server':{NextResponse:{json}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'mind',role:options.role||'superadmin',isSuperAdmin:options.isSuperAdmin??!options.role})},'@/lib/prisma':{prisma}});
  return {api,changes,count:()=>transactions};
 }
 test('reviewed reel is selected and approved without sending a social post',async()=>{
@@ -38,6 +45,9 @@ test('reviewed reel is selected and approved without sending a social post',asyn
 });
 test('viewer and changed workspace cannot prepare a reel',async()=>{
  for(const options of [{role:'viewer'},{}]){const f=fixture(options);const r=await f.api.POST(request(options.role?{}:{organizationId:'guitars'}));assert.equal(r.status,options.role?403:409);assert.equal(f.count(),0);}
+});
+test('ordinary owners, admins and members cannot bypass weekly completion and approval',async()=>{
+ for(const role of ['owner','admin','member']){const f=fixture({role,isSuperAdmin:false});assert.equal((await f.api.POST(request())).status,403);assert.equal(f.count(),0);assert.equal(f.changes.length,0);}
 });
 test('missing or non-MP4 reel cannot be approved',async()=>{
  for(const options of [{missingAsset:true},{asset:{metadata:{contentType:'video/webm'}}}]){const f=fixture(options);const r=await f.api.POST(request());assert.ok([400,404].includes(r.status));assert.equal(f.changes.length,0);}

@@ -15,6 +15,7 @@ export async function PATCH(
 ) {
   try {
     const ctx = await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });
     const { id } = await params;
 
     const parsed = Schema.safeParse(await req.json());

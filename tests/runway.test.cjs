@@ -34,7 +34,7 @@ global.fetch=async(url,init)=>{calls.push({url:String(url),init});const response
 const helper=load('lib/video/runway.ts',{});
 const storage={put:async(path,body,opts)=>{await new Response(body).arrayBuffer();stored.push({path,opts})},get:async()=>({statusCode:200,stream:new Response('video').body,blob:{size:5}})};
 const video=load('lib/video/jobs.ts',{'@/lib/prisma':{prisma},'@vercel/blob':storage,'./runway':helper});
-const context={tenantContext:async()=>({organizationId:org,role:'owner'})};
+const context={tenantContext:async()=>({isSuperAdmin:true,organizationId:org,role:'owner'})};
 const errors={apiError:(e)=>json({error:'Error'},e.message==='UNAUTHENTICATED'?401:500)};
 const route=load('app/api/video/queue/route.ts',{'next/server':{NextResponse:{json:(data,init)=>new Response(JSON.stringify(data),{...init,headers:{...init?.headers,'Content-Type':'application/json'}})}},zod:require('../node_modules/zod'),'@/lib/prisma':{prisma},'@/lib/auth/context':context,'@/lib/http/errors':errors,'@/lib/video/runway':helper,'@/lib/video/jobs':video});
 const file=load('app/api/video/file/route.ts',{'@vercel/blob':storage,'@/lib/prisma':{prisma},'@/lib/auth/context':context,'@/lib/http/errors':errors});

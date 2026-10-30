@@ -3,6 +3,11 @@ serverExternalPackages:["@resvg/resvg-js"],
 poweredByHeader:false,
 reactStrictMode:true,
 outputFileTracingIncludes:{
+  "/*":[
+    "./public/fonts/*.ttf",
+    "./public/fonts/*.woff",
+    "./public/design-formats/*.woff2"
+  ],
   "/api/media/[id]/publish":[
     "./public/fonts/noto-sans-latin-400-normal.woff"
   ]

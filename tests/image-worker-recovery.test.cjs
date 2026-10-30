@@ -12,7 +12,7 @@ function fixture(){
  '@/lib/ai/visual-director':{buildVisualDirection:input=>{directions.push(input);return 'Frozen scene '+input.recentConcepts[0].changed;}},
  '@/lib/ai/visual-plan':{isSubjectCategory:()=>false},
  };
- for(const name of ['@/lib/campaign/setup-photos','@/lib/ai/campaign','@/lib/campaign/content-plan','@/lib/campaign/photo-matching','@/lib/render/svg','@/lib/render/showcase','@/lib/ai/occasion','@/lib/render/raster'])deps[name]={};
+ for(const name of ['@/lib/creative/save-revision','@/lib/campaign/setup-photos','@/lib/ai/campaign','@/lib/campaign/content-plan','@/lib/campaign/photo-matching','@/lib/render/svg','@/lib/render/showcase','@/lib/ai/occasion','@/lib/render/raster'])deps[name]={};
  const module={exports:{}};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('app/api/jobs/run/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,{module,exports:module.exports,process:{env:{WORKER_SECRET:'test'}},require:n=>n in deps?deps[n]:require(n)});
  return{job,prompts,directions,api:module.exports,reject:()=>reject=true,req:{headers:{get:()=> 'test'},json:async()=>({jobId:job.id,organizationId:'org'})}};

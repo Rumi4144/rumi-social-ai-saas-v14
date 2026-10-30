@@ -100,6 +100,10 @@ export default async function AdminOrganizationPage({
             >
               Enter {organization.name} Workspace →
             </Link>
+            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 18 }}>
+              <Link href={`/admin/archive?organizationId=${encodeURIComponent(organization.id)}`}>Published archive</Link>
+              <Link href={`/admin/requests?organizationId=${encodeURIComponent(organization.id)}`}>Customer requests</Link>
+            </div>
           </div>
         </div>
       </section>

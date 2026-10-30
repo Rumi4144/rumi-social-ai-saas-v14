@@ -20,6 +20,7 @@ const S = z.object({
 export async function POST(req: Request) {
   try {
     const ctx = await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });
     if (ctx.role === "viewer") return NextResponse.json({error:"FORBIDDEN"},{status:403});
 
     const p = S.safeParse(await req.json());

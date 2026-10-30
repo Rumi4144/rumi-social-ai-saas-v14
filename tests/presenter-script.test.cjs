@@ -3,7 +3,7 @@ function fixture({role='owner',found=true,key='test',output='Explore our guitar 
  const calls=[];
  const deps={
   'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},
-  '@/lib/auth/context':{tenantContext:async()=>({organizationId:'org',role})},
+  '@/lib/auth/context':{tenantContext:async()=>({isSuperAdmin:['owner','admin','superadmin'].includes(role),organizationId:'org',role})},
   '@/lib/ai-lab/catalog':{labCanRun:r=>['owner','admin','superadmin'].includes(r)},
   '@/lib/http/errors':{apiError:()=>({status:500})},
   '@/lib/prisma':{prisma:{contentItem:{findFirst:async q=>{assert.equal(q.where.id,'post');assert.equal(q.where.campaignId,'campaign');assert.equal(q.where.campaign.brand.organizationId,'org');return found?{headline:'Find your next guitar',caption:'Explore the collection.',campaign:{goal:'awareness',brand:{name:'Rumi Guitars',websiteUrl:'https://rumiguitars.com',bannedWords:'guaranteed'}}}:null;}}}},

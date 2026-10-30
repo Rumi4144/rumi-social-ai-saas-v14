@@ -82,36 +82,30 @@ export default async function RootLayout({
               </div>
             )}
           </div>
-          <nav>
-            <Link href="/dashboard">Overview</Link>
-            <Link href="/create">✦ Create Everything</Link>
-            <Link href="/campaigns">Campaigns</Link>
-            <Link href="/studio">Creative Studio</Link>
-            {isSuperAdmin && <><Link href="/ai-test-lab">AI Test Lab</Link><Link href="/ai-test-lab/options">AI Options</Link></>}
-            <Link href="/calendar">Campaign Calendar</Link>
-            <Link href="/publishing">Publishing Center</Link>
-            <Link href="/library">Creative Library</Link>
-            <Link href="/analytics">Analytics</Link>
-            <Link href="/brand">Brand Brain</Link>
-            <Link href="/billing">Plans & Billing</Link>
-            <Link href="/usage">Usage & Credits</Link>
-            <Link href="/agency">Agency Mode</Link>
-            <Link href="/workspaces">Workspaces</Link>
-            <Link href="/team">Team & Access</Link>
+          <nav aria-label="Main navigation">
+            <Link href="/dashboard">This Week</Link>
+            <Link href="/scheduled">Scheduled</Link>
             <Link href="/settings">Settings</Link>
-            <Link href="/system">System</Link>
-
-            {isSuperAdmin && (
-              <>
-                <Link href="/admin" scroll={true}>
-                  ★ Master Admin
-                </Link>
-                <Link href="/admin/design-formats">Design Formats</Link>
-                <Link href="/api/admin/reset-workspace" prefetch={false} scroll={true}>
-                  ← Return to Admin
-                </Link>
-              </>
-            )}
+            {isSuperAdmin && <>
+              <Link href="/admin">★ Master Admin</Link>
+              <Link href="/admin/design-formats">Design Formats</Link>
+              <Link href="/admin/annual-plan">Annual Plan</Link>
+              <Link href="/admin/requests">Customer Requests</Link>
+              <Link href="/admin/archive">Published Archive</Link>
+              <Link href="/create">Create Everything</Link>
+              <Link href="/campaigns">Campaigns</Link>
+              <Link href="/studio">Creative Studio</Link>
+              <Link href="/ai-test-lab">AI Test Lab</Link>
+              <Link href="/ai-test-lab/options">AI Options</Link>
+              <Link href="/calendar">Campaign Calendar</Link>
+              <Link href="/publishing">Publishing Center</Link>
+              <Link href="/library">Creative Library</Link>
+              <Link href="/analytics">Analytics</Link>
+              <Link href="/brand">Brand Brain</Link>
+              <Link href="/agency">Agency Mode</Link>
+              <Link href="/system">System</Link>
+              <Link href="/api/admin/reset-workspace" prefetch={false}>← Return to Admin</Link>
+            </>}
 
             {session?.user && <SignOutButton />}
           </nav>

@@ -34,7 +34,7 @@ export function renderShowcase(input: SocialSvgInput, style: ShowcaseStyle) {
   const urls = [...new Set([input.imageUrl, ...(input.imageUrls || [])].filter((s): s is string => Boolean(s)))].slice(0, 3);
   const image = (url: string | undefined, x: number, y: number, w: number, height: number, detail: boolean | "lower" = false) => url ? `<svg x="${x}" y="${y}" width="${w}" height="${height}" viewBox="0 0 ${w} ${height}" overflow="hidden"><image href="${esc(url)}" x="${detail ? -w * .4 : 0}" y="${detail ? detail === "lower" ? -height * .8 : -height * .05 : 0}" width="${detail ? w * 1.8 : w}" height="${detail ? height * 1.8 : height}" preserveAspectRatio="xMidYMid ${detail ? "slice" : "meet"}" /></svg>` : `<rect x="${x}" y="${y}" width="${w}" height="${height}" fill="${accent}" opacity=".12"/>`;
   const text = (value: string, x: number, y: number, size: number, fill: string, limit: number, count: number, center = false, serif = false) => `<text fill="${fill}" font-family="${serif ? "Georgia, serif" : "Arial, sans-serif"}" font-size="${size}" font-weight="${serif ? 500 : 700}" text-anchor="${center ? "middle" : "start"}">${lines(value, limit, count).map((s, i) => `<tspan x="${x}" y="${y + i * size * 1.13}"${s.length * size * .9 > (center ? 960 : style === "bold-spotlight" ? 420 : 960) ? ` textLength="${center ? 960 : style === "bold-spotlight" ? 420 : 960}" lengthAdjust="spacingAndGlyphs"` : ""}>${esc(s)}</tspan>`).join("")}</text>`;
-  const brand = (y: number, fill: string) => text(input.brand.toUpperCase(), 540, y, 23, fill, 50, 1, true);
+  const brand = (y: number, fill: string) => input.logoUrl && y < 110 ? `<image href="${esc(input.logoUrl)}" x="70" y="30" width="190" height="68" preserveAspectRatio="xMidYMid meet"/>${text(input.brand.toUpperCase(), 630, y, 21, fill, 38, 1, true)}` : text(input.brand.toUpperCase(), 540, y, 23, fill, 50, 1, true);
   const footer = (fill: string) => `<line x1="60" y1="${h - 142}" x2="1020" y2="${h - 142}" stroke="${accent}" opacity=".65"/>${text(input.cta || "Explore more", 540, h - 85, 29, fill, 42, 1, true)}${brand(h - 38, fill)}`;
   const panels = urls.length > 1 || input.detailCrops === true;
   let body = "";
@@ -57,7 +57,7 @@ export function renderShowcase(input: SocialSvgInput, style: ShowcaseStyle) {
   } else {
     const panelY = 120, panelH = h - 340;
     body = `<rect width="1080" height="${h}" fill="${tint}"/><rect x="540" width="540" height="${h - 190}" fill="${paper}"/>
-      ${text(input.brand.toUpperCase(), 60, 76, 22, accent, 30, 1)}${text(input.headline, 60, 200, 66, primary, 12, 4)}
+      ${input.logoUrl ? `<image href="${esc(input.logoUrl)}" x="60" y="25" width="200" height="72" preserveAspectRatio="xMidYMid meet"/>` : text(input.brand.toUpperCase(), 60, 76, 22, accent, 30, 1)}${text(input.headline, 60, 200, 66, primary, 12, 4)}
       <rect x="60" y="530" width="90" height="6" fill="${accent}"/>${text(input.subheadline || "", 60, 590, 26, primary, 28, 3)}
       ${image(urls[0], 558, panelY, 504, panelH)}${h > 1200 && panels ? image(urls[1] || urls[0], 60, 740, 418, Math.min(360, h - 1000), Boolean(input.detailCrops) && !urls[1]) : ""}${footer(primary)}`;
   }

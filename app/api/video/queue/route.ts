@@ -17,6 +17,7 @@ const reply = (data: unknown, status = 200) => NextResponse.json(data, { status,
 export async function POST(req: Request) {
   try {
     const ctx = await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });
     if (ctx.role === "viewer") return reply({ error: "Your workspace role cannot generate videos." }, 403);
     if (Number(req.headers.get("content-length")) > 3_100_000) return reply({ error: "The image is too large. Choose an image under 2 MB." }, 413);
     const parsed = S.safeParse(await req.json());

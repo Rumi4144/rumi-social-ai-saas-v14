@@ -1,0 +1,50 @@
+.workspace { max-width:1320px; margin:0 auto; }
+.header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin-bottom:24px; }
+.header h1 { font-size:clamp(32px,4vw,48px); letter-spacing:-.04em; margin:8px 0; }
+.header p { color:#536b66; line-height:1.6; max-width:660px; }
+.eyebrow,.kind { font-size:12px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; color:#48665e; }
+.toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin:20px 0; }
+.workspace button,.workspace select,.workspace input,.workspace textarea { font:inherit; }
+.workspace button,.workspace select,.workspace input { border:1px solid #bdd1c8; border-radius:10px; background:white; color:#163d35; padding:11px 15px; min-height:44px; }
+.workspace button { cursor:pointer; font-weight:650; }
+.workspace button:disabled { cursor:not-allowed; opacity:.5; }
+.workspace button:focus-visible,.workspace a:focus-visible,.workspace summary:focus-visible { outline:3px solid #cf9b3d; outline-offset:3px; }
+.workspace .primary { background:#176c5e; border-color:#176c5e; color:white; }
+.summary { display:flex; flex-wrap:wrap; gap:20px; padding:20px 24px; border:1px solid #d2e2d8; border-radius:16px; background:#eaf4ee; margin-bottom:24px; }
+.summary strong { display:block; font-size:23px; }
+.summary span { font-size:13px; color:#4f6c60; }
+.empty { border:1px solid #d6e3dc; border-radius:22px; padding:30px; background:white; margin-bottom:24px; }
+.empty h2 { margin-top:0; }
+.empty p { max-width:750px; line-height:1.6; }
+.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:28px; }
+.post { min-width:0; border:1px solid #d1e0d8; border-radius:20px; background:white; overflow:hidden; box-shadow:0 8px 25px #173a2810; }
+.postHeader { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding:16px 20px; font-weight:650; font-size:14px; }
+.badge { border-radius:100px; padding:6px 10px; background:#edf4ee; font-size:12px; color:#315c44; }
+.media { position:relative; background:#edf1ed; aspect-ratio:4/5; display:flex; justify-content:center; align-items:center; overflow:hidden; }
+.media img,.media video { width:100%; height:100%; object-fit:contain; display:block; }
+.placeholder { text-align:center; padding:28px; color:#526b61; display:grid; gap:12px; }
+.placeholder strong { font-size:22px; }
+.unfinished { position:absolute; bottom:12px; left:12px; right:12px; padding:10px 14px; border-radius:8px; background:#fff2d5ed; color:#674813; font-size:13px; text-align:center; }
+.postBody { padding:24px; }
+.postBody h2 { font-size:24px; line-height:1.2; margin:8px 0 16px; letter-spacing:-.02em; }
+.caption summary { cursor:pointer; font-weight:650; margin-bottom:12px; }
+.caption p { white-space:pre-wrap; line-height:1.6; overflow-wrap:anywhere; }
+.actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; }
+.actions button { flex:1 1 auto; font-size:14px; }
+.notice { color:#75501d; background:#fff5df; border-radius:10px; padding:12px; font-size:14px; line-height:1.5; }
+.message { font-size:14px; color:#285e49; min-height:1em; margin:12px 0 0; }
+.changeForm { display:grid; gap:10px; padding:16px; margin-top:16px; border:1px solid #d1e0d8; border-radius:12px; }
+.changeForm textarea { min-height:100px; width:100%; border:1px solid #bdd1c8; border-radius:8px; padding:12px; resize:vertical; }
+.deliveries { padding-left:18px; font-size:14px; line-height:1.6; }
+.deliveries li { margin:8px 0; }
+.deliveries span { display:block; color:#875123; }
+.progress { border:1px solid #bcd4c7; border-radius:16px; padding:22px; background:#f2faf5; margin:20px 0; }
+.progress progress { display:block; width:100%; margin:12px 0; }
+.failure { border-radius:12px; padding:16px; background:#fff0e9; color:#783720; line-height:1.6; margin-bottom:20px; }
+.plan { margin-top:32px; padding:20px 0; border-top:1px solid #d0e0d7; color:#52675e; line-height:1.6; }
+.scheduledList { display:grid; gap:18px; }
+.scheduledRow { background:white; border:1px solid #d1e0d8; border-radius:16px; padding:22px; }
+.scheduledRow h2 { font-size:21px; margin-top:0; }
+.muted { color:#536b66; }
+@media(min-width:1500px) { .grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:700px) { .grid { grid-template-columns:1fr; gap:22px; } .header { display:block; } .postBody { padding:18px; } .empty { padding:22px; } .toolbar>* { max-width:100%; } }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {generateImage, ImageRejectedError} from "@/lib/ai/image-provider";
 export const maxDuration=180;
 import { prisma } from "@/lib/prisma";
+import { saveCreativeRevision } from "@/lib/creative/save-revision";
 import { recentBrandConcepts, regenerationVariationIndex } from "@/lib/ai/visual-history";
 import { generateCampaign } from "@/lib/ai/campaign";
 import { applyContentPlan, type ContentSlot } from "@/lib/campaign/content-plan";
@@ -12,7 +13,10 @@ import { automaticShowcaseStyle } from "@/lib/render/showcase";
 import { occasionVisualConcept, savedPostOccasion } from "@/lib/ai/occasion";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
 import { buildVisualConcept, isSubjectCategory, recentVisualConcept, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "@/lib/ai/visual-plan";
-import { imageToJpegDataUrl, logoToPngDataUrl, svgToPublishJpeg } from "@/lib/render/raster";
+import { imageToJpegDataUrl, logoToPngDataUrl, svgToPublishJpeg, weeklyDesignFonts } from "@/lib/render/raster";
+import type { WeeklySlot, WeeklyItemMapping } from "@/lib/weekly/types";
+import type { WeeklyPhoto } from "@/lib/weekly/plan";
+import type { Job } from "@prisma/client";
 
 
 function calendarDraftPlan(plan: Array<{day:number;date:string}>|undefined,days:number): Map<number,Date> {
@@ -45,6 +49,7 @@ export async function POST(req: Request) {
     typeof body?.jobId === "string" ? body.jobId.trim() : "";
 
   let requestedCampaignId = "";
+  let requestedQueuedJob: Job | null = null;
 
   if (requestedJobId) {
     const requestedJob = await prisma.job.findFirst({
@@ -52,14 +57,10 @@ export async function POST(req: Request) {
         id: requestedJobId,
         organizationId,
       },
-      select: {
-        id: true,
-        type: true,
-        status: true,
-        error: true,
-        payload: true,
-      },
     });
+
+    if (!requestedJob) return NextResponse.json({ error: "JOB_NOT_FOUND" }, { status: 404 });
+    if (requestedJob.status === "queued" && ["CREATE_EVERYTHING", "GENERATE_IMAGE"].includes(requestedJob.type)) requestedQueuedJob = requestedJob;
 
     const requestedPayload =
       requestedJob?.payload &&
@@ -106,12 +107,13 @@ export async function POST(req: Request) {
     : null;
 
   const job =
-    currentCampaignImage ??
+    requestedQueuedJob ?? currentCampaignImage ??
     (await prisma.job.findFirst({
       where: {
         organizationId,
         status: "queued",
         type: "CREATE_EVERYTHING",
+        ...(requestedCampaignId ? { payload: { path: ["campaignId"], equals: requestedCampaignId } } : {}),
       },
       orderBy: {
         createdAt: "asc",
@@ -122,6 +124,7 @@ export async function POST(req: Request) {
         organizationId,
         status: "queued",
         type: "GENERATE_IMAGE",
+        ...(requestedCampaignId ? { payload: { path: ["campaignId"], equals: requestedCampaignId } } : {}),
       },
       orderBy: {
         createdAt: "asc",
@@ -160,6 +163,7 @@ export async function POST(req: Request) {
         businessContext?: VisualBusinessContext;
         recentConcepts?: RecentVisualConcept[];
         occasion?: string;
+        designStyle?: string;
       };
 
       const format = p.format || "portrait";
@@ -301,7 +305,7 @@ export async function POST(req: Request) {
           renderImageUrl = await imageToJpegDataUrl(renderImageUrl);
         }
 
-        const designStyle = automaticShowcaseStyle(contentItem.id, brand.designStyle);
+        const designStyle = p.designStyle || automaticShowcaseStyle(contentItem.id, brand.designStyle);
         const logoUrl = await logoToPngDataUrl(brand.logoUrl);
         const svg = renderSocialSvg({
           headline: contentItem.headline || "Campaign Creative",
@@ -317,22 +321,11 @@ export async function POST(req: Request) {
           headingFont: brand.headingFont || undefined,
           bodyFont: brand.bodyFont || undefined,
           designStyle,
+          ...(designStyle.startsWith("weekly-") ? { designFonts: await weeklyDesignFonts() } : {}),
         });
 
         const creativeJpeg = await svgToPublishJpeg(svg);
         const creativeUrl = `data:image/jpeg;base64,${creativeJpeg.toString("base64")}`;
-
-        const existingCreative = await prisma.mediaAsset.findFirst({
-          where: {
-            organizationId: job.organizationId,
-            contentItemId: p.contentItemId,
-            kind: "social_creative",
-            provider: { in: ["internal-raster", "internal-svg"] },
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-        });
 
         const creativeData = {
           organizationId: job.organizationId,
@@ -352,25 +345,9 @@ export async function POST(req: Request) {
           },
         };
 
-      const creativeAsset = existingCreative
-        ? await prisma.mediaAsset.update({
-            where: { id: existingCreative.id },
-            data: creativeData,
-          })
-        : await prisma.mediaAsset.create({
-            data: creativeData,
-          });
-
-      const appUrl =
-        process.env.NEXT_PUBLIC_APP_URL ||
-        "https://rumisocialai.com";
-
-      await prisma.contentItem.update({
-        where: { id: p.contentItemId },
-        data: {
-          mediaUrl: `${appUrl}/api/media/${creativeAsset.id}`,
-        },
-      });
+      // Public media URLs are immutable. A revision gets a new identity so
+      // customer previews and approval snapshots refer to the exact artwork.
+      await saveCreativeRevision(creativeData, contentItem);
     }
 
       await prisma.job.update({
@@ -399,6 +376,9 @@ export async function POST(req: Request) {
       goal: string;
       days: number;
       contentPlan?: ContentSlot[];
+      weeklyPackId?: string;
+      weeklySlots?: WeeklySlot[];
+      weeklySources?: WeeklyPhoto[];
     dailyPlan?: Array<{
       day: number;
       date: string;
@@ -445,7 +425,8 @@ export async function POST(req: Request) {
     };
     const recentConcepts = await recentBrandConcepts(job.organizationId, campaign.brandId);
 
-    const pack = await generateCampaign({
+    const cachedPack = job.result && typeof job.result === "object" && !Array.isArray(job.result) ? (job.result as unknown as { generatedPack?: Awaited<ReturnType<typeof generateCampaign>> }).generatedPack : undefined;
+    const pack = cachedPack || await generateCampaign({
       brief: p.brief,
       goal: p.goal,
       days: p.days,
@@ -468,9 +449,14 @@ export async function POST(req: Request) {
         : businessContext,
     });
 
+    // Preserve the purchased copy before validation/rendering. An Admin retry
+    // can resume this exact result without another model request or debit.
+    if (p.weeklyPackId && !cachedPack) await prisma.job.update({ where: { id: job.id }, data: { result: { generatedPack: pack } as any } });
+
     pack.posts = applyContentPlan(pack.posts, p.contentPlan);
     if(plannedDates.size&&pack.posts.some(post=>!plannedDates.has(post.day)))throw new Error("A campaign post does not match its planned calendar day.");
     await prisma.$transaction(async (tx: any) => {
+      if (p.weeklyPackId && await tx.contentItem.count({ where: { campaignId: campaign.id } })) throw new Error("This weekly pack already has saved items. Review the existing items instead of recreating them.");
       await tx.contentItem.deleteMany({
         where: { campaignId: campaign.id },
       });
@@ -480,6 +466,7 @@ export async function POST(req: Request) {
       let imageJobsCreated = 0;
       const photoWarnings: string[] = [];
       let creativeLayoutIndex = 0;
+      const weeklyItems: WeeklyItemMapping[] = [];
       const plannedConcepts = [...recentConcepts];
 
       const creativeLayouts: Array<"left" | "right" | "top"> = [
@@ -497,8 +484,10 @@ export async function POST(req: Request) {
 
       const photoChoices: PhotoEvidence[] = p.websitePhotoEvidence?.length ? p.websitePhotoEvidence : websitePhotos.map(imageUrl => ({ imageUrl, sourceUrl: "", title: "" }));
       for (const x of pack.posts) {
+      const weeklySlot = p.weeklySlots?.find(slot => slot.key === x.planKey);
       const slotTopics = p.contentPlan?.find(slot => slot.planKey === x.planKey)?.topics;
-      const matchedPhoto = p.photoSource === "website" ? matchingWebsitePhoto({ headline: x.headline, caption: x.caption, topics: slotTopics }, photoChoices, websitePhotos) : null;
+      const assignedPhoto = weeklySlot?.sourceImageUrl ? photoChoices.find(photo => photo.imageUrl === weeklySlot.sourceImageUrl && photo.sourceUrl === weeklySlot.sourceUrl) : undefined;
+      const matchedPhoto = p.photoSource === "website" ? assignedPhoto || matchingWebsitePhoto({ headline: x.headline, caption: x.caption, topics: slotTopics }, photoChoices, websitePhotos) : null;
       if (p.photoSource === "website" && !matchedPhoto && x.type !== "holiday_post") photoWarnings.push(`${x.headline}: choose a matching website photo; no unrelated image was assigned.`);
       const occasion = p.contentPlan?.find(slot=>slot.planKey===x.planKey && slot.extra)?.occasion;
       const concept = occasion ? occasionVisualConcept(occasion) : buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });
@@ -527,6 +516,16 @@ export async function POST(req: Request) {
           },
         });
 
+        if (weeklySlot) {
+          weeklyItems.push({ slotKey: weeklySlot.key, contentItemId: item.id });
+          // Real gallery images remain original assets, so motion reels can use
+          // multiple views without generating a different version of a product.
+          if (weeklySlot.kind !== "image" && weeklySlot.sourceUrl) {
+            const gallery = (p.weeklySources || []).filter(photo => photo.sourceUrl === weeklySlot.sourceUrl && photo.productName === weeklySlot.productName);
+            for (const [index, photo] of gallery.entries()) await tx.mediaAsset.create({ data: { organizationId: job.organizationId, campaignId: campaign.id, contentItemId: item.id, kind: "product_photo", provider: "product-website", status: "ready", url: photo.imageUrl, metadata: { brandId: campaign.brandId, productName: photo.productName, sourceUrl: photo.sourceUrl, label: `Product view ${index + 1}`, sourceEvidence: { imageUrl: photo.imageUrl, sourceUrl: photo.sourceUrl, title: photo.productName } } } });
+          }
+        }
+
         if(setupPhotos.length && x.type !== "holiday_post") await attachSetupPhoto(tx,job.organizationId,campaign.id,item.id,setupPhotos[setupPhotoIndex++ % setupPhotos.length]);
         if (
           p.photoSource !== "none" && (p.photoSource !== "website" || matchedPhoto) && !(x.type === "holiday_post" && p.photoSource === "website") && (
@@ -543,6 +542,7 @@ export async function POST(req: Request) {
               payload: {
                 campaignId: campaign.id,
                 contentItemId: item.id,
+                ...(weeklySlot ? { designStyle: weeklySlot.layout, weeklyPackId: p.weeklyPackId, weeklySlotKey: weeklySlot.key } : {}),
                 businessContext,
                 visualConcept: concept,
                 variationIndex: creativeLayoutIndex,
@@ -610,6 +610,8 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
 
         }
       }
+
+      if (p.weeklyPackId) await tx.job.updateMany({ where: { id: p.weeklyPackId, organizationId: job.organizationId, type: "WEEKLY_PACK" }, data: { status: "running", progress: 25, result: { items: weeklyItems } } });
 
     for (const x of (p.contentPlan?.length ? [] : pack.stories)) {
       const concept = buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });

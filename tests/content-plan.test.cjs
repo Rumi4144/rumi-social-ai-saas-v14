@@ -76,6 +76,7 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
   const api=load('app/api/jobs/run/route.ts',{
    'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},openai:class {},'@/lib/ai/image-provider':{ImageRejectedError:class extends Error{},generateImage:async()=>{throw Error('No image expected');},imageConfiguration:()=>({provider:'bfl',model:'flux-3-image-klein'})},
    '@/lib/prisma':{prisma:{job:{findFirst:async()=>job,updateMany:async()=>({count:1}),update:async()=>{}},campaign:{findUnique:async q=>{assert.equal(q.where.brand.organizationId,'master-mind');return {id:'campaign',brandId:'brand',brand:{name:'Master Mind',description:'Hypnosis service'}};}},$transaction:async fn=>{transactions++;return fn(tx);}}},
+   '@/lib/creative/save-revision':{},
    '@/lib/ai/occasion':load('lib/ai/occasion.ts'),'@/lib/campaign/content-plan':plan,'@/lib/ai/visual-history':{recentBrandConcepts:async()=>[]},
    '@/lib/ai/campaign':{generateCampaign:async()=>{const p=pack();if(invalid)p.posts[1].planKey=p.posts[0].planKey;return p;}},
    '@/lib/campaign/photo-matching':{matchingWebsitePhoto:()=>null,modelCodes:()=>[]},'@/lib/render/svg':{},'@/lib/render/showcase':{automaticShowcaseStyle:()=> 'modern-gradient'},'@/lib/render/raster':{},'@/lib/ai/visual-director':{},
@@ -137,11 +138,12 @@ test('model must return exactly one matching entry per slot and cannot change co
 });
 test('creation derives the plan in the current workspace without generating paid media',async()=>{
  const writes=[],credits=[];
+ let admin=true;
  const api=load('app/api/campaigns/create-everything/route.ts',{
   'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},
   '@/lib/campaign/content-plan':plan,
   '@/lib/campaign/photo-matching':{verifyPhotoEvidence:()=>[]},
-  '@/lib/auth/context':{tenantContext:async()=>({organizationId:'master-mind'})},
+  '@/lib/auth/context':{tenantContext:async()=>({organizationId:'master-mind',isSuperAdmin:admin})},
   '@/lib/services/credits':{spendCredits:async(...args)=>credits.push(args)},
   '@/lib/prisma':{prisma:{brand:{findFirst:async q=>{assert.equal(q.where.organizationId,'master-mind');return {id:'master-brand',name:'Master Mind'};}},onboardingState:{findUnique:async()=>null},campaign:{create:async q=>{writes.push(q);return {id:'campaign'};}},job:{create:async q=>{writes.push(q);return {id:'job'};}}}},
  });
@@ -157,4 +159,7 @@ test('creation derives the plan in the current workspace without generating paid
  const typed=await api.POST({json:async()=>({brief:'Mindful change for our audience',days:7,photoSource:'none',dailyPlan:calendar(7),contentQuantities:quantities})});
  assert.equal(typed.status,202);const typedSlots=writes.at(-1).data.payload.contentPlan;
  assert.equal(typedSlots.filter(s=>s.type==='reel_post').length,7);assert.equal(typedSlots.filter(s=>s.type==='story_post').length,7);
+ admin=false;const writeCount=writes.length,creditCount=credits.length;
+ const customer=await api.POST({json:async()=>({brief:'A customer cannot edit advanced campaign generation',days:7,photoSource:'none',dailyPlan:calendar(7)})});
+ assert.equal(customer.status,403);assert.equal(writes.length,writeCount);assert.equal(credits.length,creditCount);
 });

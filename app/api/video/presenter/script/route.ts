@@ -10,6 +10,7 @@ const input = z.object({ organizationId: z.string(), campaignId: z.string().min(
 export async function POST(req: Request) {
   try {
     const ctx = await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });
     if (!["owner", "admin", "superadmin"].includes(ctx.role) && !ctx.isSuperAdmin) return NextResponse.json({ error: "Your workspace owner or administrator can create presenter scripts." }, { status: 403 });
     const parsed = input.safeParse(await req.json());
     if (!parsed.success) return NextResponse.json({ error: "Choose a campaign post and script length." }, { status: 400 });

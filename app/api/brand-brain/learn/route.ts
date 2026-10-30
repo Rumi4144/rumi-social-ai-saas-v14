@@ -6,7 +6,8 @@ import {websiteBrandProfile,normalizedWebsite} from "@/lib/website/brand-profile
 import {apiError} from "@/lib/http/errors";
 export const maxDuration=90;
 export async function POST(req:Request){try{
- const ctx=await tenantContext();if(ctx.role==="viewer")return NextResponse.json({error:"Your role cannot fill Brand Brain."},{status:403});
+ const ctx=await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });if(ctx.role==="viewer")return NextResponse.json({error:"Your role cannot fill Brand Brain."},{status:403});
  const parsed=z.object({websiteUrl:z.string().trim().min(1).max(2000)}).safeParse(await req.json());
  if(!parsed.success)return NextResponse.json({error:"Enter your business website first."},{status:400});
  let website:string;try{website=normalizedWebsite(parsed.data.websiteUrl);}catch{return NextResponse.json({error:"Enter a valid HTTPS business website address."},{status:400});}

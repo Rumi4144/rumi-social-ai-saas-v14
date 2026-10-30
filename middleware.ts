@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 const protectedRoutes = [
   "/dashboard",
+  "/scheduled",
   "/create",
   "/campaigns",
   "/studio",
@@ -36,6 +37,7 @@ export default auth((req) => {
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/scheduled/:path*",
     "/create/:path*",
     "/campaigns/:path*",
     "/studio/:path*",

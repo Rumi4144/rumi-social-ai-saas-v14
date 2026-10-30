@@ -1,3 +1,4 @@
+import Link from "next/link";
 import TikTokConnectionStatus from "./TikTokConnectionStatus";
 import YouTubeDisconnect from "./YouTubeDisconnect";
 import { prisma } from "@/lib/prisma";
@@ -46,8 +47,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <div className="eyebrow">CONNECTIONS</div>
-      <h1>Connect your business.</h1>
+      <div className="eyebrow">YOUR ACCOUNT</div>
+      <h1>Settings</h1>
+      <nav aria-label="Account settings" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 28 }}>
+        <Link className="button" href="/billing">Plan &amp; billing</Link>
+        <Link className="button" href="/usage">Credits &amp; usage</Link>
+        <Link className="button" href="/workspaces">Switch business</Link>
+        <Link className="button" href="/team">Team access</Link>
+      </nav>
+      <h2>Connected accounts</h2>
       {query.youtube === "disconnected" ? <p role="status">YouTube disconnected. Its stored channel data and upload history were deleted. Your videos remain on YouTube.</p> : null}
       {query.youtube === "revoke_manually" ? <p role="status">Stored YouTube data was deleted. Please also revoke Rumi Social AI access in <a href="https://security.google.com/settings/security/permissions" target="_blank" rel="noreferrer">Google security settings</a>.</p> : null}
 

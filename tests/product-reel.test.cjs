@@ -19,7 +19,7 @@ const reference=(id=photo.id,extra={})=>({id,organizationId:'org',campaignId:'ca
 const planInput={campaignId:'campaign',contentItemId:'post',sourceUrl:product.sourceUrl,productName:product.name,brand:{name:'Rumi Guitars',website:'https://shop.example',color:'#123456',accent:'#abcdef'},shots:productReelShots(product.name,[photo])};
 const requestId='10000000-0000-4000-8000-000000000001';
 const req=body=>new Request('https://rumi.test/api/reels/product-video',{method:'POST',body:JSON.stringify({requestId,campaignId:'campaign',contentItemId:'post',...body})});
-function fixture({credits=200,assets=[reference()],ctx={organizationId:'org',role:'owner'},providerError,fetchError,configured=true}={}){
+function fixture({credits=200,subscriptionStatus='active',assets=[reference()],ctx={organizationId:'org',role:'owner'},providerError,fetchError,configured=true}={}){
  const records=new Map(),ledger=[],calls=[];let balance=credits,tail=Promise.resolve();
  const matches=(row,w)=>Object.entries(w).every(([k,v])=>{if(k==='AND')return v.every(part=>matches(row,part));if(k==='payload')return row.payload[v.path[0]]===v.equals;if(v&&typeof v==='object'&&!Array.isArray(v))return v.in?v.in.includes(row[k]):v.lt?row[k]<v.lt:false;return row[k]===v;});
  const db={
@@ -29,7 +29,7 @@ function fixture({credits=200,assets=[reference()],ctx={organizationId:'org',rol
  updateMany:async({where,data})=>{let count=0;for(const [id,row]of records)if(matches(row,where)){records.set(id,{...row,...plain(data)});count++;}return {count};},update:async({where,data})=>{const row={...records.get(where.id),...plain(data)};records.set(where.id,row);return plain(row);}},
  contentItem:{findFirst:async({where})=>where.id==='post'&&where.campaignId==='campaign'&&where.campaign.brand.organizationId==='org'?post:null},
  mediaAsset:{findMany:async({where})=>plain(assets.filter(a=>matches(a,where)))},
- subscription:{updateMany:async({where,data})=>{if(balance<where.credits.gte)return {count:0};balance-=data.credits.decrement;return {count:1};},findUniqueOrThrow:async()=>({credits:balance}),update:async({data})=>{balance+=data.credits.increment;return {credits:balance};}},
+ subscription:{updateMany:async({where,data})=>{if(balance<where.credits.gte||(where.status&&!where.status.in.includes(subscriptionStatus)))return {count:0};balance-=data.credits.decrement;return {count:1};},findUniqueOrThrow:async()=>({credits:balance}),update:async({data})=>{balance+=data.credits.increment;return {credits:balance};}},
  creditLedger:{create:async({data})=>{ledger.push(plain(data));return data;}}
  };
  db.$transaction=fn=>{const run=tail.then(async()=>{const snapshot=plain([...records]),oldBalance=balance,oldLength=ledger.length;try{return await fn(db);}catch(e){records.clear();snapshot.forEach(([id,row])=>records.set(id,row));balance=oldBalance;ledger.length=oldLength;throw e;}});tail=run.catch(()=>{});return run;};
@@ -72,6 +72,9 @@ test('concurrent start reserves once and sends exactly three paid requests; GET 
 });
 test('insufficient credits rolls back the parent claim and creates no child or provider task',async()=>{
  const f=fixture({credits:119});await prepare(f);assert.equal((await start(f)).status,402);assert.equal(f.records.get(requestId).status,'draft');assert.equal(f.records.size,1);assert.equal(f.calls.length,0);assert.equal(f.balance(),119);
+});
+test('ended or unpaid plans cannot start new AI scenes despite an unused balance',async()=>{
+ for(const subscriptionStatus of ['canceled','past_due','incomplete_expired']){const f=fixture({subscriptionStatus});await prepare(f);const response=await start(f);assert.equal(response.status,402);assert.equal(f.records.get(requestId).status,'draft');assert.equal(f.calls.length,0);assert.equal(f.balance(),200);}
 });
 test('ambiguous provider timeouts keep the original request reserved and never resubmit it',async()=>{
  const f=fixture({providerError:'unknown'});await prepare(f);const response=await start(f);assert.equal(response.body.job.status,'attention');assert.ok(response.body.job.shots.every(s=>s.status==='uncertain'));assert.equal(f.calls.length,3);assert.equal(f.balance(),80);

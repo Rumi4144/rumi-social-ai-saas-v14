@@ -7,7 +7,8 @@ import {apiError} from '@/lib/http/errors';
 const selection=z.object({campaignId:z.string().min(1),contentItemId:z.string().min(1),assetId:z.string().min(1)});
 export async function POST(req:Request){try{
  if(req.headers.get('origin')!==new URL(req.url).origin)return NextResponse.json({error:'Request origin is not allowed.'},{status:403});
- const ctx=await tenantContext();if(ctx.role==='viewer')return NextResponse.json({error:'Your role cannot change posts.'},{status:403});
+ const ctx=await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });if(ctx.role==='viewer')return NextResponse.json({error:'Your role cannot change posts.'},{status:403});
  let input:{campaignId:string;contentItemId:string;assetId?:string},uploaded:{url:string;label:string;stockSource:string|null}|null=null;
  if(req.headers.get('content-type')?.includes('multipart/form-data')){
   if(Number(req.headers.get('content-length')||0)>4_000_000)return NextResponse.json({error:'Upload a photo smaller than 3 MB.'},{status:413});

@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { renderSocialSvg } from "@/lib/render/svg";
 import { SHOWCASE_STYLES, isShowcaseStyle } from "@/lib/render/showcase";
+import { WEEKLY_DESIGN_CHOICES, isWeeklyDesign } from "@/lib/render/weekly-layouts";
 import type { StudioBrand } from "@/lib/studio/creative-context";
 import CreativeTemplatePicker, { CreativeSvgPreview } from "@/components/CreativeTemplatePicker";
 import RunwayVideo from "./RunwayVideo";
@@ -21,7 +22,7 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
     primaryColor: treatment === "minimal" ? brand.secondaryColor : brand.primaryColor,
     secondaryColor: treatment === "minimal" ? brand.primaryColor : brand.secondaryColor,
     imageUrl: photos[0], imageUrls: photos.slice(1), detailCrops,
-    designStyle: isShowcaseStyle(treatment) ? treatment : treatment === "brand" ? (isShowcaseStyle(brand.designStyle) ? brand.designStyle : "modern-gradient") : undefined,
+    designStyle: isShowcaseStyle(treatment) || isWeeklyDesign(treatment) ? treatment : treatment === "brand" ? (isShowcaseStyle(brand.designStyle) ? brand.designStyle : "modern-gradient") : undefined,
     textPosition: treatment === "bold" ? "top" as const : "left" as const,
   }), [brand, headline, subheadline, cta, format, treatment, photos, detailCrops]);
   const svg = useMemo(() => renderSocialSvg(previewInput), [previewInput]);
@@ -30,6 +31,7 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
   }), [previewInput, brand]);
   const templateChoices = useMemo(() => [
     ...SHOWCASE_STYLES,
+    ...WEEKLY_DESIGN_CHOICES,
     { value: "brand", label: "Workspace brand style", description: "The preferred layout and fonts saved for your business.", previewStyle: isShowcaseStyle(brand.designStyle) ? brand.designStyle : "modern-gradient", previewOverrides: { headingFont: brand.headingFont } },
     { value: "editorial", label: "Editorial", description: "Classic photograph with elegant serif lettering.", previewOverrides: { headingFont: "Georgia" } },
     { value: "minimal", label: "Minimal", description: "A simple photo layout with your secondary brand color.", previewOverrides: { primaryColor: brand.secondaryColor, secondaryColor: brand.primaryColor } },

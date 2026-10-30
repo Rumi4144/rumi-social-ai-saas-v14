@@ -3,12 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { superAdminContext } from "@/lib/admin/context";
 import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
+import { canonicalPlan, TRIAL_PACKAGE } from "@/lib/billing/packages";
 
 const S = z.object({
   name: z.string().trim().min(2).max(100),
   ownerEmail: z.string().trim().email(),
-  plan: z.string().trim().min(2).max(50).default("starter"),
-  credits: z.number().int().min(0).max(100000).default(100),
+  plan: z.enum(["starter", "creator", "business", "agency", "pro", "enterprise"]).default("starter"),
+  credits: z.number().int().min(0).max(100000).default(TRIAL_PACKAGE.monthlyCredits),
 });
 
 function makeSlug(name: string) {
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
       await tx.subscription.create({
         data: {
           organizationId: org.id,
-          plan: parsed.data.plan,
+          plan: canonicalPlan(parsed.data.plan),
           status: "trialing",
           credits: parsed.data.credits,
         },

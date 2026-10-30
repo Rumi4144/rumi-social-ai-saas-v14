@@ -25,7 +25,7 @@ test('seven distinct layouts preserve source images, safe dimensions and escaped
 test('additional views are supplied photos; a single photo uses two different labeled detail crops',()=>{const multiple=renderSocialSvg({...input,designStyle:'heritage',imageUrls:['https://own.example/back.jpg','https://own.example/detail.jpg']});assert.ok(multiple.includes('https://own.example/back.jpg'));assert.ok(multiple.includes('https://own.example/detail.jpg'));assert.match(multiple,/MORE VIEWS/);const single=renderSocialSvg({...input,designStyle:'heritage'});assert.match(single,/DETAIL STUDIES/);assert.ok(!single.includes('MORE VIEWS'));assert.match(single,/x="-118.4"/);});
 test('long words and unsafe palette values cannot break poster markup',()=>{const svg=renderSocialSvg({...input,headline:'W'.repeat(150)+' <script>alert(1)</script>',designStyle:'gallery-story',primaryColor:'red" onload="bad',accentColor:'url(https://foreign.example)'});assert.ok(!svg.includes('onload='));assert.ok(!svg.includes('<script>'));assert.match(svg,/…/);});
 const json=(body,options={})=>({body,status:options.status||200});
-function route({missing=false,style='automatic',brandName='Rumi Guitars',logoUrl}={}){let writes=0,photoQuery,saved;const brand={id:'own-brand',name:brandName,designStyle:style,logoUrl};const api=load('app/api/creative/render/route.ts',{'next/server':{NextResponse:{json}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'own'})},'@/lib/prisma':{prisma:{contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'own');return missing?null:{id:'post',campaignId:'camp',campaign:{brand}};}},mediaAsset:{findMany:async q=>{photoQuery=q;return[{url:'https://own.example/back.jpg'}];},findFirst:async()=>null,create:async q=>{writes++;saved=q.data;return{id:'saved'};}}}},'@/lib/render/raster':{imageToJpegDataUrl:async url=>url,logoToPngDataUrl:async url=>url?'data:image/png;base64,LOGO':undefined,svgToPublishJpeg:async()=>Buffer.from('mock jpeg')}});return{api,writes:()=>writes,query:()=>photoQuery,saved:()=>saved};}
+function route({missing=false,style='automatic',brandName='Rumi Guitars',logoUrl}={}){let writes=0,photoQuery,saved;const brand={id:'own-brand',name:brandName,designStyle:style,logoUrl};const api=load('app/api/creative/render/route.ts',{'next/server':{NextResponse:{json}},'@/lib/auth/context':{tenantContext:async()=>({isSuperAdmin:true,organizationId:'own'})},'@/lib/prisma':{prisma:{contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'own');return missing?null:{id:'post',campaignId:'camp',campaign:{brand}};}},mediaAsset:{findMany:async q=>{photoQuery=q;return[{url:'https://own.example/back.jpg'}];},findFirst:async()=>({id:'previous-creative'}),update:async()=>{throw new Error('MUST_NOT_REPLACE_CACHED_ARTWORK')},create:async q=>{writes++;saved=q.data;return{id:'saved-'+writes};}}}},'@/lib/creative/save-revision':{saveCreativeRevision:async data=>{writes++;saved=data;return{id:'saved-'+writes}}},'@/lib/render/raster':{imageToJpegDataUrl:async url=>url,logoToPngDataUrl:async url=>url?'data:image/png;base64,LOGO':undefined,svgToPublishJpeg:async()=>Buffer.from('mock jpeg')}});return{api,writes:()=>writes,query:()=>photoQuery,saved:()=>saved};}
 const request=extra=>({json:async()=>({campaignId:'camp',contentItemId:'post',headline:'A guitar',imageUrl:'https://own.example/front.jpg',designStyle:'heritage',prepareOnly:true,...extra})});
 test('render rejects foreign post before retrieving photos or saving',async()=>{const a=route({missing:true});assert.equal((await a.api.POST(request())).status,404);assert.equal(a.query(),undefined);assert.equal(a.writes(),0);});
 test('preparation only uses photos attached to the owned post and never writes',async()=>{const a=route();const r=await a.api.POST(request());assert.equal(r.status,200);assert.equal(a.query().where.organizationId,'own');assert.equal(a.query().where.campaignId,'camp');assert.equal(a.query().where.contentItemId,'post');assert.equal(a.writes(),0);const svg=Buffer.from(r.body.svgDataUrl.split(',')[1],'base64').toString();assert.ok(svg.includes('https://own.example/back.jpg'));});
@@ -99,12 +99,13 @@ test('campaign worker embeds owned logos and persists the chosen template in gen
     '@/lib/render/showcase':{automaticShowcaseStyle},
     '@/lib/render/svg':{renderSocialSvg:input=>{rendered=input;return '<svg/>';}},
     '@/lib/render/raster':{imageToJpegDataUrl:async()=> 'data:image/jpeg;base64,PHOTO',logoToPngDataUrl:async url=>{assert.equal(url,brand.logoUrl);return 'data:image/png;base64,LOGO';},svgToPublishJpeg:async()=>Buffer.from('jpeg')},
+    '@/lib/creative/save-revision':{saveCreativeRevision:async data=>{saved=data;return{id:'creative'}}},
     '@/lib/creative/image-history':{saveGeneratedPhoto:async data=>({id:'photo',url:data.url})},
     '@/lib/prisma':{prisma:{
      job:{findFirst:async q=>q.where.type==='GENERATE_IMAGE'?job:null,updateMany:async()=>({count:1}),update:async()=>({})},
      contentItem:{findUnique:async q=>{if(q.include)assert.equal(q.where.campaign.brand.organizationId,'own');return post;},update:async()=>({})},
      campaign:{findUnique:async()=>campaign},
-     mediaAsset:{findFirst:async()=>null,create:async q=>{saved=q.data;return {id:'creative'};}}
+     mediaAsset:{findFirst:async()=>({id:'previous-creative'}),update:async()=>{throw new Error('MUST_NOT_REPLACE_CACHED_ARTWORK')},create:async q=>{saved=q.data;return {id:'creative'};}}
     }},
    });
    const response=await api.POST({headers:{get:()=> 'template-worker'},json:async()=>({organizationId:'own'})});
@@ -114,4 +115,25 @@ test('campaign worker embeds owned logos and persists the chosen template in gen
    assert.equal(saved.metadata.designStyle,rendered.designStyle);assert.equal(saved.organizationId,'own');assert.equal(saved.contentItemId,post.id);
   }
  } finally {if(before===undefined)delete process.env.WORKER_SECRET;else process.env.WORKER_SECRET=before;}
+});
+
+test('both browser and server design revisions keep previously cached media immutable',async()=>{
+ for(const mode of [{prepareOnly:false},{prepareOnly:false,browserRasterDataUrl:'data:image/jpeg;base64,bmV3'}]){
+  const a=route();const first=await a.api.POST(request(mode));const second=await a.api.POST(request(mode));
+  assert.equal(first.status,200);assert.equal(second.status,200);assert.notEqual(first.body.assetId,second.body.assetId);assert.equal(a.writes(),2);
+ }
+});
+
+test('revision selection preserves cached assets, resets approval and guards active delivery and tenant boundaries',async()=>{
+ const original={id:'post',campaignId:'camp',mediaUrl:'/api/media/old',headline:'Same headline',caption:'Same caption',status:'approved'};
+ const writes=[];let current={...original},delivery=null;
+ const db={contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'own');return current},update:async q=>{writes.push(['select',q.data]);current={...current,...q.data};return current}},publishJob:{findFirst:async q=>{assert.equal(q.where.organizationId,'own');return delivery}},mediaAsset:{create:async q=>{writes.push(['create',q.data]);return{id:'new-'+writes.length}},update:async()=>{throw Error('immutable')}}};
+ db.$transaction=async(fn,options)=>{assert.equal(options.isolationLevel,'Serializable');return fn(db)};
+ const {saveCreativeRevision}=load('lib/creative/save-revision.ts',{'@/lib/prisma':{prisma:db}});
+ const data={organizationId:'own',campaignId:'camp',contentItemId:'post',kind:'social_creative',provider:'internal-raster',status:'ready',url:'new pixels'};
+ await saveCreativeRevision(data,original);assert.equal(writes.length,2);assert.equal(current.status,'draft');assert.notEqual(current.mediaUrl,original.mediaUrl);
+ current={...original};delivery={id:'reserved'};await assert.rejects(saveCreativeRevision(data,original),/Cancel scheduled/);assert.equal(writes.length,2);
+ delivery=null;current={...original,mediaUrl:'/api/media/some-newer-version'};await assert.rejects(saveCreativeRevision(data,original),/changed during preparation/);assert.equal(writes.length,2);
+ current=null;await assert.rejects(saveCreativeRevision(data,original),/not found/);assert.equal(writes.length,2);
+ current={...original,status:'published'};await assert.rejects(saveCreativeRevision(data,original),/Cancel scheduled/);assert.equal(writes.length,2);
 });

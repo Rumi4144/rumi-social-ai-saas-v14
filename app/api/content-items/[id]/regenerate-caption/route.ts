@@ -19,6 +19,7 @@ export async function POST(
 ) {
   try {
     const ctx = await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });
     const { id } = await params;
 
     const item = await prisma.contentItem.findFirst({

@@ -7,6 +7,7 @@ export async function POST(req: Request) {
   try {
     // Require a valid logged-in tenant.
     const ctx = await tenantContext();
+    if (ctx.role === "viewer") return NextResponse.json({ error: "Your access is read-only." }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const jobId =

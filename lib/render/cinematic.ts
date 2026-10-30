@@ -44,7 +44,7 @@ export function renderCinematic(input: SocialSvgInput) {
   <rect width="1080" height="${height}" fill="${tint}"/><rect width="1080" height="${height}" fill="url(#cinema-light)"/><rect width="1080" height="${height}" fill="url(#cinema-vignette)"/><rect width="1080" height="${height}" fill="url(#cinema-grain)"/>
   <rect x="23" y="23" width="1034" height="${height - 46}" fill="none" stroke="${accent}" stroke-opacity=".4"/>
   <path d="M45 110V45h90m810 0h90v65M45 ${height - 110}v65h90m810 0h90v-65" fill="none" stroke="${accent}" stroke-width="2"/>
-  ${text(input.brand.toUpperCase(), 540, 83, 24, accent, 910)}${ornament(112)}
+  ${input.logoUrl ? `<image href="${escape(input.logoUrl)}" x="65" y="34" width="190" height="62" preserveAspectRatio="xMidYMid meet"/>${text(input.brand.toUpperCase(), 650, 83, 21, accent, 680)}` : text(input.brand.toUpperCase(), 540, 83, 24, accent, 910)}${ornament(112)}
   ${title.map((line, i) => text(line, 540, 163 + i * titleSize * 1.04, titleSize, primary, 930, true)).join("")}
   ${input.subheadline ? wrap(input.subheadline, 64, 2).map((line, i) => text(line, 540, 177 + title.length * titleSize * 1.04 + i * 29, 23, accent, 900)).join("") : ""}
   <ellipse cx="${panels ? 360 : 540}" cy="${heroY + heroH * .6}" rx="${panels ? 300 : 440}" ry="${heroH * .53}" fill="none" stroke="${accent}" stroke-opacity=".18"/>

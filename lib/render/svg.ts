@@ -1,4 +1,5 @@
 import { isShowcaseStyle, renderShowcase } from "./showcase";
+import { isWeeklyDesign, renderWeeklyDesign } from "./weekly-layouts";
 function esc(s: string) {
   return s.replace(
     /[&<>"']/g,
@@ -51,9 +52,11 @@ export type SocialSvgInput = {
   headingFont?: string;
   bodyFont?: string;
   designStyle?: string;
+  designFonts?: { display: string; editorial: string; body: string };
 };
 
 export function renderSocialSvg(input: SocialSvgInput) {
+  if (isWeeklyDesign(input.designStyle)) return renderWeeklyDesign(input, input.designStyle);
   if (isShowcaseStyle(input.designStyle)) return renderShowcase(input, input.designStyle);
   const size =
     input.format === "story"

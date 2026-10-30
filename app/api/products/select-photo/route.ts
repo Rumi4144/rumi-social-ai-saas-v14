@@ -8,6 +8,7 @@ const schema = z.object({ campaignId: z.string().min(1), contentItemId: z.string
 export async function POST(req: Request) {
   try {
     const ctx = await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });
     if (ctx.role === "viewer") return NextResponse.json({error:"Your role cannot change posts."},{status:403});
     const parsed = schema.safeParse(await req.json());
     if (!parsed.success) return NextResponse.json({error:"Choose a campaign post and website product."},{status:400});

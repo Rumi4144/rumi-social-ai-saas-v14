@@ -20,8 +20,10 @@ export async function GET(
       return NextResponse.redirect(new URL("/admin", request.url));
     }
 
+    const campaignId = new URL(request.url).searchParams.get("campaignId");
+    const campaign = campaignId ? await prisma.campaign.findFirst({ where: { id: campaignId, brand: { organizationId: organization.id } }, select: { id: true } }) : null;
     const response = NextResponse.redirect(
-      new URL("/dashboard", request.url)
+      new URL(campaign ? `/campaigns/${encodeURIComponent(campaign.id)}` : "/dashboard", request.url)
     );
 
     response.cookies.set("adminWorkspace", organization.id, {

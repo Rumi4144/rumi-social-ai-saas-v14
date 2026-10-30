@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { SHOWCASE_STYLES, automaticShowcaseStyle, isShowcaseStyle } from "@/lib/render/showcase";
+import { WEEKLY_DESIGN_CHOICES, isWeeklyDesign } from "@/lib/render/weekly-layouts";
 import { renderSocialSvg } from "@/lib/render/svg";
 import CreativeTemplatePicker, { CreativeSvgPreview } from "@/components/CreativeTemplatePicker";
 import type { StudioBrand } from "@/lib/studio/creative-context";
@@ -33,13 +34,14 @@ export default function RenderCreativeButton({
   existingCreative?: boolean;
   format?: "portrait" | "story";
 }) {
-  const [designStyle, setDesignStyle] = useState(initialDesignStyle === "classic" || isShowcaseStyle(initialDesignStyle) ? initialDesignStyle! : "automatic");
+  const [designStyle, setDesignStyle] = useState(initialDesignStyle === "classic" || isShowcaseStyle(initialDesignStyle) || isWeeklyDesign(initialDesignStyle) ? initialDesignStyle! : "automatic");
   const [designChanged, setDesignChanged] = useState(false);
   const [status, setStatus] = useState("");
 
   const choices = useMemo(() => [
     { value: "automatic", label: "Automatic variety", description: "Choose a layout for this post using your workspace style.", previewStyle: automaticShowcaseStyle(contentItemId, brand?.designStyle) },
     ...SHOWCASE_STYLES,
+    ...WEEKLY_DESIGN_CHOICES,
     { value: "classic", label: "Classic photo overlay", description: "A simple photograph with your headline and call to action." },
   ], [contentItemId, brand?.designStyle]);
   const preview = useMemo(() => ({ ...brand, brand: brand?.name || "Your business", headline,

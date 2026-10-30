@@ -13,7 +13,8 @@ const reply=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{"
 const summary=(job:Parameters<typeof videoSummary>[0])=>({...videoSummary(job),campaignId:(job.payload as unknown as PresenterPayload).campaignId,contentItemId:(job.payload as unknown as PresenterPayload).contentItemId});
 const isPresenter=(payload:unknown)=>(payload as {mode?:string})?.mode==="presenter";
 export async function POST(req:Request){try{
- const ctx=await tenantContext();if(ctx.role==="viewer")return reply({error:"Your workspace role cannot generate videos."},403);
+ const ctx=await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });if(ctx.role==="viewer")return reply({error:"Your workspace role cannot generate videos."},403);
  if(Number(req.headers.get("content-length"))>4_100_000)return reply({error:"Use reference photos under 1 MB each."},413);
  const parsed=S.safeParse(await req.json());if(!parsed.success)return reply({error:"For premium Runway generation, explicitly choose Runway, select a campaign post and photo, add a script and confirm its cost."},400);const p=parsed.data;
  const existing=await prisma.job.findFirst({where:{id:p.requestId,organizationId:ctx.organizationId,type:"RUNWAY_VIDEO"}});

@@ -31,6 +31,8 @@ export default function SchedulePostButton({
   allowPostNow = false,
   beforeSchedule,
   videoAssetId,
+  excludedConnectionIds,
+  onSubmitted,
 }: {
   contentItemId: string;
   initialStatus: string;
@@ -40,6 +42,8 @@ export default function SchedulePostButton({
   allowPostNow?: boolean;
   beforeSchedule?: () => Promise<void>;
   videoAssetId?:string;
+  excludedConnectionIds?: string[];
+  onSubmitted?: () => void;
 }) {
   const [tikTokOptions,setTikTokOptions]=useState<TikTokOptions|null>(null);
   const [completed,setCompleted] = useState(false);
@@ -126,7 +130,7 @@ export default function SchedulePostButton({
           );
         }
 
-        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "instagram", "youtube", "tiktok", "x"] : ["facebook", "instagram", "google_business", "x"]).includes(connection.provider.toLowerCase()));
+        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => !excludedConnectionIds?.includes(connection.id) && (isVideo ? ["facebook", "instagram", "youtube", "tiktok", "x"] : ["facebook", "instagram", "google_business", "x"]).includes(connection.provider.toLowerCase()));
 
         if (controller.signal.aborted) return;
         const ready = list.filter(connection => connection.provider !== "x" || connection.status === "connected");
@@ -216,6 +220,7 @@ export default function SchedulePostButton({
       setQueuedNow(postNow);
       setSavedTime(isoTime);
       setCompleted(true);
+      onSubmitted?.();
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Could not schedule post.",
@@ -257,7 +262,7 @@ export default function SchedulePostButton({
             width: "100%",
           }}
         >
-          <strong>{allowPostNow ? "Post your reel" : "Schedule Post"}</strong>
+          <strong>{allowPostNow ? "Post or schedule" : "Schedule Post"}</strong>
           <PostDeliveryStatus contentItemId={contentItemId} refreshKey={completed ? 1 : 0} />
           <p>Select a destination for this post.</p>
           {isVideo && <p>Google Business Profile is available for text and photo posts. Choose a photo for a Google post.</p>}

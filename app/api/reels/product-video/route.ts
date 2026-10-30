@@ -10,6 +10,7 @@ import { pageBelongsToBrand, photoKey } from "@/lib/reels/product-photos";
 import { reelPhotoMatchesProduct, reelProductSubject } from "@/lib/reels/product-identity";
 import { PRODUCT_REEL_COST, productReelShots, type ProductReelPlan } from "@/lib/reels/product-video-plan";
 import { productReelView, productScenePayload, startProductScene } from "@/lib/reels/product-video-jobs";
+import { reelPostRevision } from "@/lib/reels/post-revision";
 
 export const maxDuration = 180;
 const reply = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store" } });
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
       if (photos.some(asset => !asset.url || (asset.metadata as { sourceUrl?: string })?.sourceUrl !== sourceUrl || !reelPhotoMatchesProduct(subject, asset))) return reply({ error: "All reference photos must show this post’s product and come from the same product page." }, 400);
       const seen = new Set<string>();
       const references = photos.filter(asset => { const key = photoKey(asset.url!); if (seen.has(key)) return false; seen.add(key); return true; });
-      const plan: ProductReelPlan = { campaignId: p.campaignId, contentItemId: p.contentItemId, sourceUrl, productName, productSubject: subject,
+      const plan: ProductReelPlan = { campaignId: p.campaignId, contentItemId: p.contentItemId, sourceUrl, productName, productSubject: subject, postRevision: reelPostRevision(post),
         brand: { name: brand.name, website: brand.websiteUrl || "", industry: brand.industry, color: brand.primaryColor || "#132342", accent: brand.accentColor || "#dec184", ...(brand.logoUrl ? { logo: `/api/reels/media?brandId=${encodeURIComponent(brand.id)}` } : {}) },
         shots: productReelShots(productName, references.map(asset => ({ id: asset.id, url: asset.url! }))) };
       const job = await prisma.job.create({ data: { id: p.requestId, organizationId: ctx.organizationId, type: "PRODUCT_REEL", status: "draft", payload: json(plan) } });
@@ -54,13 +55,14 @@ export async function POST(req: Request) {
     }
     if (!runwayConfigured()) return reply({ error: "Connect Runway and private video storage before generating. No credits were charged." }, 503);
     const plan = existing!.payload as unknown as ProductReelPlan;
+    if (existing!.status === "draft" && plan.postRevision && plan.postRevision !== reelPostRevision(post)) return reply({ error: "This post changed after its video was prepared. Admin needs to prepare a revised video. No generation was started." }, 409);
     // A single transaction claims the plan, reserves the exact displayed cost,
     // and records all scene IDs. Retrying never creates a second paid batch.
     await prisma.$transaction(async tx => {
       const claim = await tx.job.updateMany({ where: { id: existing!.id, organizationId: ctx.organizationId, status: "draft" }, data: { status: "running" } });
       if (!claim.count) return;
-      const spent = await tx.subscription.updateMany({ where: { organizationId: ctx.organizationId, credits: { gte: PRODUCT_REEL_COST } }, data: { credits: { decrement: PRODUCT_REEL_COST } } });
-      if (!spent.count) throw new Error("INSUFFICIENT_CREDITS");
+      const spent = await tx.subscription.updateMany({ where: { organizationId: ctx.organizationId, credits: { gte: PRODUCT_REEL_COST }, status: { in: ["active", "trialing"] } }, data: { credits: { decrement: PRODUCT_REEL_COST } } });
+      if (!spent.count) throw new Error("PLAN_OR_CREDITS_REQUIRED");
       const sub = await tx.subscription.findUniqueOrThrow({ where: { organizationId: ctx.organizationId } });
       await tx.creditLedger.create({ data: { organizationId: ctx.organizationId, delta: -PRODUCT_REEL_COST, balanceAfter: sub.credits, reason: "product_reel", referenceId: existing!.id } });
       const sceneIds = plan.shots.map(() => randomUUID());
@@ -74,6 +76,7 @@ export async function POST(req: Request) {
     if (started.some(result => result.status === "rejected")) console.error("PRODUCT_REEL_SCENE_SAVE_DELAYED", { jobId: current.id });
     return reply({ job: await productReelView(current) }, 202);
   } catch (error) {
+    if (error instanceof Error && error.message === "PLAN_OR_CREDITS_REQUIRED") return reply({ error: `An active plan or trial and ${PRODUCT_REEL_COST} Rumi credits are needed to start these scenes. No generation was started.` }, 402);
     if (error instanceof Error && error.message === "INSUFFICIENT_CREDITS") return reply({ error: `This reel needs ${PRODUCT_REEL_COST} Rumi credits. No generation was started.` }, 402);
     if ((error as { code?: string })?.code === "P2002") return reply({ error: "This reel request already exists. Check its status before trying again." }, 409);
     return apiError(error, "Could not prepare or start this product reel. Check its status before trying again.");

@@ -36,7 +36,8 @@ async function failAndRefund(id:string,org:string){
 }
 export async function POST(req:Request){
  try {
-  const ctx=await tenantContext();if(ctx.role==="viewer")throw new Error("FORBIDDEN");
+  const ctx=await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });if(ctx.role==="viewer")throw new Error("FORBIDDEN");
   const parsed=schema.safeParse(await req.json());if(!parsed.success)return NextResponse.json({error:"Choose a scene and describe its photo (10–1,200 characters)."},{status:400});
   const p=parsed.data;if(p.organizationId!==ctx.organizationId)return NextResponse.json({error:"Your workspace changed. Reopen this reel first."},{status:409});
   const post=await prisma.contentItem.findFirst({where:{id:p.contentItemId,campaignId:p.campaignId,campaign:{brand:{organizationId:ctx.organizationId}}},include:{campaign:{include:{brand:true}}}});

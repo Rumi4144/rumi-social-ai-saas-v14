@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PACKAGE_KEYS, PACKAGE_CATALOG, canonicalPlan } from "@/lib/billing/packages";
 
 type Props = {
   organizationId: string;
@@ -18,7 +19,7 @@ export default function AdminSubscriptionEditor({
 }: Props) {
   const router = useRouter();
 
-  const [plan, setPlan] = useState(initialPlan);
+  const [plan, setPlan] = useState(canonicalPlan(initialPlan));
   const [status, setStatus] = useState(initialStatus);
   const [credits, setCredits] = useState(initialCredits);
   const [saving, setSaving] = useState(false);
@@ -75,13 +76,10 @@ export default function AdminSubscriptionEditor({
         <strong>Plan</strong>
         <select
           value={plan}
-          onChange={(e) => setPlan(e.target.value)}
+          onChange={(e) => setPlan(canonicalPlan(e.target.value))}
           style={{ display: "block", width: "100%", marginTop: 6 }}
         >
-          <option value="starter">Starter</option>
-          <option value="pro">Pro</option>
-          <option value="business">Business</option>
-          <option value="enterprise">Enterprise</option>
+          {PACKAGE_KEYS.map(key => <option key={key} value={key}>{PACKAGE_CATALOG[key].label}</option>)}
         </select>
       </label>
 
@@ -114,6 +112,7 @@ export default function AdminSubscriptionEditor({
       <button type="button" className="button" onClick={save} disabled={saving}>
         {saving ? "Saving..." : "Save Plan & Credits"}
       </button>
+      <small>This changes workspace access and the credit balance. It does not change an existing Stripe subscription or charge the customer.</small>
 
       {message && <small>{message}</small>}
     </div>

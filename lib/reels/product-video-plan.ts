@@ -7,7 +7,7 @@ export const PRODUCT_REEL_COST = 120;
 export const PRODUCT_REEL_SCENE_COST = 40;
 export type ProductReelShot = { id: string; assetId: string; imageUrl: string; label: string; prompt: string; caption: string };
 export type ProductReelPlan = {
-  campaignId: string; contentItemId: string; sourceUrl: string; productName: string; productSubject?: string;
+  campaignId: string; contentItemId: string; sourceUrl: string; productName: string; productSubject?: string; postRevision?: string;
   brand: { name: string; website: string; color: string; accent: string; logo?: string; industry?: string | null };
   shots: ProductReelShot[];
 };

@@ -58,6 +58,7 @@ export async function POST(req: Request) {
       if(p.data.campaignTopics.length){if(!contentPlan)throw new Error("Supply a campaign calendar for mixed topics.");contentPlan=applyCampaignTopics(contentPlan,p.data.campaignTopics);}
     } catch (error) { return NextResponse.json({error:error instanceof Error?error.message:"Invalid campaign plan."},{status:400}); }
     const ctx = await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Campaign design is managed in Admin. Prepare your seven-day pack from This Week." }, { status: 403 });
     if (p.data.organizationId && p.data.organizationId !== ctx.organizationId) return NextResponse.json({error:"Your selected workspace changed. Refresh this page before creating the campaign."},{status:409});
 
     let brand;

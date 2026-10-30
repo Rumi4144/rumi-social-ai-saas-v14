@@ -6,7 +6,9 @@ import { tenantContext } from "@/lib/auth/context";
 import { apiError } from "@/lib/http/errors";
 const schema=z.object({contentItemId:z.string().min(1),assetId:z.string().min(1)});
 export async function GET(req:Request){try{
-  const ctx=await tenantContext(),id=new URL(req.url).searchParams.get("contentItemId");
+  const ctx=await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "The creative library is available in Admin." }, { status: 403 });
+    const id=new URL(req.url).searchParams.get("contentItemId");
   const item=await prisma.contentItem.findFirst({where:{id:id||"",campaign:{brand:{organizationId:ctx.organizationId}}},select:{campaign:{select:{brandId:true}}}});
   if(!item)return NextResponse.json({error:"Post not found."},{status:404});
   const campaigns=await prisma.campaign.findMany({where:{brandId:item.campaign.brandId,brand:{organizationId:ctx.organizationId}},select:{id:true,title:true}});
@@ -15,7 +17,8 @@ export async function GET(req:Request){try{
   return NextResponse.json({videos:assets.filter(a=>!(a.metadata as {reusedFromAssetId?:string}|null)?.reusedFromAssetId).map(a=>({id:a.id,title:posts.find(p=>p.id===a.contentItemId)?.headline||a.prompt?.slice(0,120)||"Saved video",campaign:campaigns.find(c=>c.id===a.campaignId)?.title||"",src:`/api/video/media/${a.id}`}))},{headers:{"Cache-Control":"private, no-store"}});
 }catch(e){return apiError(e,"Could not load saved videos.");}}
 export async function POST(req:Request){try{
-  const ctx=await tenantContext();if(ctx.role==="viewer")return NextResponse.json({error:"Your role cannot change posts."},{status:403});
+  const ctx=await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "Creative controls are available in Admin. Request a change from This Week." }, { status: 403 });if(ctx.role==="viewer")return NextResponse.json({error:"Your role cannot change posts."},{status:403});
   const parsed=schema.safeParse(await req.json());if(!parsed.success)return NextResponse.json({error:"Choose a saved video and destination post."},{status:400});const p=parsed.data;
   const result=await prisma.$transaction(async tx=>{
     const item=await tx.contentItem.findFirst({where:{id:p.contentItemId,campaign:{brand:{organizationId:ctx.organizationId}}},include:{campaign:{select:{brandId:true}}}});

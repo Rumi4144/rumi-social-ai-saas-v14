@@ -46,7 +46,7 @@ test('scene parser rejects incomplete, overlapping and oversized plans rather th
 test('reel project reads the saved plan only for the active organization and matching post',async()=>{
  let query;
  const api=load('app/api/reels/project/route.ts',{
-  'next/server':{NextResponse:{json:body=>body}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'master-mind'})},
+  'next/server':{NextResponse:{json:body=>body}},'@/lib/auth/context':{tenantContext:async()=>({isSuperAdmin:true,organizationId:'master-mind'})},
   '@/lib/prisma':{prisma:{campaign:{findFirst:async()=>({id:'campaign',title:'Campaign',brand:{id:'brand',name:'Master Mind'},items:[{id:'own',type:'reel_post',headline:'Own',caption:'Caption'}]})},mediaAsset:{findMany:async()=>[]},job:{findFirst:async q=>{query=q;return {result:{posts:[{type:'reel_post',headline:'Own',caption:'Caption',visualDirection:screenshotPlan}]}};}}}},
  });
  const result=await api.GET(new Request('https://app.test/api/reels/project?campaignId=campaign&contentItemId=own'));
@@ -88,7 +88,7 @@ test('reel upload signs ownership and completion stays in that campaign', async 
  const api=load('app/api/reels/upload/route.ts',{
   '@/lib/video/media':{videoBytes:async asset=>{assert.equal(asset.organizationId,'org-a');if(rejectVideo)throw Error('audio only');return {contentType:'video/mp4'};}},
   '@vercel/blob/client':{handleUpload:async h=>{hooks=h;return{};}},'next/server':response,
-  '@/lib/auth/context':{tenantContext:async()=>({organizationId:'org-a',role:'owner'})},
+  '@/lib/auth/context':{tenantContext:async()=>({isSuperAdmin:true,organizationId:'org-a',role:'owner'})},
   '@/lib/prisma':{prisma:{contentItem:{findFirst:async q=>q.where.campaign.brand.organizationId==='org-a'?{id:'post-a'}:null},mediaAsset:{upsert:async q=>{saved=q;}}}},
   '@/lib/http/errors':{apiError:e=>{throw e;}}
  });
@@ -108,7 +108,7 @@ test('editor cannot load another workspace campaign or its images', async () => 
  let where;
  const api=load('app/api/reels/project/route.ts',{
   'next/server':{NextResponse:{json:(body,options={})=>({body,status:options.status||200})}},
-  '@/lib/auth/context':{tenantContext:async()=>({organizationId:'org-a'})},
+  '@/lib/auth/context':{tenantContext:async()=>({isSuperAdmin:true,organizationId:'org-a'})},
   '@/lib/prisma':{prisma:{campaign:{findFirst:async q=>{where=q.where;return null;}},mediaAsset:{findMany:async()=>{throw Error('must not query assets');}}}},
   '@/lib/http/errors':{apiError:e=>{throw e;}}
  });
@@ -123,7 +123,7 @@ test('weekly plan stays on seven calendar dates across daylight savings and rota
 test('weekly creation claims once, makes seven draft posts, and refuses foreign campaigns',async()=>{
  let claimed,created=0,scheduled=0;
  const tx={job:{findFirst:async()=>claimed,create:async q=>{claimed={payload:q.data.payload};},update:async q=>{claimed.result=q.data.result;}},contentItem:{create:async q=>{assert.equal(q.data.status,'draft');assert.equal(q.data.platform,'facebook');created++;return{id:`day-${created}`};}},publishJob:{create:async()=>scheduled++}};
- const api=load('app/api/reels/week/route.ts',{'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'org',role:'owner'})},'@/lib/prisma':{prisma:{campaign:{findFirst:async q=>q.where.id==='own'&&q.where.brand.organizationId==='org'?{id:'own'}:null},$transaction:async fn=>fn(tx)}},'@/lib/http/errors':{apiError:e=>{throw e;}}});
+ const api=load('app/api/reels/week/route.ts',{'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},'@/lib/auth/context':{tenantContext:async()=>({isSuperAdmin:true,organizationId:'org',role:'owner'})},'@/lib/prisma':{prisma:{campaign:{findFirst:async q=>q.where.id==='own'&&q.where.brand.organizationId==='org'?{id:'own'}:null},$transaction:async fn=>fn(tx)}},'@/lib/http/errors':{apiError:e=>{throw e;}}});
  const p={requestId:'12345678-1234-4234-8234-123456789abc',campaignId:'own',startDate:'2026-10-04',days:Array.from({length:7},(_,i)=>({headline:`Day ${i}`,caption:'Grounded'}))};
  const first=await api.POST({json:async()=>p});assert.equal(first.body.days.length,7);await api.POST({json:async()=>p});assert.equal(created,7);assert.equal(scheduled,0);const foreign=await api.POST({json:async()=>({...p,campaignId:'foreign'})});assert.equal(foreign.status,404);
 });
@@ -170,7 +170,7 @@ test('product photos require post ownership, stay scoped, and import idempotentl
  let role='owner',found=true,fetches=0; const writes=[];
  const api=load('app/api/reels/photos/route.ts',{
   'next/server':{NextResponse:{json:(body,options={})=>({body,status:options.status||200})}},
-  '@/lib/auth/context':{tenantContext:async()=>({organizationId:'org-a',role})},
+  '@/lib/auth/context':{tenantContext:async()=>({isSuperAdmin:true,organizationId:'org-a',role})},
   '@/lib/http/errors':{apiError:e=>({status:e.message==='FORBIDDEN'?403:500})},
   '@/lib/reels/public-fetch':{fetchPublicBytes:async()=>{fetches++;return{contentType:'text/html',bytes:Buffer.from('<div class="woocommerce-product-gallery"><img src="/a.jpg"><img src="/b.jpg"></div>')};}},
   '@/lib/prisma':{prisma:{contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'org-a');assert.equal(q.where.campaignId,'campaign-a');return found?{id:'post-a',headline:'A',caption:'https://shop.test/product/a',campaign:{brand:{websiteUrl:'https://shop.test',products:[]}}}:null;}},mediaAsset:{upsert:async q=>writes.push(q)}}}
@@ -195,7 +195,7 @@ test('product photo proxy enforces organization ownership', async () => {
  class ResponseMock { constructor(body,options={}) { this.body=body;this.status=options.status||200; } }
  const api=load('app/api/reels/media/route.ts',{
   'next/server':{NextResponse:ResponseMock},
-  '@/lib/auth/context':{tenantContext:async()=>({organizationId:'org-a'})},
+  '@/lib/auth/context':{tenantContext:async()=>({isSuperAdmin:true,organizationId:'org-a'})},
   '@/lib/prisma':{prisma:{mediaAsset:{findFirst:async q=>{where=q.where;return null;}}}},
   '@/lib/reels/public-fetch':{fetchPublicBytes:async()=>{downloads++;}},
   '@/lib/http/errors':{apiError:e=>{throw e;}}
@@ -314,7 +314,7 @@ test('saved video download preserves attachment intent for inline, private and R
  let asset={id:'clip',organizationId:'own',url:'data:video/mp4;base64,unused',metadata:null};
  class NextResponse extends Response {static redirect(url){return new Response(null,{status:307,headers:{Location:String(url)}});}}
  const api=load('app/api/video/media/[id]/route.ts',{
-  'next/server':{NextResponse},'@/lib/auth/context':{tenantContext:async()=>({organizationId:'own'})},
+  'next/server':{NextResponse},'@/lib/auth/context':{tenantContext:async()=>({isSuperAdmin:true,organizationId:'own'})},
   '@/lib/prisma':{prisma:{mediaAsset:{findFirst:async q=>{assert.equal(q.where.organizationId,'own');return asset;}}}},
   '@/lib/video/reuse':{resolveVideoAsset:async a=>a},'@/lib/video/clips':{decodeClip:()=>({contentType:'video/mp4',bytes:Buffer.from('saved-video')})},
   '@/lib/reels/storage':{privateReelPath:()=>false},

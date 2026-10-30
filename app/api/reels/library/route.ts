@@ -9,6 +9,8 @@ import { apiError } from "@/lib/http/errors";
 export async function GET(req: Request) {
   try {
     const ctx = await tenantContext();
+    if (!ctx.isSuperAdmin) return NextResponse.json({ error: "The creative library is available in Admin." }, { status: 403 });
+
     const query = new URL(req.url).searchParams;
     if (query.get("organizationId") !== ctx.organizationId) return NextResponse.json({ error: "Your workspace changed. Refresh the reel editor." }, { status: 409 });
     const campaignId = query.get("campaignId");
