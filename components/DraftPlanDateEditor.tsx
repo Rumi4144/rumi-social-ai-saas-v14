@@ -13,7 +13,7 @@ export default function DraftPlanDateEditor({ contentItemId, scheduledFor }: { c
       window.location.reload();
     } catch (err) { setError(err instanceof Error ? err.message : "Could not update this draft's date."); setSaving(false); }
   }
-  if (!open) return <button type="button" onClick={() => setOpen(true)}>Change draft date</button>;
+  if (!open) return <><button type="button" onClick={() => setOpen(true)}>Change draft date</button>{" "}<a href={`/admin/drafts/${encodeURIComponent(contentItemId)}`}>Open saved post</a></>;
   return <section aria-label="Draft date" style={{ width: "100%", marginTop: 12 }}>
     <p>This changes the draft's place in the weekly list. Publishing still requires approval and a separate posting action.</p>
     <label htmlFor={`draft-date-${contentItemId}`}>Planned date</label>{" "}
