@@ -14,6 +14,7 @@ import RenderCreativeButton from "@/components/RenderCreativeButton";
 import RegenerateImageButton from "@/components/RegenerateImageButton";
 import RegenerateCaptionButton from "@/components/RegenerateCaptionButton";
 import EditContentButton from "@/components/EditContentButton";
+import DraftPlanDateEditor from "@/components/DraftPlanDateEditor";
 import ApproveContentButton from "@/components/ApproveContentButton";
 import SchedulePostButton from "@/components/SchedulePostButton";
 import CampaignImageProcessor from "@/components/CampaignImageProcessor";
@@ -34,7 +35,7 @@ export default async function Campaign({
 
   const pageStarted = Date.now();
   const tenantStarted = Date.now();
-  const { organizationId } = await tenantContext();
+  const { organizationId, isSuperAdmin } = await tenantContext();
   console.log("[CAMPAIGN PERF] tenantContext:", Date.now() - tenantStarted, "ms");
 
   const dataStarted = Date.now();
@@ -210,7 +211,7 @@ export default async function Campaign({
           const photoReviewResult = latestPhotoReview?.result as {selected?: boolean; assetId?: string; review?: {issues?: string[]}} | null;
           const showPhotoReview = photoReviewResult?.selected === false && photoReviewResult.assetId && (!originalImage || originalImage.createdAt < latestPhotoReview!.createdAt);
           return (
-            <article className="card" key={item.id}>
+            <article className="card" key={item.id} id={`post-${item.id}`}>
               <div style={{marginBottom:20,padding:16,borderRadius:12,border:item.type === "story_post" ? "2px solid #9a5b12" : "1px solid #315943",background:item.type === "story_post" ? "#fff4dd" : "#edf5ef",color:"#172b24"}}>
                 <strong style={{fontSize:20}}>{contentTypeLabel(item.type)}</strong>
                 <PostDeliveryStatus contentItemId={item.id} />
@@ -266,7 +267,7 @@ export default async function Campaign({
               )}
 
               <span className="eyebrow">
-                {item.type === "holiday_post" ? "EXTRA SPECIAL DAY" : `DAY ${calendarDay}`} · {contentTypeLabel(item.type)} ·{" "}
+                {!item.scheduledFor ? "UNASSIGNED DRAFT" : item.type === "holiday_post" ? "EXTRA SPECIAL DAY" : `DAY ${calendarDay}`} · {contentTypeLabel(item.type)} ·{" "}
               {item.platform
                 .split(",")
                 .map((platform: string) =>
@@ -291,7 +292,8 @@ export default async function Campaign({
           {plannedSlot?.topics?.length ? <p><strong>Topics:</strong> {plannedSlot.topics.join(" · ")}</p> : null}
           {occasion && <p><strong>{occasion}</strong> · extra draft alongside regular content</p>}
           <h3>{item.headline || "Creative"}</h3>
-          {item.scheduledFor && <p>Planned date: {item.scheduledFor.toISOString().slice(0, 10)}</p>}
+          <p>{item.scheduledFor ? `Planned date: ${item.scheduledFor.toISOString().slice(0, 10)}` : "No planned date · saved in Admin"}</p>
+          {isSuperAdmin && item.status === "draft" && !(planningJob?.payload as { weeklyPackId?: string } | null)?.weeklyPackId && <DraftPlanDateEditor contentItemId={item.id} scheduledFor={item.scheduledFor?.toISOString() || null} />}
 
               <p>{item.caption}</p>
               <CampaignProductPicker campaignId={campaign.id} contentItemId={item.id}><CampaignPhotoChoices organizationId={organizationId} campaignId={campaign.id} contentItemId={item.id} headline={item.headline || ""}/>                <RegenerateImageButton label="Generate AI image" showRegenerate

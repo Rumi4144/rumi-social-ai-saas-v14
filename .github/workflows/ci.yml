@@ -61,6 +61,7 @@ jobs:
       - run: node tests/social-account-selection-browser.cjs
       - run: node tests/user-activity-browser.cjs
       - run: node tests/weekly-customer-browser.cjs
+      - run: node tests/draft-planned-date-browser.cjs
       - run: node tests/onboarding-browser.cjs
       - run: node tests/weekly-video-browser.cjs
       - run: node tests/weekly-billing-browser.cjs
