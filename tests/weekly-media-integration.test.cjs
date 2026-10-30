@@ -12,10 +12,13 @@ test('rendered worker JPEG survives weekly readiness, browser serving, customer 
   const item={id:'post',campaignId:'campaign',type:'static_post',platform:'facebook,instagram',headline:'Find your sound',caption:'An actual product photo in a finished design.',status:'draft',mediaUrl:origin+'/api/media/worker-art',scheduledFor:new Date(),createdAt:new Date()};
   const asset={id:'worker-art',organizationId:'org',campaignId:'campaign',contentItemId:'post',kind:'social_creative',provider:'internal-raster',status:'ready',url:'data:image/jpeg;base64,'+raster.toString('base64'),metadata:{format:'portrait',width:1080,height:1350},createdAt:new Date()};
   const context={organizationId:'org',role:'member',userId:'member'},writes=[];
+  const {monday,weeklyPackId,planWeek}=load('lib/weekly/plan.ts'),weekStart=monday();
+  const planned=planWeek({organizationId:'org',brandId:'brand',brandName:'Fixture Guitars',weekStart,startsOn:weekStart,mix:{images:7,motionReels:0,aiVideos:0},photos:[],history:[]});
+  const weeklyRecord={id:weeklyPackId('org','brand',weekStart),type:'WEEKLY_PACK',payload:{version:1,brandId:'brand',campaignId:'campaign',weekStart,startsOn:weekStart,slots:planned.slots},result:{items:[{slotKey:planned.slots[0].key,contentItemId:'post'}]}};
   const db={
     brand:{findMany:async()=>[{id:'brand',organizationId:'org',name:'Fixture Guitars',createdAt:new Date(),websiteUrl:'https://fixture.test',logoUrl:null,products:[]}]},
     subscription:{findUnique:async()=>({plan:'starter',status:'active',credits:100})},
-    campaign:{findMany:async()=>[]},job:{findMany:async()=>[],findFirst:async()=>null},
+    campaign:{findMany:async()=>[]},job:{findMany:async q=>q.where.type==='WEEKLY_PACK'?[weeklyRecord]:[],findFirst:async()=>null},
     contentItem:{findMany:async()=>[item],findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'org');return item},update:async({data})=>{writes.push(data);Object.assign(item,data);return item}},
     mediaAsset:{findMany:async q=>q.where.kind==='product_photo'?[]:[asset],findUnique:async()=>asset,findFirst:async q=>{assert.equal(q.where.organizationId,'org');assert.equal(q.where.campaignId,'campaign');assert.equal(q.where.contentItemId,'post');return q.where.id===asset.id?asset:null}},
     publishJob:{findMany:async()=>[],findFirst:async()=>null},socialConnection:{findMany:async()=>[]},auditLog:{create:async()=>{}},

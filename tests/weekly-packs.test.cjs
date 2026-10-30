@@ -103,7 +103,7 @@ function fixture({ credits = 100, planName = 'starter', status = 'trialing', gal
     job: { findMany: async ({ where }) => { assert.equal(where.organizationId, 'own'); return state.jobs.filter(row => matches(row, where)); }, findFirst: async ({ where }) => { assert.equal(where.organizationId, 'own'); return state.jobs.find(row => matches(row, where)) || null; }, create: async ({ data }) => { assert.ok(!state.jobs.some(job => job.id === data.id)); const row = { status: 'queued', createdAt: new Date(), updatedAt: new Date(), ...data }; state.jobs.push(row); return row; } },
     creditLedger: { create: async ({ data }) => { state.ledger.push(data); return data; } },
     mediaAsset: { findMany: async query => { assert.equal(query.where.organizationId, 'own'); return state.assets.filter(row => matches(row, query.where)); } },
-    contentItem: { findMany: async query => { assert.equal(query.where.campaign.brand.organizationId, 'own'); return state.items.filter(item => !query.where.campaignId || item.campaignId === query.where.campaignId); } },
+    contentItem: { findMany: async query => { assert.equal(query.where.campaign.brand.organizationId, 'own'); return state.items.filter(item => matches(item, query.where)); } },
     publishJob: { findMany: async query => { assert.equal(query.where.organizationId, 'own'); return state.deliveries.filter(row => matches(row, query.where)); } },
     socialConnection: { findMany: async query => { assert.equal(query.where.organizationId, 'own'); return []; } },
     $queryRaw: async (parts, organizationId) => { assert.equal(organizationId, 'own'); assert.match(parts.join('?'), /FOR UPDATE/); state.locks.push(organizationId); return [{ id: 'subscription' }]; },
@@ -118,6 +118,54 @@ function fixture({ credits = 100, planName = 'starter', status = 'trialing', gal
   const context = { organizationId: 'own', userId: 'user', role: 'owner' };
   return { state, db, service, request, context };
 }
+const savedPost = (id, campaignId, date = plan.monday()) => ({ id, campaignId, type: 'post', headline: id, caption: 'Saved copy', status: 'draft', platform: 'facebook,instagram,youtube', mediaUrl: null, scheduledFor: new Date(`${date}T12:00:00Z`), createdAt: new Date() });
+test('55 older drafts never become an unprepared weekly pack or trigger any work', async () => {
+  const f = fixture();
+  f.state.items.push(...Array.from({ length: 55 }, (_, i) => savedPost(`older-${i}`, `older-campaign-${i % 3}`)));
+  const before = JSON.stringify(f.state);
+  f.db.contentItem.findMany = async () => { throw new Error('An unprepared week must not load older campaign drafts'); };
+  const view = await f.service.weeklyView(f.context);
+  assert.equal(view.pack, null); assert.equal(view.items.length, 0); assert.equal(view.prepare.allowed, true);
+  assert.equal(view.plan.weeklyPosts, 7);
+  assert.equal(view.prepare.mix.images + view.prepare.mix.motionReels + view.prepare.mix.aiVideos, 7);
+  assert.equal(JSON.stringify(f.state), before, 'Opening This Week preserves every saved draft, date, status and credit');
+});
+test('a seven-day pack stays seven posts across three social accounts, with no legacy or duplicate additions', async () => {
+  const f = fixture();
+  f.db.socialConnection.findMany = async () => ['facebook', 'instagram', 'youtube'].map(provider => ({ provider }));
+  const result = await f.service.prepareWeekly(f.context, f.request());
+  const pack = f.state.jobs.find(job => job.type === 'WEEKLY_PACK');
+  const generation = f.state.jobs.find(job => job.type === 'CREATE_EVERYTHING');
+  assert.equal(generation.payload.contentPlan.length, 7);
+  assert.equal(generation.payload.dailyPlan.length, 7);
+  assert.ok(generation.payload.contentPlan.every(slot => slot.platforms.length === 3));
+  pack.result = { items: pack.payload.slots.map((slot, i) => ({ slotKey: slot.key, contentItemId: `weekly-${i}` })) };
+  f.state.items.push(...pack.payload.slots.map((slot, i) => savedPost(`weekly-${i}`, result.campaignId, slot.date)));
+  f.state.items.push(...Array.from({ length: 55 }, (_, i) => savedPost(`older-${i}`, 'older-campaign')),
+    savedPost('extra-in-same-campaign', result.campaignId), savedPost('duplicate-slot', result.campaignId));
+  pack.result.items.push({ slotKey: pack.payload.slots[0].key, contentItemId: 'duplicate-slot' }, { slotKey: 'unplanned', contentItemId: 'extra-in-same-campaign' });
+  const before = JSON.stringify(f.state);
+  const view = await f.service.weeklyView(f.context);
+  assert.equal(view.items.length, 7); assert.equal(new Set(view.items.map(item => item.date)).size, 7);
+  assert.ok(view.items.every(item => item.id.startsWith('weekly-')));
+  assert.equal(JSON.stringify(f.state), before);
+  f.state.items[0].status = 'published';
+  assert.equal((await f.service.weeklyView(f.context)).items.length, 6, 'Published slots are not refilled with older drafts');
+  await f.service.prepareWeekly(f.context, f.request());
+  assert.equal(f.state.ledger.length, 1); assert.equal(f.state.campaigns.length, 1);
+  assert.equal(f.state.items.filter(item => item.id.startsWith('older-')).length, 55, 'Admin history remains saved');
+});
+test('a paid larger pack remains intact after the customer changes plans', async () => {
+  const f = fixture({ planName: 'business', status: 'active' });
+  const result = await f.service.prepareWeekly(f.context, f.request({ expectedCredits: 29 }));
+  const pack = f.state.jobs.find(job => job.type === 'WEEKLY_PACK');
+  pack.result = { items: pack.payload.slots.map((slot, i) => ({ slotKey: slot.key, contentItemId: `paid-${i}` })) };
+  f.state.items.push(...pack.payload.slots.map((slot, i) => savedPost(`paid-${i}`, result.campaignId, slot.date)));
+  f.state.subscription.plan = 'starter';
+  const view = await f.service.weeklyView(f.context);
+  assert.equal(view.plan.weeklyPosts, 7); assert.equal(view.items.length, 14);
+  assert.equal(f.state.ledger.length, 1, 'Viewing a saved pack never prepares or charges a replacement');
+});
 test('concurrent preparation retries claim one pack and debit exactly once', async () => {
   const f = fixture(); const results = await Promise.all([f.service.prepareWeekly(f.context, f.request()), f.service.prepareWeekly(f.context, f.request())]);
   assert.equal(results[0].packId, results[1].packId); assert.equal(results.filter(r => r.reused).length, 1); assert.equal(f.state.ledger.length, 1); assert.equal(f.state.subscription.credits, 85); assert.equal(f.state.campaigns.length, 1);

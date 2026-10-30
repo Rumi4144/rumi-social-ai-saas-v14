@@ -56,7 +56,17 @@ export async function weeklyView(ctx: Context, options: Options = {}): Promise<W
   const allowance = checkWeeklyAllowance(spec, { ...usage, requestedPosts: quote.posts });
   const record = brand ? records.find(row => row.id === weeklyPackId(ctx.organizationId, brand.id, weekStart)) : undefined;
   const manifest = record ? manifestOf(record.payload) : null;
-  const items = brand ? await prisma.contentItem.findMany({ where: { campaign: { brandId: brand.id, brand: { organizationId: ctx.organizationId } }, ...(manifest ? { campaignId: manifest.campaignId } : { scheduledFor: { gte: new Date(`${weekStart}T00:00:00Z`), lt: new Date(`${addDays(weekStart, 7)}T00:00:00Z`) } }) }, orderBy: [{ scheduledFor: "asc" }, { createdAt: "asc" }] }) : [];
+  const savedMapping = object(record?.result).items;
+  const mapping: WeeklyItemMapping[] = Array.isArray(savedMapping) ? savedMapping : [];
+  const slotsByItem = new Map<string, WeeklyManifest["slots"][number]>(), assignedSlots = new Set<string>();
+  for (const entry of mapping) {
+    const slot = manifest?.slots.find(slot => slot.key === entry?.slotKey);
+    if (!slot || typeof entry?.contentItemId !== "string" || !entry.contentItemId || assignedSlots.has(slot.key) || slotsByItem.has(entry.contentItemId)) continue;
+    assignedSlots.add(slot.key); slotsByItem.set(entry.contentItemId, slot);
+  }
+  // Calendar dates do not make older campaign drafts part of a weekly pack.
+  // Only its saved slots appear here; all other content stays in Admin.
+  const items = brand && manifest && slotsByItem.size ? await prisma.contentItem.findMany({ where: { id: { in: [...slotsByItem.keys()] }, campaignId: manifest.campaignId, campaign: { brandId: brand.id, brand: { organizationId: ctx.organizationId } } }, orderBy: [{ scheduledFor: "asc" }, { createdAt: "asc" }] }) : [];
   const ids = items.map(item => item.id);
   const [assets, publishJobs, connections, changes, preparationJobs] = await Promise.all([
     ids.length ? prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, contentItemId: { in: ids }, status: "ready", kind: { in: ["social_creative", "campaign_video"] } } }) : [],
@@ -65,13 +75,12 @@ export async function weeklyView(ctx: Context, options: Options = {}): Promise<W
     ids.length ? prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: "CONTENT_CHANGE_REQUEST", status: "pending", OR: ids.map(id => ({ payload: { path: ["contentItemId"], equals: id } })) }, orderBy: { updatedAt: "desc" } }) : [],
     manifest ? prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: { in: ["CREATE_EVERYTHING", "GENERATE_IMAGE"] }, payload: { path: ["campaignId"], equals: manifest.campaignId } }, orderBy: { createdAt: "asc" } }) : [],
   ]);
-  const mapping: WeeklyItemMapping[] = object(record?.result).items || [];
   const output: WeeklyItem[] = [];
   for (const item of items) {
     const jobs = latestDeliveries(publishJobs.filter(row => row.contentItemId === item.id));
     if (fullyPublished(item.status, jobs)) continue;
-    const slot = manifest?.slots.find(s => mapping.some(m => m.contentItemId === item.id && m.slotKey === s.key));
-    const kind = slot?.kind || (item.type === "reel_post" || item.type === "presenter_post" ? "motion_reel" : "image");
+    const slot = slotsByItem.get(item.id)!;
+    const kind = slot.kind;
     const ref = savedItemMedia(item.mediaUrl);
     const asset = ref && assets.find(a => a.id === ref.id && a.contentItemId === item.id && a.campaignId === item.campaignId && a.kind === (ref.kind === "image" ? "social_creative" : "campaign_video"));
     const correctMedia = !!asset?.url && (kind === "image" ? ref?.kind === "image" : ref?.kind === "video" && object(asset.metadata).contentType === "video/mp4");
