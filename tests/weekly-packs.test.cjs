@@ -32,6 +32,58 @@ test('pack identity includes tenant, business and week; calendar handles a year 
   assert.equal(new Set(keys).size, 4); assert.equal(plan.addDays('2026-12-28', 6), '2027-01-03'); assert.throws(() => plan.dateValue('2026-02-31'));
   assert.deepEqual(serialize(plan.annualPosition(plan.addDays('2026-10-26', 364), '2026-10-26')), { weekNumber: 1, cycle: 2 });
 });
+const productPhotos = (name, count) => Array.from({ length: count }, (_, index) => ({ imageUrl: `https://brand.test/${name}-${index}.jpg`, sourceUrl: `https://brand.test/products/${name}`, productName: name }));
+const weeklyInput = (photos, mix = { images: 7, motionReels: 0, aiVideos: 0 }) => ({ organizationId: 'own', brandId: 'brand', brandName: 'Real business', weekStart: '2026-10-26', startsOn: '2026-10-26', photos, mix, history: [] });
+test('weekly rotation selects products before photos, even with very uneven gallery sizes', () => {
+  const input = weeklyInput([...productPhotos('guitar', 20), ...productPhotos('ukulele', 1), ...productPhotos('mandolin', 1)]);
+  const slots = plan.planWeek(input).slots;
+  assert.equal(new Set(slots.slice(0, 3).map(s => s.productName)).size, 3, 'Use all three products before repeating one');
+  for (let i = 1; i < slots.length; i++) assert.notEqual(slots[i].productName, slots[i - 1].productName);
+  const counts = ['guitar', 'ukulele', 'mandolin'].map(name => slots.filter(s => s.productName === name).length);
+  assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, 'A large photo gallery must not dominate the week');
+});
+test('14- and 21-post packs use distinct products each day and reserve galleries for reels', () => {
+  for (const [count, mix] of [[14, { images: 10, motionReels: 3, aiVideos: 1 }], [21, { images: 16, motionReels: 4, aiVideos: 1 }]]) {
+    const input = weeklyInput([...productPhotos('guitar', 10), ...productPhotos('ukulele', 1), ...(count === 21 ? productPhotos('mandolin', 1) : [])], mix);
+    const snapshot = JSON.stringify(input);
+    const slots = plan.planWeek(input).slots;
+    assert.equal(slots.length, count);
+    for (let day = 1; day <= 7; day++) {
+      const today = slots.filter(s => s.day === day);
+      assert.equal(today.length, count / 7);
+      assert.equal(new Set(today.map(plan.weeklyProductKey)).size, today.length, `Day ${day} must not feature one product twice`);
+      assert.ok(today.every(s => s.date === plan.addDays(input.weekStart, day - 1)));
+    }
+    assert.equal(slots.filter(s => s.kind === 'motion_reel').length, mix.motionReels);
+    assert.equal(slots.filter(s => s.kind === 'ai_video').length, mix.aiVideos);
+    assert.ok(slots.filter(s => s.kind !== 'image').every(s => s.productName === 'guitar'), 'Only the guitar has enough real views for a reel');
+    assert.equal(JSON.stringify(input), snapshot, 'Planning must not rewrite saved history or catalog order');
+    assert.deepEqual(serialize(slots), serialize(plan.planWeek(input).slots));
+  }
+});
+test('product rotation carries across weeks without using another business or a future pack', () => {
+  const input = weeklyInput([...productPhotos('guitar', 10), ...productPhotos('ukulele', 1), ...productPhotos('mandolin', 1)]);
+  input.history = [{ brandId: 'brand', weekStart: '2026-10-19', slots: ['guitar', 'ukulele', 'mandolin'].map(name => ({ ...productPhotos(name, 1)[0], sourceImageUrl: productPhotos(name, 1)[0].imageUrl, layout: 'cinematic' })) }];
+  const expected = plan.planWeek(input);
+  assert.equal(expected.slots[0].productName, 'guitar', 'The least recently featured product goes first');
+  input.history.push({ ...input.history[0], brandId: 'other', weekStart: '2026-10-25', slots: input.history[0].slots.slice().reverse() }, { ...input.history[0], weekStart: '2026-11-02', slots: input.history[0].slots.slice().reverse() });
+  assert.deepEqual(serialize(plan.planWeek(input)), serialize(expected));
+});
+test('tracking links and resized photographs cannot masquerade as extra products or reel scenes', () => {
+  const photo = productPhotos('guitar', 1)[0];
+  const variants = [photo, { ...photo, productName: '  GUITAR  ', sourceUrl: `${photo.sourceUrl}/?utm_source=ad&fbclid=123#gallery`, imageUrl: `${photo.imageUrl}?width=600` }, { ...photo, sourceUrl: `${photo.sourceUrl}?gclid=123`, imageUrl: `${photo.imageUrl}?quality=80` }];
+  assert.equal(plan.photoGroups(variants).length, 1);
+  assert.equal(plan.photoGroups(variants)[0].length, 1, 'One photo in three sizes is not a gallery');
+  assert.notEqual(plan.weeklyProductKey(photo), plan.weeklyProductKey({ ...photo, sourceUrl: photo.sourceUrl + '?variant=blue' }), 'Meaningful product variants remain distinct');
+  assert.equal(plan.photoGroups([photo, { ...photo, productName: 'Different product' }]).length, 2, 'A shared catalog page must not combine differently named products');
+});
+test('small catalogs keep the promised quantities without inventing products', () => {
+  const input = weeklyInput(productPhotos('guitar', 3), { images: 10, motionReels: 3, aiVideos: 1 });
+  const slots = plan.planWeek(input).slots;
+  assert.equal(slots.length, 14);
+  assert.ok(slots.every(s => s.productName === 'guitar' && input.photos.some(p => p.imageUrl === s.sourceImageUrl)));
+  assert.equal(new Set(slots.map(s => s.date)).size, 7);
+});
 function fixture({ credits = 100, planName = 'starter', status = 'trialing', gallery = false } = {}) {
   let queue = Promise.resolve(), sequence = 0;
   const state = { subscription: { organizationId: 'own', plan: planName, status, credits }, jobs: [], campaigns: [], ledger: [], items: [], assets: [], deliveries: [], locks: [] };
@@ -124,6 +176,14 @@ test('unconfigured AI video is replaced with an image and cannot be explicitly c
   const f = fixture({ gallery: true, planName: 'business', status: 'active', credits: 1500 });
   const view = await f.service.weeklyView(f.context); assert.equal(view.prepare.aiVideoAvailable, false); assert.equal(view.prepare.mix.aiVideos, 0);
   await assert.rejects(f.service.prepareWeekly(f.context, f.request({ expectedCredits: 29, mix: { images: 13, motionReels: 0, aiVideos: 1 } })), /not configured/);
+  assert.equal(f.state.ledger.length, 0);
+});
+test('a small catalog explains unavoidable same-day repeats before preparation', async () => {
+  const f = fixture({ gallery: true, planName: 'business', status: 'active', credits: 1500 });
+  const view = await f.service.weeklyView(f.context);
+  assert.ok(view.prepare.warnings.some(text => /Some products will repeat that day/.test(text)));
+  const intro = fixture({ gallery: true, status: 'active' });
+  assert.ok(!(await intro.service.weeklyView(intro.context)).prepare.warnings.some(text => /repeat that day/.test(text)));
   assert.equal(f.state.ledger.length, 0);
 });
 test('a newer retry outcome controls each account independently of an older success', () => {

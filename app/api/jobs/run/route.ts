@@ -15,7 +15,7 @@ import { buildVisualDirection } from "@/lib/ai/visual-director";
 import { buildVisualConcept, isSubjectCategory, recentVisualConcept, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "@/lib/ai/visual-plan";
 import { imageToJpegDataUrl, logoToPngDataUrl, svgToPublishJpeg, weeklyDesignFonts } from "@/lib/render/raster";
 import type { WeeklySlot, WeeklyItemMapping } from "@/lib/weekly/types";
-import type { WeeklyPhoto } from "@/lib/weekly/plan";
+import { photoGroups, weeklyProductKey, type WeeklyPhoto } from "@/lib/weekly/plan";
 import type { Job } from "@prisma/client";
 
 
@@ -521,7 +521,7 @@ export async function POST(req: Request) {
           // Real gallery images remain original assets, so motion reels can use
           // multiple views without generating a different version of a product.
           if (weeklySlot.kind !== "image" && weeklySlot.sourceUrl) {
-            const gallery = (p.weeklySources || []).filter(photo => photo.sourceUrl === weeklySlot.sourceUrl && photo.productName === weeklySlot.productName);
+            const gallery = photoGroups(p.weeklySources || []).find(group => weeklyProductKey(group[0]) === weeklyProductKey(weeklySlot)) || [];
             for (const [index, photo] of gallery.entries()) await tx.mediaAsset.create({ data: { organizationId: job.organizationId, campaignId: campaign.id, contentItemId: item.id, kind: "product_photo", provider: "product-website", status: "ready", url: photo.imageUrl, metadata: { brandId: campaign.brandId, productName: photo.productName, sourceUrl: photo.sourceUrl, label: `Product view ${index + 1}`, sourceEvidence: { imageUrl: photo.imageUrl, sourceUrl: photo.sourceUrl, title: photo.productName } } } });
           }
         }

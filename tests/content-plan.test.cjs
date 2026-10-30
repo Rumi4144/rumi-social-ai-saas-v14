@@ -74,6 +74,7 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
   const job={id:'job',organizationId:'master-mind',type:'CREATE_EVERYTHING',status:'queued',payload:{campaignId:'campaign',brief:'Mindful change',goal:'education',days:7,dailyPlan:rows,contentPlan:slots,photoSource:'none'}};
   const tx={mediaAsset:{findMany:async()=>[{id:'saved',kind:'ai_image',url:'saved-photo',provider:'openai'}],create:async q=>attached.push(q.data)},contentItem:{update:async q=>{assert.equal(q.data.mediaUrl,'saved-photo');},deleteMany:async()=>{},create:async q=>{items.push(q.data);return {id:'item-'+items.length};}},job:{create:async q=>media.push(q),update:async q=>{result=q.data;}},campaign:{findMany:async()=>[{id:"past"}],update:async()=>{}}};
   const api=load('app/api/jobs/run/route.ts',{
+   '@/lib/weekly/plan':require('./helpers/weekly-load.cjs').load('lib/weekly/plan.ts'),
    'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},openai:class {},'@/lib/ai/image-provider':{ImageRejectedError:class extends Error{},generateImage:async()=>{throw Error('No image expected');},imageConfiguration:()=>({provider:'bfl',model:'flux-3-image-klein'})},
    '@/lib/prisma':{prisma:{job:{findFirst:async()=>job,updateMany:async()=>({count:1}),update:async()=>{}},campaign:{findUnique:async q=>{assert.equal(q.where.brand.organizationId,'master-mind');return {id:'campaign',brandId:'brand',brand:{name:'Master Mind',description:'Hypnosis service'}};}},$transaction:async fn=>{transactions++;return fn(tx);}}},
    '@/lib/creative/save-revision':{},
@@ -93,6 +94,20 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
   media.length=0;job.payload.photoSource="website";job.payload.imageUrls=['https://business.example/product.jpg'];assert.equal((await api.POST(req)).status,200);assert.equal(media.length,0);assert.ok(result.result.photoWarnings.length>0);
 
   media.length=0;job.payload.photoSource="none";job.payload.campaignPhotoIds=['saved'];assert.equal((await api.POST(req)).status,200);assert.equal(media.length,0);assert.equal(attached.length,8);assert.ok(attached.every(a=>a.provider==='reuse'&&a.url==='saved-photo'));
+
+  // Weekly gallery eligibility and the worker must use the same product key.
+  job.payload.campaignPhotoIds=[];attached.length=0;
+  job.payload.weeklySlots=[{key:slots[1].planKey,kind:'motion_reel',sourceUrl:'https://business.example/product',productName:'Actual guitar'}];
+  job.payload.weeklySources=[
+   {sourceUrl:'https://business.example/product',productName:'Actual guitar',imageUrl:'https://business.example/one.jpg'},
+   {sourceUrl:'https://business.example/product/?utm_source=ad',productName:' ACTUAL  GUITAR ',imageUrl:'https://business.example/two.jpg'},
+   {sourceUrl:'https://business.example/product#gallery',productName:'Actual guitar',imageUrl:'https://business.example/three.jpg'},
+   {sourceUrl:'https://business.example/product',productName:'Actual guitar',imageUrl:'https://business.example/one.jpg?width=600'},
+   {sourceUrl:'https://business.example/other',productName:'Other guitar',imageUrl:'https://business.example/other.jpg'},
+  ];
+  assert.equal((await api.POST(req)).status,200);
+  assert.deepEqual(attached.map(a=>a.url),['https://business.example/one.jpg','https://business.example/two.jpg','https://business.example/three.jpg']);
+  assert.ok(attached.every(a=>a.kind==='product_photo'&&a.organizationId==='master-mind'));
 
  } finally {if(previous===undefined)delete process.env.WORKER_SECRET;else process.env.WORKER_SECRET=previous;}
 });
