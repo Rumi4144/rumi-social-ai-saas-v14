@@ -1,6 +1,8 @@
 import Link from "next/link";
 import TikTokConnectionStatus from "./TikTokConnectionStatus";
 import YouTubeDisconnect from "./YouTubeDisconnect";
+import FacebookConnection from "./FacebookConnection";
+import { canManageFacebook, facebookMessage } from "@/lib/social/facebook-connection";
 import InstagramConnection from "./InstagramConnection";
 import { canManageInstagram, instagramMessage } from "@/lib/social/instagram-connection";
 import { prisma } from "@/lib/prisma";
@@ -8,7 +10,7 @@ import { tenantContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ youtube?: string; googleBusiness?: string; tiktok?:string; instagram?: string; reason?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ youtube?: string; googleBusiness?: string; tiktok?:string; instagram?: string; facebook?: string; reason?: string }> }) {
   const query = await searchParams;
   const ctx = await tenantContext();
 
@@ -37,12 +39,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     },
   });
 
-  const facebookConnection = await prisma.socialConnection.findFirst({
+  const facebookConnections = await prisma.socialConnection.findMany({
     where: {
       organizationId: ctx.organizationId,
       provider: "facebook",
       status: "connected",
     },
+    select: { id: true, accountName: true },
   });
 
   const googleConnection = await prisma.socialConnection.findFirst({ where: { organizationId: ctx.organizationId, provider: "google_business", status: "connected" } });
@@ -59,6 +62,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <Link className="button" href="/team">Team access</Link>
       </nav>
       <h2>Connected accounts</h2>
+      {query.facebook === "connected" && <p role="status">Facebook connected. Review any failed posts before trying them again.</p>}
+      {query.facebook === "cancelled" && <p role="status">Facebook sign-in was cancelled. The previous connection was kept.</p>}
+      {query.facebook === "disconnected" && <p role="status">Facebook disconnected from Rumi. Pending Facebook posts were stopped. Your published posts and account history remain.</p>}
+      {query.facebook === "error" && <p role="alert">{facebookMessage(query.reason)}</p>}
       {query.instagram === "connected" && <p role="status">Instagram connected. Review any failed posts before trying them again.</p>}
       {query.instagram === "cancelled" && <p role="status">Instagram sign-in was cancelled. The previous connection was kept.</p>}
       {query.instagram === "disconnected" && <p role="status">Instagram disconnected from Rumi and its saved access token removed. Pending posts were stopped. Your published posts and account history remain.</p>}
@@ -91,21 +98,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </>
             ) : x === "Facebook Page" ? (
               <>
-                <p>
-                  {facebookConnection
-                    ? `Connected as ${facebookConnection.accountName || "Facebook Page"}`
-                    : "Not connected"}
-                </p>
-
-                {facebookConnection ? (
-                  <button type="button" disabled>
-                    Connected
-                  </button>
-                ) : (
-                  <a href="/api/social/facebook/connect">
-                    <button type="button">Connect</button>
-                  </a>
-                )}
+                {facebookConnections.map(connection => <FacebookConnection key={connection.id} connectionId={connection.id} accountName={connection.accountName} canManage={canManageFacebook(ctx.role)}/>)}
+                {!facebookConnections.length && <><p>Not connected</p>{canManageFacebook(ctx.role) ? <a className="button" href="/api/social/facebook/connect">Connect Facebook</a> : <p>Ask a workspace owner or team member to connect Facebook.</p>}</>}
               </>
             ) : x === "YouTube" ? (
               <>

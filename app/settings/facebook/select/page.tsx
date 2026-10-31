@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/security/crypto";
 import { tenantContext } from "@/lib/auth/context";
 import { redirect } from "next/navigation";
+import { canManageFacebook, FACEBOOK_SELECTION_TYPE, validFacebookAttempt, type FacebookAttempt, type FacebookPage } from "@/lib/social/facebook-connection";
+
+export const dynamic = "force-dynamic";
 
 export default async function FacebookPageSelector({
   searchParams,
@@ -12,38 +15,35 @@ export default async function FacebookPageSelector({
   const params = await searchParams;
   const jobId = params.job;
 
+  if (!canManageFacebook(ctx.role)) redirect("/settings?facebook=error&reason=workspace");
+
   if (!jobId) {
-    redirect("/settings?facebook=error&reason=missing_selection");
+    redirect("/settings?facebook=error&reason=session");
   }
 
   const job = await prisma.job.findFirst({
     where: {
       id: jobId,
       organizationId: ctx.organizationId,
-      type: "facebook_page_selection",
+      type: FACEBOOK_SELECTION_TYPE,
       status: "pending",
     },
   });
 
   if (!job) {
-    redirect("/settings?facebook=error&reason=selection_expired");
+    redirect("/settings?facebook=error&reason=session");
   }
 
-  const payload = job.payload as {
-    encryptedPages?: string;
-  };
-
-  if (!payload.encryptedPages) {
-    redirect("/settings?facebook=error&reason=selection_data");
+  const payload = job.payload as FacebookAttempt | null;
+  if (!validFacebookAttempt(payload, ctx.userId) || !payload?.encryptedPages) {
+    redirect("/settings?facebook=error&reason=session");
   }
-
-  const pages = JSON.parse(
-    decryptSecret(payload.encryptedPages)
-  ) as Array<{
-    id: string;
-    name: string;
-    pictureUrl?: string;
-  }>;
+  let pages: Pick<FacebookPage, "id" | "name" | "pictureUrl">[];
+  try {
+    // Only display fields reach the rendered page; credentials remain on the server.
+    pages = (JSON.parse(decryptSecret(payload.encryptedPages)) as FacebookPage[])
+      .map(({ id, name, pictureUrl }) => ({ id, name, pictureUrl }));
+  } catch { redirect("/settings?facebook=error&reason=session"); }
 
   return (
     <>

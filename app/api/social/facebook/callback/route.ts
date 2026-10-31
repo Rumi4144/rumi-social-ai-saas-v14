@@ -1,220 +1,100 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { encryptSecret } from "@/lib/security/crypto";
+import { encryptSecret, hashSensitive } from "@/lib/security/crypto";
 import { verifyFacebookOAuthState } from "@/lib/social/oauth-state";
+import { canManageFacebook, facebookConfig, FACEBOOK_OAUTH_TYPE, FACEBOOK_SELECTION_TYPE, validFacebookAttempt, saveFacebookPage, type FacebookAttempt, type FacebookPage } from "@/lib/social/facebook-connection";
 
 export async function GET(req: Request) {
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://rumi-social-ai-saas-v14.vercel.app";
-
+  let reason = "session";
+  let attemptId: string | undefined;
+  const redirect = (path: string) => {
+    const response = NextResponse.redirect(new URL(path, process.env.NEXT_PUBLIC_APP_URL || req.url));
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
+  };
   try {
     const url = new URL(req.url);
-
-    const code = url.searchParams.get("code");
-    const stateValue = url.searchParams.get("state");
-    const oauthError = url.searchParams.get("error");
-
-    if (oauthError) {
-      return NextResponse.redirect(
-        `${appUrl}/settings?facebook=cancelled`
-      );
-    }
-
-    if (!code || !stateValue) {
-      throw new Error("FACEBOOK_OAUTH_RESPONSE_INVALID");
-    }
-
-    const appId = process.env.FACEBOOK_APP_ID;
-    const appSecret = process.env.FACEBOOK_APP_SECRET;
-
-    if (!appId) throw new Error("FACEBOOK_APP_ID_MISSING");
-    if (!appSecret) throw new Error("FACEBOOK_APP_SECRET_MISSING");
-
+    const stateValue = url.searchParams.get("state") || "";
     const state = verifyFacebookOAuthState(stateValue);
-
-    // Confirm the OAuth state belongs to a user allowed in this workspace.
-    const [membership, oauthUser] = await Promise.all([
-      prisma.membership.findFirst({
-        where: {
-          userId: state.userId,
-          organizationId: state.organizationId,
-        },
-      }),
-      prisma.user.findUnique({
-        where: { id: state.userId },
-        select: { isSuperAdmin: true },
-      }),
+    const id = `facebook_oauth_${hashSensitive(stateValue)}`;
+    const attempt = await prisma.job.findFirst({ where: { id, organizationId: state.organizationId, type: FACEBOOK_OAUTH_TYPE, status: "pending" } });
+    const payload = attempt?.payload as FacebookAttempt | null;
+    if (!attempt || !validFacebookAttempt(payload, state.userId)) throw new Error("SESSION_EXPIRED");
+    reason = "workspace";
+    const [membership, user] = await Promise.all([
+      prisma.membership.findFirst({ where: { userId: state.userId, organizationId: state.organizationId }, include: { organization: { select: { status: true } } } }),
+      prisma.user.findUnique({ where: { id: state.userId }, select: { isSuperAdmin: true } }),
     ]);
-
-    if (!membership && !oauthUser?.isSuperAdmin) {
-      throw new Error("FACEBOOK_WORKSPACE_FORBIDDEN");
+    if (!user || (!user.isSuperAdmin && (!membership || !canManageFacebook(membership.role) || membership.organization.status === "suspended"))) throw new Error("FORBIDDEN");
+    reason = "session";
+    const claim = await prisma.job.updateMany({ where: { id, organizationId: state.organizationId, type: FACEBOOK_OAUTH_TYPE, status: "pending" }, data: { status: "processing" } });
+    if (claim.count !== 1) throw new Error("SESSION_EXPIRED");
+    attemptId = id;
+    if (url.searchParams.has("error")) {
+      await prisma.job.updateMany({ where: { id, status: "processing" }, data: { status: "cancelled", payload: {} } });
+      return redirect("/settings?facebook=cancelled");
     }
+    const code = url.searchParams.get("code");
+    if (!code) throw new Error("CODE_MISSING");
+    reason = "setup";
+    const { appId, appSecret, redirectUri } = facebookConfig();
+    if (payload!.redirectUri !== redirectUri) throw new Error("CALLBACK_CHANGED");
+    reason = "token_exchange";
+    const tokenUrl = new URL("https://graph.facebook.com/v23.0/oauth/access_token");
+    tokenUrl.search = new URLSearchParams({ client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code }).toString();
+    const tokenRes = await fetch(tokenUrl, { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000) });
+    const token = await tokenRes.json();
+    if (!tokenRes.ok || !token.access_token) throw new Error("TOKEN_EXCHANGE_FAILED");
 
-    const redirectUri =
-      `${appUrl}/api/social/facebook/callback`;
-
-    // Exchange authorization code for a user access token.
-    const tokenUrl = new URL(
-      "https://graph.facebook.com/v23.0/oauth/access_token"
-    );
-
-    tokenUrl.searchParams.set("client_id", appId);
-    tokenUrl.searchParams.set("client_secret", appSecret);
-    tokenUrl.searchParams.set("redirect_uri", redirectUri);
-    tokenUrl.searchParams.set("code", code);
-
-    const tokenRes = await fetch(tokenUrl, {
-      cache: "no-store",
+    reason = "pages";
+    const pages: FacebookPage[] = [];
+    let after = "";
+    // Follow only cursors on the fixed Meta endpoint; never fetch provider-supplied URLs.
+    for (let batch = 0; batch < 10; batch++) {
+      const pagesUrl = new URL("https://graph.facebook.com/v23.0/me/accounts");
+      pagesUrl.search = new URLSearchParams({ fields: "id,name,picture{url},access_token,tasks", limit: "100", ...(after ? { after } : {}) }).toString();
+      const pagesRes = await fetch(pagesUrl, { headers: { Authorization: `Bearer ${token.access_token}` }, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000) });
+      const result = await pagesRes.json();
+      if (!pagesRes.ok || !Array.isArray(result.data)) throw new Error("PAGES_FAILED");
+      for (const page of result.data) {
+        if (page.id && page.access_token && !pages.some(p => p.id === String(page.id))) pages.push({
+          id: String(page.id), name: page.name || "Facebook Page", accessToken: String(page.access_token),
+          pictureUrl: page.picture?.data?.url || "", tasks: Array.isArray(page.tasks) ? page.tasks : [],
+        });
+      }
+      if (!result.paging?.next || !result.paging?.cursors?.after || result.paging.cursors.after === after) break;
+      after = String(result.paging.cursors.after);
+    }
+    reason = "no_pages";
+    if (!pages.length) throw new Error("NO_PAGES");
+    reason = "account_mismatch";
+    const page = payload!.accountId ? pages.find(p => p.id === payload!.accountId) : pages.length === 1 ? pages[0] : undefined;
+    if (payload!.accountId && !page) throw new Error("PAGE_MISMATCH");
+    reason = "encryption_key_missing";
+    // Encrypt choices before saving the temporary selection. No user access token is retained.
+    const encryptedPages = page ? null : encryptSecret(JSON.stringify(pages));
+    reason = "session";
+    const selectionId = await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${state.organizationId}))`;
+      if (!validFacebookAttempt(payload, state.userId)) throw new Error("SESSION_EXPIRED");
+      // A disconnect while Facebook responds cancels this attempt and must win.
+      const consumed = await tx.job.updateMany({ where: { id, organizationId: state.organizationId, type: FACEBOOK_OAUTH_TYPE, status: "processing" }, data: { status: "completed", payload: {} } });
+      if (consumed.count !== 1) throw new Error("SESSION_CANCELLED");
+      if (page) {
+        await saveFacebookPage(tx, state.organizationId, payload!, page);
+        return null;
+      }
+      const selection = await tx.job.create({ data: {
+        organizationId: state.organizationId, type: FACEBOOK_SELECTION_TYPE, status: "pending",
+        payload: { userId: state.userId, encryptedPages, expiresAt: Date.now() + 10 * 60 * 1000 },
+      } });
+      return selection.id;
     });
-
-    const tokenResult = await tokenRes.json();
-
-    if (!tokenRes.ok || !tokenResult.access_token) {
-      throw new Error(
-        `FACEBOOK_TOKEN_EXCHANGE_FAILED: ${JSON.stringify(tokenResult)}`
-      );
-    }
-
-    const userAccessToken = String(tokenResult.access_token);
-
-    // Get Pages this Facebook user can manage.
-    const pagesUrl = new URL(
-      "https://graph.facebook.com/v23.0/me/accounts"
-    );
-
-    pagesUrl.searchParams.set(
-      "fields",
-      "id,name,picture{url},access_token,tasks"
-    );
-    pagesUrl.searchParams.set(
-      "access_token",
-      userAccessToken
-    );
-
-    const pagesRes = await fetch(pagesUrl, {
-      cache: "no-store",
-    });
-
-    const pagesResult = await pagesRes.json();
-
-    if (!pagesRes.ok) {
-      throw new Error(
-        `FACEBOOK_PAGES_FAILED: ${JSON.stringify(pagesResult)}`
-      );
-    }
-
-    const pages = Array.isArray(pagesResult.data)
-      ? pagesResult.data
-      : [];
-
-    if (pages.length === 0) {
-      throw new Error("FACEBOOK_NO_PAGES");
-    }
-
-    // If multiple Pages are available, securely store the choices
-    // and let the user explicitly select the correct Page.
-    if (pages.length > 1) {
-      const encryptedPages = encryptSecret(
-        JSON.stringify(
-          pages.map((page: any) => ({
-            id: String(page.id),
-            name: page.name || "Facebook Page",
-            pictureUrl: page.picture?.data?.url || "",
-            accessToken: String(page.access_token || ""),
-            tasks: page.tasks || [],
-          }))
-        )
-      );
-
-      const selectionJob = await prisma.job.create({
-        data: {
-          organizationId: state.organizationId,
-          type: "facebook_page_selection",
-          status: "pending",
-          progress: 0,
-          payload: {
-            userId: state.userId,
-            encryptedPages,
-          },
-        },
-      });
-
-      return NextResponse.redirect(
-        `${appUrl}/settings/facebook/select?job=${selectionJob.id}`
-      );
-    }
-
-    const page = pages[0];
-
-    if (!page.id || !page.access_token) {
-      throw new Error("FACEBOOK_PAGE_DATA_INVALID");
-    }
-
-    const encryptedToken = encryptSecret(
-      JSON.stringify({
-        pageAccessToken: String(page.access_token),
-        userAccessToken,
-        pageId: String(page.id),
-        tasks: page.tasks || [],
-      })
-    );
-
-    const existing =
-      await prisma.socialConnection.findFirst({
-        where: {
-          organizationId: state.organizationId,
-          provider: "facebook",
-        },
-      });
-
-    if (existing) {
-      await prisma.socialConnection.update({
-        where: { id: existing.id },
-        data: {
-          accountName: page.name || "Facebook Page",
-          externalId: String(page.id),
-          status: "connected",
-          encryptedToken,
-        },
-      });
-    } else {
-      await prisma.socialConnection.create({
-        data: {
-          organizationId: state.organizationId,
-          provider: "facebook",
-          accountName: page.name || "Facebook Page",
-          externalId: String(page.id),
-          status: "connected",
-          encryptedToken,
-        },
-      });
-    }
-
-    return NextResponse.redirect(
-      `${appUrl}/settings?facebook=connected`
-    );
-  } catch (error) {
-    console.error("Facebook OAuth callback failed", error);
-
-    const message =
-      error instanceof Error ? error.message : "UNKNOWN_ERROR";
-
-    const reason =
-      message.startsWith("FACEBOOK_TOKEN_EXCHANGE_FAILED")
-        ? "token_exchange"
-        : message.startsWith("FACEBOOK_PAGES_FAILED")
-        ? "pages"
-        : message === "FACEBOOK_NO_PAGES"
-        ? "no_pages"
-        : message === "FACEBOOK_WORKSPACE_FORBIDDEN"
-        ? "workspace"
-        : message.includes("TOKEN_ENCRYPTION_KEY_MISSING")
-        ? "encryption_key_missing"
-        : "callback";
-
-    return NextResponse.redirect(
-      `${appUrl}/settings?facebook=error&reason=${reason}`
-    );
+    return redirect(selectionId ? `/settings/facebook/select?job=${encodeURIComponent(selectionId)}` : "/settings?facebook=connected");
+  } catch {
+    // Provider payloads may contain tokens; return safe reason codes only.
+    if (attemptId) await prisma.job.updateMany({ where: { id: attemptId, status: "processing" }, data: { status: "failed", payload: {}, error: reason } }).catch(() => {});
+    return redirect(`/settings?facebook=error&reason=${reason}`);
   }
 }

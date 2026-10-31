@@ -196,6 +196,7 @@ export function createFacebookOAuthState(input: {
     userId: input.userId,
     organizationId: input.organizationId,
     provider: "facebook",
+    nonce: randomUUID(),
     expiresAt: Date.now() + 10 * 60 * 1000,
   };
 
