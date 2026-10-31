@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { weeklyPackageSpec, validateWeeklyMix, checkWeeklyAllowance, weeklyMixQuote, type WeeklyMix } from "@/lib/billing/packages";
-import { savedItemMedia, downloadableStatuses } from "@/components/weekly/item-policy";
+import { savedItemMedia, downloadableStatuses, fullyPublished } from "@/components/weekly/item-policy";
+export { fullyPublished } from "@/components/weekly/item-policy";
 import { photoKey } from "@/lib/reels/product-photos";
 import { runwayConfigured } from "@/lib/video/runway";
 import { addDays, annualPosition, annualStart, dateValue, manifestOf, monday, photoGroups, planWeek, weeklyPackId, weeklyUsage, type WeeklyPhoto } from "./plan";
@@ -47,9 +48,6 @@ export function latestDeliveries<T extends { socialConnectionId: string; created
   for (const row of [...rows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())) if (!latest.has(row.socialConnectionId)) latest.set(row.socialConnectionId, row);
   return [...latest.values()];
 }
-export function fullyPublished(status: string, deliveries: Array<{ status: string }>) {
-  return deliveries.length ? deliveries.every(row => row.status === "published") : status === "published";
-}
 export async function weeklyView(ctx: Context, options: Options = {}): Promise<WeeklyResponse> {
   const base = await loadBase(ctx, options), { brand, brands, spec, manifests, records, weekStart, weekEnd, startsOn, mix } = base;
   const usage = weeklyUsage(manifests, weekStart), quote = weeklyMixQuote(mix);
@@ -78,7 +76,6 @@ export async function weeklyView(ctx: Context, options: Options = {}): Promise<W
   const output: WeeklyItem[] = [];
   for (const item of items) {
     const jobs = latestDeliveries(publishJobs.filter(row => row.contentItemId === item.id));
-    if (fullyPublished(item.status, jobs)) continue;
     const slot = slotsByItem.get(item.id)!;
     const kind = slot.kind;
     const ref = savedItemMedia(item.mediaUrl);
@@ -91,6 +88,10 @@ export async function weeklyView(ctx: Context, options: Options = {}): Promise<W
     const image = assets.find(a => a.contentItemId === item.id && a.kind === "social_creative");
     output.push({ id: item.id, campaignId: item.campaignId, brandId: brand!.id, date: slot?.date || item.scheduledFor?.toISOString().slice(0, 10) || weekStart, day: slot?.day || 1, type: item.type, kind, headline: item.headline || "", caption: item.caption || "", status: item.status, isReady: !approvalBlockedReason, approvalBlockedReason, mediaUrl: item.mediaUrl, previewUrl: correctMedia ? item.mediaUrl : image ? `/api/media/${image.id}` : null, mediaKind: correctMedia ? ref!.kind : image ? "image" : null, assetId: correctMedia ? asset!.id : null, downloadUrl: correctMedia && downloadableStatuses.includes(item.status) ? `/api/weekly/items/${item.id}/download` : null, platforms: item.platform.split(",").map(v => v.trim()).filter(Boolean), needsAttention, deliveries, changeRequest: requested ? { comment: String(object(requested.payload).comment || ""), createdAt: requested.updatedAt.toISOString() } : null, changesRequested: !!requested, nextAction: needsAttention ? "delivery_attention" : correctMedia ? "review" : kind === "motion_reel" ? "finish_motion_reel" : kind === "ai_video" ? "finish_ai_video" : "prepare" });
   }
+  // Keep every saved slot in its original position, including after delivery.
+  const slotOrder = new Map(manifest?.slots.map((slot, index) => [slot.key, index]));
+  output.sort((a, b) => (slotOrder.get(slotsByItem.get(a.id)!.key) ?? 0) - (slotOrder.get(slotsByItem.get(b.id)!.key) ?? 0));
+  const complete = !!manifest && output.length === manifest.slots.length && output.every(item => fullyPublished(item.status, item.deliveries));
   const pending = preparationJobs.filter(job => ["queued", "running"].includes(job.status)), failed = preparationJobs.find(job => job.status === "failed");
   const warnings = [];
   if (brand && !brand.logoUrl) warnings.push("Admin can add this business’s actual logo to its Brand Brain. A logo will not be invented.");
@@ -102,7 +103,7 @@ export async function weeklyView(ctx: Context, options: Options = {}): Promise<W
   if (productCount > 0 && productCount < Math.ceil(quote.posts / 7)) warnings.push(`This pack includes more posts per day than the ${productCount} saved ${productCount === 1 ? "product" : "products"} available. Some products will repeat that day. Admin can add more products for variety.`);
   let reason = !brand ? "Ask Admin to set up this business’s brand first." : ctx.role === "viewer" ? "Your access is read-only." : record ? "This week has already been prepared. Continue reviewing its saved posts." : !allowance.allowed ? allowance.reason : (base.subscription?.credits || 0) < quote.preparationCredits ? "There are not enough credits to prepare this week." : null;
   const position = annualPosition(weekStart, startsOn);
-  return { organizationId: ctx.organizationId, canManage: ctx.role !== "viewer", brands: brands.map(b => ({ id: b.id, name: b.name })), brand: brand ? { id: brand.id, name: brand.name, website: brand.websiteUrl, logoUrl: brand.logoUrl } : null, weekStart, weekEnd, weekNumber: position.weekNumber, pack: manifest && record ? { ...manifest, id: record.id, status: pending.length ? "preparing" : failed || output.some(item => !item.isReady) ? "needs_attention" : items.length && !output.length ? "complete" : "ready", error: failed ? "Some media could not be prepared. Admin can review the failed generation; your saved posts and credits remain recorded." : null, pendingJobs: pending.length, nextJobId: pending.find(job => job.status === "queued")?.id || null } : null, items: output, prepare: { allowed: !reason, reason, mix, preparationCredits: quote.preparationCredits, completionCredits: quote.completionCredits, totalCredits: quote.packCredits, availableCredits: base.subscription?.credits || 0, warnings, motionAvailable: base.motionAvailable, aiVideoAvailable: base.aiVideoAvailable }, plan: { key: spec.key, label: spec.label, weeklyPosts: spec.weeklyPosts, mix: { ...spec.mix }, oneTime: spec.oneTime, postsThisWeek: usage.postsThisWeek }, annualPlan: { weeks: 52, days: 364, cycle: position.cycle, preparedWeeks: base.brandHistory.length, generatedPosts: base.brandHistory.reduce((sum, row) => sum + row.slots.length, 0), startsOn } };
+  return { organizationId: ctx.organizationId, canManage: ctx.role !== "viewer", brands: brands.map(b => ({ id: b.id, name: b.name })), brand: brand ? { id: brand.id, name: brand.name, website: brand.websiteUrl, logoUrl: brand.logoUrl } : null, weekStart, weekEnd, weekNumber: position.weekNumber, pack: manifest && record ? { ...manifest, id: record.id, status: pending.length ? "preparing" : failed || output.some(item => !item.isReady) ? "needs_attention" : complete ? "complete" : "ready", error: failed ? "Some media could not be prepared. Admin can review the failed generation; your saved posts and credits remain recorded." : null, pendingJobs: pending.length, nextJobId: pending.find(job => job.status === "queued")?.id || null } : null, items: output, prepare: { allowed: !reason, reason, mix, preparationCredits: quote.preparationCredits, completionCredits: quote.completionCredits, totalCredits: quote.packCredits, availableCredits: base.subscription?.credits || 0, warnings, motionAvailable: base.motionAvailable, aiVideoAvailable: base.aiVideoAvailable }, plan: { key: spec.key, label: spec.label, weeklyPosts: spec.weeklyPosts, mix: { ...spec.mix }, oneTime: spec.oneTime, postsThisWeek: usage.postsThisWeek }, annualPlan: { weeks: 52, days: 364, cycle: position.cycle, preparedWeeks: base.brandHistory.length, generatedPosts: base.brandHistory.reduce((sum, row) => sum + row.slots.length, 0), startsOn } };
 }
 
 export async function prepareWeekly(ctx: Context, input: PrepareWeeklyRequest): Promise<WeeklyMutationResponse> {

@@ -96,7 +96,7 @@ export default function WeeklyWorkspace({ isAdmin = false }: { isAdmin?: boolean
   }
 
   return <div className={styles.workspace}>
-    <header className={styles.header}><div><span className={styles.eyebrow}>{data?.brand?.name || "Your business"}</span><h1>This Week</h1><p>Your ready-made posts, in one place. Review each design, approve it, then download or choose where and when it goes live.</p></div>{isAdmin && <a href="/admin">Return to Admin →</a>}</header>
+    <header className={styles.header}><div><span className={styles.eyebrow}>{data?.brand?.name || "Your business"}</span><h1>This Week</h1><p>Your ready-made posts, in one place. Review, approve and download your posts here. Approved and published posts stay in their weekly slots.</p></div>{isAdmin && <a href="/admin">Return to Admin →</a>}</header>
     {error && <div role="alert" className={styles.failure}>{error}{!data && <div><button onClick={changed}>Try again</button></div>}</div>}
     {!data ? !error && <p role="status">Loading your week…</p> : <>
       <div className={styles.toolbar}>
@@ -110,8 +110,8 @@ export default function WeeklyWorkspace({ isAdmin = false }: { isAdmin?: boolean
       {(busy || message) && <section className={styles.progress} aria-live="polite"><p>{message}</p>{busy && <><progress value={progress} max={100} aria-label="Weekly preparation progress" /><button onClick={() => controller.current?.abort()}>Pause preparation</button></>}</section>}
       {isAdmin && <p><a href="/campaigns">View older drafts and campaigns in Admin →</a></p>}
       <div className={styles.grid}>{weekItems.map(item => <WeeklyCard key={item.id} item={item} canManage={data.canManage} busy={busy} onChanged={changed} onFinish={item => void run(false, item)} />)}</div>
-      {data.pack && !weekItems.length && <section className={styles.empty}><h2>{data.pack.status === "complete" ? "All done for this week" : "Your week is being prepared"}</h2><p>{data.pack.status === "complete" ? "Successfully posted items have left your active list. Admin keeps your business’s full history." : data.pack.error || "Your post previews will appear here as they finish."}</p></section>}
-      <footer className={styles.plan}><strong>Week {data.weekNumber} of 52</strong> · {data.annualPlan.preparedWeeks} weeks prepared.<br />Your year is planned in weekly packs. New posts are prepared a week at a time; previously posted items remain in your business’s Admin archive.</footer>
+      {data.pack && !weekItems.length && <section className={styles.empty}><h2>{data.pack.status === "complete" ? "All done for this week" : "Your week is being prepared"}</h2><p>{data.pack.status === "complete" ? "Your published posts stay in this week. Refresh to load their previews." : data.pack.error || "Your post previews will appear here as they finish."}</p></section>}
+      <footer className={styles.plan}><strong>Week {data.weekNumber} of 52</strong> · {data.annualPlan.preparedWeeks} weeks prepared.<br />Your year is planned in weekly packs. New posts are prepared a week at a time; approved and published posts stay in their original week. Use the week arrows to revisit them.</footer>
     </>}
   </div>;
 }

@@ -150,7 +150,7 @@ test('a seven-day pack stays seven posts across three social accounts, with no l
   assert.ok(view.items.every(item => item.id.startsWith('weekly-')));
   assert.equal(JSON.stringify(f.state), before);
   f.state.items[0].status = 'published';
-  assert.equal((await f.service.weeklyView(f.context)).items.length, 6, 'Published slots are not refilled with older drafts');
+  assert.equal((await f.service.weeklyView(f.context)).items.length, 7, 'Published slots stay visible without adding older drafts');
   await f.service.prepareWeekly(f.context, f.request());
   assert.equal(f.state.ledger.length, 1); assert.equal(f.state.campaigns.length, 1);
   assert.equal(f.state.items.filter(item => item.id.startsWith('older-')).length, 55, 'Admin history remains saved');
@@ -165,6 +165,31 @@ test('a paid larger pack remains intact after the customer changes plans', async
   const view = await f.service.weeklyView(f.context);
   assert.equal(view.plan.weeklyPosts, 7); assert.equal(view.items.length, 14);
   assert.equal(f.state.ledger.length, 1, 'Viewing a saved pack never prepares or charges a replacement');
+});
+test('approved and fully published weekly slots retain their original order, dates and downloads', async () => {
+  const f = fixture();
+  const created = await f.service.prepareWeekly(f.context, f.request());
+  const pack = f.state.jobs.find(job => job.type === 'WEEKLY_PACK');
+  pack.result = { items: pack.payload.slots.map((slot, i) => ({ slotKey: slot.key, contentItemId: `retained-${i}` })) };
+  for (const [i, slot] of pack.payload.slots.entries()) {
+    const id = `retained-${i}`, assetId = `art-${i}`;
+    f.state.items.unshift({ ...savedPost(id, created.campaignId, slot.date), status: i ? 'approved' : 'published', mediaUrl: `/api/media/${assetId}`, scheduledFor: new Date('2030-01-01') });
+    f.state.assets.push({ id: assetId, contentItemId: id, campaignId: created.campaignId, organizationId: 'own', kind: 'social_creative', status: 'ready', url: 'data:image/jpeg;base64,YQ==' });
+  }
+  f.state.jobs.find(job => job.type === 'CREATE_EVERYTHING').status = 'succeeded';
+  const before = JSON.stringify(f.state);
+  const view = await f.service.weeklyView(f.context, { weekStart: pack.payload.weekStart });
+  assert.deepEqual(Array.from(view.items, item => item.id), Array.from({ length: 7 }, (_, i) => `retained-${i}`));
+  assert.deepEqual(Array.from(view.items, item => item.date), Array.from(pack.payload.slots, slot => slot.date));
+  assert.ok(view.items.every(item => item.isReady && item.downloadUrl));
+  assert.equal(view.pack.status, 'ready');
+  assert.equal(JSON.stringify(f.state), before, 'Viewing the week never changes approvals, media, credits or delivery');
+  for (const item of f.state.items) item.status = 'published';
+  const finished = await f.service.weeklyView(f.context, { weekStart: pack.payload.weekStart });
+  assert.equal(finished.items.length, 7);
+  assert.equal(finished.pack.status, 'complete');
+  assert.ok(finished.items.every(item => item.downloadUrl));
+  assert.equal(f.state.ledger.length, 1);
 });
 test('concurrent preparation retries claim one pack and debit exactly once', async () => {
   const f = fixture(); const results = await Promise.all([f.service.prepareWeekly(f.context, f.request()), f.service.prepareWeekly(f.context, f.request())]);
@@ -217,7 +242,7 @@ test('weekly views retain partial failures and distinguish source image previews
   f.state.assets.push({ id: 'photo', organizationId: 'own', campaignId: created.campaignId, contentItemId: 'reel', kind: 'social_creative', status: 'ready', url: 'data:image/jpeg;base64,YQ==' });
   f.state.deliveries.push(...['published', 'failed'].map((status, n) => ({ id: `delivery-${n}`, organizationId: 'own', contentItemId: 'reel', socialConnectionId: `account-${n}`, platform: n ? 'instagram' : 'facebook', status, scheduledFor: new Date(), createdAt: new Date(), lastError: status === 'failed' ? 'Try again' : null, publishedAt: status === 'published' ? new Date() : null })));
   const view = await f.service.weeklyView(f.context); assert.equal(view.items.length, 1); assert.equal(view.items[0].isReady, false); assert.equal(view.items[0].mediaKind, 'image'); assert.equal(view.items[0].downloadUrl, null); assert.equal(view.items[0].needsAttention, true);
-  f.state.deliveries[1].status = 'published'; assert.equal((await f.service.weeklyView(f.context)).items.length, 0);
+  f.state.deliveries[1].status = 'published'; const delivered = await f.service.weeklyView(f.context); assert.equal(delivered.items.length, 1); assert.equal(delivered.items[0].needsAttention, false);
   } finally { if (previous === undefined) delete process.env.BLOB_READ_WRITE_TOKEN; else process.env.BLOB_READ_WRITE_TOKEN = previous; }
 });
 test('unconfigured AI video is replaced with an image and cannot be explicitly charged', async () => {

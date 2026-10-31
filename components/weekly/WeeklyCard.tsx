@@ -1,8 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import SchedulePostButton from "@/components/SchedulePostButton";
 import type { WeeklyItem } from "@/lib/weekly/types";
-import { lockedDeliveryStatuses } from "./item-policy";
+import { fullyPublished, lockedDeliveryStatuses } from "./item-policy";
 import styles from "./weekly.module.css";
 
 const platformNames: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", google_business: "Google Business Profile", youtube: "YouTube", tiktok: "TikTok", x: "X" };
@@ -11,10 +11,12 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
   const [pending, setPending] = useState(false), [message, setMessage] = useState("");
   const [changesOpen, setChangesOpen] = useState(false), [comment, setComment] = useState("");
   const [deliveryOpen, setDeliveryOpen] = useState(false);
-  const approved = ["approved", "scheduled", "published"].includes(item.status);
+  const preview = useRef<HTMLDialogElement>(null);
+  const published = fullyPublished(item.status, item.deliveries);
+  const approved = published || ["approved", "scheduled", "published"].includes(item.status);
   const locked = ["scheduled", "published"].includes(item.status) || item.deliveries.some(delivery => lockedDeliveryStatuses.includes(delivery.status));
   const excludedAccounts = item.deliveries.filter(delivery => lockedDeliveryStatuses.includes(delivery.status)).map(delivery => delivery.connectionId);
-  const title = item.changeRequest ? "Changes requested" : item.needsAttention ? "Needs attention" : item.status === "scheduled" ? "Scheduled" : approved ? "Approved" : item.isReady ? "Ready to review" : "Being prepared";
+  const title = item.changeRequest ? "Changes requested" : item.needsAttention ? "Needs attention" : published ? "Posted" : item.status === "scheduled" ? "Scheduled" : approved ? "Approved" : item.isReady ? "Ready to review" : "Being prepared";
 
   async function review(action: "approve" | "request_changes") {
     setPending(true); setMessage("");
@@ -45,15 +47,12 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
     <div className={styles.postHeader}><span>{new Date(`${item.date.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}</span><span className={styles.badge}>{title}</span></div>
     <div className={styles.media}>
       {item.mediaKind === "video" && item.previewUrl ? <video src={item.previewUrl} controls preload="metadata" playsInline aria-label={`Preview ${item.headline}`} /> : item.previewUrl ? <img src={item.previewUrl} alt={item.headline || "Post preview"} loading="lazy" /> : <div className={styles.placeholder}><strong>{item.kind === "image" ? "Your design is on its way" : "Your video is not finished yet"}</strong><span>Finished media will appear here.</span></div>}
+      {item.previewUrl && item.mediaKind !== "video" && <button className={styles.enlarge} aria-haspopup="dialog" aria-label={`Enlarge image: ${item.headline}`} onClick={() => preview.current?.showModal()}>Enlarge ↗</button>}
       {item.kind !== "image" && item.mediaKind !== "video" && !item.isReady && <span className={styles.unfinished}>Source photo · video not finished</span>}
     </div>
     <div className={styles.postBody}>
       <span className={styles.kind}>{item.kind === "image" ? "Image post" : item.kind === "motion_reel" ? "Motion reel" : "AI video"}</span>
       <h2>{item.headline || "Your next post"}</h2>
-      <details className={styles.caption}><summary>Read caption</summary><p>{item.caption || "Caption is being prepared."}</p></details>
-      {item.approvalBlockedReason && !approved && <p className={styles.notice}>{item.approvalBlockedReason}</p>}
-      {item.changeRequest && <p className={styles.notice}><strong>Requested change:</strong> {item.changeRequest.comment}</p>}
-      {item.deliveries.length > 0 && <ul className={styles.deliveries}>{item.deliveries.map(delivery => <li key={delivery.id}><strong>{platformNames[delivery.platform] || delivery.platform}{delivery.account ? ` · ${delivery.account}` : ""}</strong>: {delivery.status === "published" ? "Posted" : delivery.status === "scheduled" ? `Scheduled ${new Date(delivery.scheduledFor).toLocaleString()}` : delivery.status === "failed" ? "Posting failed" : delivery.status === "verification_pending" ? "Check the existing post before retrying" : delivery.status === "retry" ? "Waiting to retry" : delivery.status === "processing" ? "Processing" : "Posting"}{delivery.error && delivery.status !== "published" && <span>{delivery.error}</span>}</li>)}</ul>}
       <div className={styles.actions}>
         {canManage && !approved && !item.changeRequest && <button className={styles.primary} disabled={pending || busy || !item.isReady || !!item.approvalBlockedReason} onClick={() => void review("approve")}>{pending ? "Saving…" : "Approve post"}</button>}
         {canManage && item.nextAction === "finish_motion_reel" && onFinish && !item.changeRequest && <button disabled={pending || busy} onClick={() => onFinish(item)}>Finish reel · 4 credits</button>}
@@ -63,10 +62,18 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
         {canManage && !locked && <button disabled={pending || busy} onClick={() => setChangesOpen(!changesOpen)}>{item.changeRequest ? "Update request" : "Request changes"}</button>}
         {canManage && approved && item.isReady && item.type !== "story_post" && <button disabled={busy} onClick={() => setDeliveryOpen(!deliveryOpen)}>Post or schedule</button>}
       </div>
+      <details className={styles.caption}><summary>Read caption</summary><p>{item.caption || "Caption is being prepared."}</p></details>
+      {item.approvalBlockedReason && !approved && <p className={styles.notice}>{item.approvalBlockedReason}</p>}
+      {item.changeRequest && <p className={styles.notice}><strong>Requested change:</strong> {item.changeRequest.comment}</p>}
+      {item.deliveries.length > 0 && <ul className={styles.deliveries}>{item.deliveries.map(delivery => <li key={delivery.id}><strong>{platformNames[delivery.platform] || delivery.platform}{delivery.account ? ` · ${delivery.account}` : ""}</strong>: {delivery.status === "published" ? "Posted" : delivery.status === "scheduled" ? `Scheduled ${new Date(delivery.scheduledFor).toLocaleString()}` : delivery.status === "failed" ? "Posting failed" : delivery.status === "verification_pending" ? "Check the existing post before retrying" : delivery.status === "retry" ? "Waiting to retry" : delivery.status === "processing" ? "Processing" : "Posting"}{delivery.error && delivery.status !== "published" && <span>{delivery.error}</span>}</li>)}</ul>}
       {item.type === "story_post" && approved && <p>Download this Story and post it from your social app.</p>}
       {changesOpen && <form className={styles.changeForm} onSubmit={event => { event.preventDefault(); void review("request_changes"); }}><label htmlFor={`changes-${item.id}`}>What should we change?</label><textarea id={`changes-${item.id}`} value={comment} onChange={event => setComment(event.target.value)} maxLength={2000} required minLength={3} placeholder="For example: use the blue guitar photo and a brighter background." /><button disabled={pending || comment.trim().length < 3}>Send to Admin</button></form>}
       {deliveryOpen && canManage && <SchedulePostButton key={item.deliveries.map(d => `${d.id}:${d.status}`).join(",")} contentItemId={item.id} initialStatus="approved" initialScheduledFor={item.date} isVideo={item.mediaKind === "video"} videoAssetId={item.mediaKind === "video" ? item.assetId || undefined : undefined} allowPostNow openByDefault excludedConnectionIds={excludedAccounts} onSubmitted={onChanged} />}
       <p role="status" className={styles.message}>{message}</p>
     </div>
+    {item.previewUrl && item.mediaKind !== "video" && <dialog ref={preview} className={styles.previewDialog} aria-label={`Full-size preview: ${item.headline}`} onClick={event => { if (event.target === event.currentTarget) preview.current?.close(); }}>
+      <div className={styles.previewHeader}><strong>{item.headline || "Post preview"}</strong><button autoFocus onClick={() => preview.current?.close()} aria-label="Close image preview">Close ✕</button></div>
+      <img src={item.previewUrl} alt={item.headline || "Full-size post preview"} />
+    </dialog>}
   </article>;
 }

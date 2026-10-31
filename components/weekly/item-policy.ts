@@ -15,6 +15,10 @@ export function savedItemMedia(value: string | null | undefined) {
 export const lockedDeliveryStatuses = ["scheduled", "publishing", "retry", "processing", "verification_pending", "published"];
 export const downloadableStatuses = ["approved", "scheduled", "published"];
 
+export function fullyPublished(status: string, deliveries: Array<{ status: string }>) {
+  return deliveries.length ? deliveries.every(row => row.status === "published") : status === "published";
+}
+
 export function safeDownloadName(headline: string | null | undefined) {
   return (headline || "rumi-post").normalize("NFKD").replace(/[^a-zA-Z0-9 -]/g, "").trim().replace(/\s+/g, "-").slice(0, 80) || "rumi-post";
 }
