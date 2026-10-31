@@ -123,7 +123,7 @@ test('scheduled video uses the selected clip and is claimed once before publishi
   const job = { id: 'publish', organizationId: 'own', contentItemId: 'post', socialConnectionId: 'connection', platform: 'facebook', status: 'scheduled', attempts: 0 };
   const prisma = {
     publishJob: { findFirst: async () => job, updateMany: async () => ({ count: claimed ? 1 : 0 }), update: async q => { updated = q.data; } },
-    socialConnection: { findUnique: async () => ({ organizationId: 'own', encryptedToken: 'test', externalId: 'page' }) },
+    socialConnection: { findUnique: async () => ({ organizationId: 'own', status: 'connected', encryptedToken: 'test', externalId: 'page' }) },
     contentItem: { findUnique: async () => ({ id: 'post', status: itemStatus, caption: 'Caption', mediaUrl: '/api/video/media/clip' }), update: async () => ({}) },
     publishAttempt: { create: async () => ({}) },
   };
@@ -147,6 +147,18 @@ test('posting status returns confirmed per-account delivery and rejects foreign 
   assert.equal((await api.GET(new Request('https://app.test/api/publishing/status'))).status,400);
 });
 
+test('worker will not send a previously queued post after its account is disconnected', async () => {
+  let calls = 0, updated;
+  const prisma = {
+    publishJob: { findFirst: async () => ({ id: 'job', organizationId: 'own', socialConnectionId: 'ig', contentItemId: 'post', platform: 'instagram', status: 'retry', attempts: 1 }), updateMany: async () => ({ count: 1 }), update: async q => { updated = q.data; } },
+    socialConnection: { findUnique: async () => ({ organizationId: 'own', status: 'disconnected', encryptedToken: null }) },
+    contentItem: { findUnique: async () => ({ id: 'post', status: 'approved', mediaUrl: '/api/media/photo' }) },
+  };
+  const mod = load('lib/publishing/process-due-job.ts', { '@/lib/prisma': { prisma }, '@/lib/publishing/providers': { publishToProvider: async () => { calls++; } } });
+  assert.equal((await mod.processDuePublishJob()).status, 'failed'); assert.equal(calls, 0);
+  assert.match(updated.lastError, /disconnected/);
+});
+
 
 test('Facebook processing and encoding failure never count as a playable video or upload twice',async()=>{
  let state, uploads=0, remote='processing';
@@ -167,7 +179,7 @@ test('Facebook processing and encoding failure never count as a playable video o
 
 test('worker defers a Facebook processing check without spending upload attempts',async()=>{
  let saved;
- const prisma={publishJob:{findFirst:async()=>({id:'job',organizationId:'own',socialConnectionId:'connection',contentItemId:'post',platform:'facebook',status:'retry',attempts:1}),updateMany:async()=>({count:1}),update:async q=>{saved=q.data;}},socialConnection:{findUnique:async()=>({organizationId:'own'})},contentItem:{findUnique:async()=>({id:'post',status:'scheduled',mediaUrl:'/api/video/media/clip'})},publishAttempt:{create:async()=>({})}};
+ const prisma={publishJob:{findFirst:async()=>({id:'job',organizationId:'own',socialConnectionId:'connection',contentItemId:'post',platform:'facebook',status:'retry',attempts:1}),updateMany:async()=>({count:1}),update:async q=>{saved=q.data;}},socialConnection:{findUnique:async()=>({organizationId:'own',status:'connected'})},contentItem:{findUnique:async()=>({id:'post',status:'scheduled',mediaUrl:'/api/video/media/clip'})},publishAttempt:{create:async()=>({})}};
  const mod=load('lib/publishing/process-due-job.ts',{'@/lib/prisma':{prisma},'@/lib/publishing/providers':{publishToProvider:async()=>({ok:false,pending:true,externalId:'123',error:'Processing'})}});
  assert.equal((await mod.processDuePublishJob()).status,'processing');assert.equal(saved.attempts,1);assert.equal(saved.externalPostId,'123');assert.equal(saved.status,'retry');assert.ok(saved.scheduledFor.getTime()>Date.now()+240000);
 });

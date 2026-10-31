@@ -73,6 +73,8 @@ export async function POST(req: Request) {
     if (existing) return NextResponse.json({ error: `${deliveryMessage(existing.status)} Select only accounts that still need this post.` }, { status: 409 });
 
     const youtubeSelected = await prisma.socialConnection.findFirst({ where: { id: { in: p.data.socialConnectionIds }, organizationId: ctx.organizationId, provider: "youtube", status: "connected" } });
+    const instagramSelected = await prisma.socialConnection.findFirst({ where: { id: { in: p.data.socialConnectionIds }, organizationId: ctx.organizationId, provider: "instagram", status: "connected" } });
+    if (instagramSelected && !item.mediaUrl?.trim()) return NextResponse.json({ error: "Finish and select this post's image or reel before scheduling to Instagram." }, { status: 400 });
     if (youtubeSelected && (!p.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
     const googleSelected = await prisma.socialConnection.findFirst({ where: { id: { in: p.data.socialConnectionIds }, organizationId: ctx.organizationId, provider: "google_business", status: "connected" } });
     if (googleSelected) { try { googleBusinessPost(item.caption || item.headline || "", item.mediaUrl); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "This post is not supported by Google Business Profile." }, { status: 400 }); } }

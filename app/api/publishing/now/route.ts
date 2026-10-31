@@ -82,6 +82,8 @@ export async function POST(req: Request) {
 
     if(connection.provider==="tiktok_sandbox")return NextResponse.json({error:"Use the separate TikTok test area."},{status:403});
 
+    if (connection.provider === "instagram" && !item.mediaUrl?.trim()) return NextResponse.json({ error: "Finish and select this post's image or reel before publishing to Instagram." }, { status: 400 });
+
     const existing = await prisma.publishJob.findFirst({ where: { organizationId: ctx.organizationId, contentItemId: item.id, socialConnectionId: connection.id, status: { in: reservedDeliveryStatuses } }, orderBy: { createdAt: "desc" } });
     if (existing) return NextResponse.json({ ok: true, pending: existing.status !== "published", jobId: existing.id, externalPostId: existing.externalPostId, message: deliveryMessage(existing.status) }, { status: existing.status === "published" ? 200 : 202 });
 

@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual, randomUUID } from "crypto";
 
 type OAuthState = {
   userId: string;
@@ -7,6 +7,7 @@ type OAuthState = {
   expiresAt: number;
   redirectUri?: string;
   environment?: "sandbox";
+  nonce?: string;
 };
 
 function secret() {
@@ -29,6 +30,7 @@ export function createInstagramOAuthState(input: {
     userId: input.userId,
     organizationId: input.organizationId,
     provider: "instagram",
+    nonce: randomUUID(),
     expiresAt: Date.now() + 10 * 60 * 1000,
   };
 

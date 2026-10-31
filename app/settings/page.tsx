@@ -1,21 +1,24 @@
 import Link from "next/link";
 import TikTokConnectionStatus from "./TikTokConnectionStatus";
 import YouTubeDisconnect from "./YouTubeDisconnect";
+import InstagramConnection from "./InstagramConnection";
+import { canManageInstagram, instagramMessage } from "@/lib/social/instagram-connection";
 import { prisma } from "@/lib/prisma";
 import { tenantContext } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ youtube?: string; googleBusiness?: string; tiktok?:string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ youtube?: string; googleBusiness?: string; tiktok?:string; instagram?: string; reason?: string }> }) {
   const query = await searchParams;
   const ctx = await tenantContext();
 
-  const instagramConnection = await prisma.socialConnection.findFirst({
+  const instagramConnections = await prisma.socialConnection.findMany({
     where: {
       organizationId: ctx.organizationId,
       provider: "instagram",
       status: "connected",
     },
+    select: { id: true, accountName: true },
   });
 
   const youtubeConnection = await prisma.socialConnection.findFirst({
@@ -56,6 +59,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <Link className="button" href="/team">Team access</Link>
       </nav>
       <h2>Connected accounts</h2>
+      {query.instagram === "connected" && <p role="status">Instagram connected. Review any failed posts before trying them again.</p>}
+      {query.instagram === "cancelled" && <p role="status">Instagram sign-in was cancelled. The previous connection was kept.</p>}
+      {query.instagram === "disconnected" && <p role="status">Instagram disconnected from Rumi and its saved access token removed. Pending posts were stopped. Your published posts and account history remain.</p>}
+      {query.instagram === "error" && <p role="alert">{instagramMessage(query.reason)}</p>}
       {query.youtube === "disconnected" ? <p role="status">YouTube disconnected. Its stored channel data and upload history were deleted. Your videos remain on YouTube.</p> : null}
       {query.youtube === "revoke_manually" ? <p role="status">Stored YouTube data was deleted. Please also revoke Rumi Social AI access in <a href="https://security.google.com/settings/security/permissions" target="_blank" rel="noreferrer">Google security settings</a>.</p> : null}
 
@@ -79,25 +86,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
             {x === "Instagram Business" ? (
               <>
-                <p>
-                  {instagramConnection
-                    ? `Connected${
-                        instagramConnection.accountName
-                          ? ` as @${instagramConnection.accountName}`
-                          : ""
-                      }`
-                    : "Not connected"}
-                </p>
-
-                {instagramConnection ? (
-                  <button type="button" disabled>
-                    Connected
-                  </button>
-                ) : (
-                  <a href="/api/social/instagram/connect">
-                    <button type="button">Connect</button>
-                  </a>
-                )}
+                {instagramConnections.map(connection => <InstagramConnection key={connection.id} connectionId={connection.id} accountName={connection.accountName} canManage={canManageInstagram(ctx.role)}/>)}
+                {!instagramConnections.length && <><p>Not connected</p>{canManageInstagram(ctx.role) ? <a className="button" href="/api/social/instagram/connect">Connect Instagram</a> : <p>Ask a workspace owner or team member to connect Instagram.</p>}</>}
               </>
             ) : x === "Facebook Page" ? (
               <>

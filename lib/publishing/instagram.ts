@@ -7,7 +7,7 @@ export async function publishInstagram(input: {
   caption: string;
   mediaUrl?: string | null;
 }): Promise<PublishResult> {
-  if (!input.mediaUrl) return { ok: false, error: "Instagram requires an image for feed posts." };
+  if (!input.mediaUrl?.trim()) return { ok: false, retryable: false, error: "This Instagram post has no finished image attached. Finish and select its image before trying again. Reconnecting the account will not fix a missing image." };
   if (!input.accountId) return { ok: false, error: "INSTAGRAM_ACCOUNT_ID_MISSING" };
   if (input.caption.length > 2200) return { ok: false, error: "Instagram captions must be at most 2,200 characters." };
 

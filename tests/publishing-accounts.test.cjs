@@ -112,6 +112,16 @@ test('drafts, withdrawn approval, foreign content, disconnected accounts, viewer
   }
 });
 
+test('Instagram refuses an unfinished photo before creating jobs or partially scheduling other accounts', async () => {
+  for (const route of ['now', 'schedule']) {
+    const f = fixture(); f.item.type = 'image_post'; f.item.mediaUrl = null;
+    f.connections.push({ id: 'ig', provider: 'instagram', organizationId: 'org', status: 'connected' });
+    const response = await f.run(route, 'ig', { socialConnectionIds: ['x', 'ig'] });
+    assert.equal(response.status, 400); assert.match((await response.json()).error, /Finish and select/);
+    assert.equal(f.calls.length, 0); assert.equal(f.jobs.length, 0);
+  }
+});
+
 test('active or completed delivery is reserved only for its own account; failed attempts remain retryable', async () => {
   for (const status of ['scheduled', 'publishing', 'retry', 'processing', 'verification_pending', 'published']) {
     const f = fixture(); f.item.status = 'published';

@@ -1,189 +1,86 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { encryptSecret } from "@/lib/security/crypto";
+import { encryptSecret, hashSensitive } from "@/lib/security/crypto";
 import { verifyInstagramOAuthState } from "@/lib/social/oauth-state";
+import { canManageInstagram, instagramConfig, INSTAGRAM_OAUTH_TYPE } from "@/lib/social/instagram-connection";
 
 export async function GET(req: Request) {
+  let reason = "session";
+  let attemptId: string | undefined;
+  const redirect = (query: string) => {
+    const response = NextResponse.redirect(new URL(`/settings?${query}`, process.env.NEXT_PUBLIC_APP_URL || req.url));
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
+  };
   try {
     const url = new URL(req.url);
-
-    const code = url.searchParams.get("code");
-    const stateValue = url.searchParams.get("state");
-    const oauthError = url.searchParams.get("error");
-
-    const appId = process.env.INSTAGRAM_APP_ID;
-    const appSecret = process.env.INSTAGRAM_APP_SECRET;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-
-    if (oauthError) {
-      return NextResponse.redirect(`${appUrl}/settings?instagram=cancelled`);
-    }
-
-    if (!code || !stateValue) {
-      throw new Error("INSTAGRAM_OAUTH_RESPONSE_INVALID");
-    }
-
-    if (!appId) throw new Error("INSTAGRAM_APP_ID_MISSING");
-    if (!appSecret) throw new Error("INSTAGRAM_APP_SECRET_MISSING");
-    if (!appUrl) throw new Error("NEXT_PUBLIC_APP_URL_MISSING");
-
+    const stateValue = url.searchParams.get("state") || "";
     const state = verifyInstagramOAuthState(stateValue);
-
-    const redirectUri =
-      "https://rumi-social-ai-saas-v14.vercel.app/api/social/instagram/callback";
-
-    // Exchange authorization code for short-lived token.
-    const tokenBody = new URLSearchParams({
-      client_id: appId,
-      client_secret: appSecret,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri,
-      code,
-    });
-
-    const tokenRes = await fetch(
-      "https://api.instagram.com/oauth/access_token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: tokenBody,
-        cache: "no-store",
-      },
-    );
-
-    const tokenResult = await tokenRes.json();
-
-    if (!tokenRes.ok || !tokenResult.access_token) {
-      throw new Error(
-        `INSTAGRAM_TOKEN_EXCHANGE_FAILED: ${
-          tokenResult.error_message ||
-          tokenResult.error?.message ||
-          JSON.stringify(tokenResult)
-        }`,
-      );
+    const id = `instagram_oauth_${hashSensitive(stateValue)}`;
+    const attempt = await prisma.job.findFirst({ where: { id, organizationId: state.organizationId, type: INSTAGRAM_OAUTH_TYPE, status: "pending" } });
+    const payload = attempt?.payload as { userId?: string; connectionId?: string; accountId?: string; redirectUri?: string; expiresAt?: number } | undefined;
+    if (!attempt || payload?.userId !== state.userId || !payload.expiresAt || payload.expiresAt < Date.now()) throw new Error("SESSION_EXPIRED");
+    reason = "workspace";
+    const [membership, user] = await Promise.all([
+      prisma.membership.findFirst({ where: { userId: state.userId, organizationId: state.organizationId }, include: { organization: { select: { status: true } } } }),
+      prisma.user.findUnique({ where: { id: state.userId }, select: { isSuperAdmin: true } }),
+    ]);
+    if (!user || (!user.isSuperAdmin && (!membership || !canManageInstagram(membership.role) || membership.organization.status === "suspended"))) throw new Error("FORBIDDEN");
+    reason = "session";
+    const claim = await prisma.job.updateMany({ where: { id, organizationId: state.organizationId, type: INSTAGRAM_OAUTH_TYPE, status: "pending" }, data: { status: "processing" } });
+    if (claim.count !== 1) throw new Error("SESSION_EXPIRED");
+    attemptId = id;
+    if (url.searchParams.has("error")) {
+      await prisma.job.updateMany({ where: { id, status: "processing" }, data: { status: "cancelled", payload: {} } });
+      return redirect("instagram=cancelled");
     }
+    const code = url.searchParams.get("code");
+    if (!code) throw new Error("CODE_MISSING");
+    reason = "setup";
+    const { appId, appSecret, redirectUri } = instagramConfig();
+    if (payload.redirectUri !== redirectUri) throw new Error("CALLBACK_CHANGED");
 
-    const shortToken = String(tokenResult.access_token);
-
-    // Exchange short-lived token for long-lived token.
-    const longTokenUrl = new URL("https://graph.instagram.com/access_token");
-
-    longTokenUrl.searchParams.set("grant_type", "ig_exchange_token");
-    longTokenUrl.searchParams.set("client_secret", appSecret);
-    longTokenUrl.searchParams.set("access_token", shortToken);
-
-    const longTokenRes = await fetch(longTokenUrl, {
-      cache: "no-store",
+    reason = "token_exchange";
+    const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: appId, client_secret: appSecret, grant_type: "authorization_code", redirect_uri: redirectUri, code }),
+      cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000),
     });
-
-    const longTokenResult = await longTokenRes.json();
-
-    if (!longTokenRes.ok || !longTokenResult.access_token) {
-      throw new Error(
-        `INSTAGRAM_LONG_TOKEN_FAILED: ${
-          longTokenResult.error?.message || JSON.stringify(longTokenResult)
-        }`,
-      );
-    }
-
-    const accessToken = String(longTokenResult.access_token);
-
-    // Get connected Instagram identity.
-    const profileUrl = new URL("https://graph.instagram.com/me");
-
-    profileUrl.searchParams.set("fields", "id,username,account_type");
-    profileUrl.searchParams.set("access_token", accessToken);
-
-    const profileRes = await fetch(profileUrl, {
-      cache: "no-store",
+    const token = await tokenRes.json();
+    if (!tokenRes.ok || !token.access_token) throw new Error("TOKEN_EXCHANGE_FAILED");
+    reason = "long_token";
+    const longUrl = new URL("https://graph.instagram.com/access_token");
+    longUrl.search = new URLSearchParams({ grant_type: "ig_exchange_token", client_secret: appSecret, access_token: String(token.access_token) }).toString();
+    const longRes = await fetch(longUrl, { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000) });
+    const grant = await longRes.json();
+    if (!longRes.ok || !grant.access_token) throw new Error("LONG_TOKEN_FAILED");
+    reason = "profile";
+    const profileRes = await fetch("https://graph.instagram.com/v23.0/me?fields=id,username,account_type", {
+      headers: { Authorization: `Bearer ${grant.access_token}` }, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000),
     });
-
     const profile = await profileRes.json();
-
-    if (!profileRes.ok || !profile.id) {
-      throw new Error(
-        `INSTAGRAM_PROFILE_FAILED: ${
-          profile.error?.message || JSON.stringify(profile)
-        }`,
-      );
-    }
-
-    // Confirm the OAuth state belongs to an authorized user.
-  // Normal users require membership; Super Admin may enter any workspace.
-  const [membership, oauthUser] = await Promise.all([
-    prisma.membership.findFirst({
-      where: {
-        userId: state.userId,
-        organizationId: state.organizationId,
-      },
-    }),
-    prisma.user.findUnique({
-      where: { id: state.userId },
-      select: { isSuperAdmin: true },
-    }),
-  ]);
-
-  if (!membership && !oauthUser?.isSuperAdmin) {
-    throw new Error(`INSTAGRAM_WORKSPACE_FORBIDDEN:user=${state.userId}:org=${state.organizationId}:userFound=${!!oauthUser}:superAdmin=${oauthUser?.isSuperAdmin ?? "null"}`);
-  }
-
-  const encryptedToken = encryptSecret(accessToken);
-
-    // Reuse an existing Instagram connection when possible.
-    const existing = await prisma.socialConnection.findFirst({
-      where: {
-        organizationId: state.organizationId,
-        provider: "instagram",
-        externalId: String(profile.id),
-      },
+    if (!profileRes.ok || !profile.id) throw new Error("PROFILE_FAILED");
+    reason = "account_mismatch";
+    if (payload.accountId && String(profile.id) !== payload.accountId) throw new Error("ACCOUNT_MISMATCH");
+    reason = "encryption_key_missing";
+    const encryptedToken = encryptSecret(String(grant.access_token));
+    reason = "session";
+    await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${state.organizationId}))`;
+      // A disconnect while the provider was responding must win over this callback.
+      const consumed = await tx.job.updateMany({ where: { id, organizationId: state.organizationId, type: INSTAGRAM_OAUTH_TYPE, status: "processing" }, data: { status: "completed", payload: {} } });
+      if (consumed.count !== 1) throw new Error("SESSION_CANCELLED");
+      const existing = await tx.socialConnection.findFirst({ where: { organizationId: state.organizationId, provider: "instagram", externalId: String(profile.id) } });
+      if (payload.connectionId && existing?.id !== payload.connectionId) throw new Error("CONNECTION_CHANGED");
+      const data = { accountName: profile.username || "Instagram", status: "connected", encryptedToken };
+      if (existing) await tx.socialConnection.update({ where: { id: existing.id }, data });
+      else await tx.socialConnection.create({ data: { organizationId: state.organizationId, provider: "instagram", externalId: String(profile.id), ...data } });
     });
-
-    if (existing) {
-      await prisma.socialConnection.update({
-        where: { id: existing.id },
-        data: {
-          accountName: profile.username || "Instagram",
-          status: "connected",
-          encryptedToken,
-        },
-      });
-    } else {
-      await prisma.socialConnection.create({
-        data: {
-          organizationId: state.organizationId,
-          provider: "instagram",
-          accountName: profile.username || "Instagram",
-          externalId: String(profile.id),
-          status: "connected",
-          encryptedToken,
-        },
-      });
-    }
-
-    return NextResponse.redirect(`${appUrl}/settings?instagram=connected`);
-  } catch (error) {
-    console.error("Instagram OAuth callback failed", error);
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "/";
-
-    const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
-
-    const safeError = message.startsWith("INSTAGRAM_TOKEN_EXCHANGE_FAILED")
-      ? "token_exchange"
-      : message.startsWith("INSTAGRAM_LONG_TOKEN_FAILED")
-        ? "long_token"
-        : message.startsWith("INSTAGRAM_PROFILE_FAILED")
-          ? "profile"
-          : message.startsWith("INSTAGRAM_WORKSPACE_FORBIDDEN")
-            ? "workspace"
-            : message.includes("TOKEN_ENCRYPTION_KEY_MISSING")
-              ? "encryption_key_missing"
-              : "callback";
-
-    return NextResponse.redirect(
-      `${appUrl}/settings?instagram=error&reason=${safeError}`,
-    );
+    return redirect("instagram=connected");
+  } catch {
+    // Provider payloads can contain credentials; expose only our safe reason codes.
+    if (attemptId) await prisma.job.updateMany({ where: { id: attemptId, status: "processing" }, data: { status: "failed", payload: {}, error: reason } }).catch(() => {});
+    return redirect(`instagram=error&reason=${reason}`);
   }
 }
