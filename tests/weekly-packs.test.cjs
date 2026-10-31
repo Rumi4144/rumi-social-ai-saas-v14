@@ -155,6 +155,22 @@ test('a seven-day pack stays seven posts across three social accounts, with no l
   assert.equal(f.state.ledger.length, 1); assert.equal(f.state.campaigns.length, 1);
   assert.equal(f.state.items.filter(item => item.id.startsWith('older-')).length, 55, 'Admin history remains saved');
 });
+test('a changed planned date is returned after reload without moving its original weekly slot', async () => {
+  const f = fixture();
+  const result = await f.service.prepareWeekly(f.context, f.request());
+  const pack = f.state.jobs.find(job => job.type === 'WEEKLY_PACK');
+  pack.result = { items: pack.payload.slots.map((slot, i) => ({ slotKey: slot.key, contentItemId: `dated-${i}` })) };
+  f.state.items.push(...pack.payload.slots.map((slot, i) => savedPost(`dated-${i}`, result.campaignId, slot.date)));
+  const original = pack.payload.slots[0].date, changed = plan.addDays(original, 10);
+  f.state.jobs.push({ id: 'weekly-date-dated-0', organizationId: 'own', type: 'WEEKLY_POST_DATE', payload: { campaignId: result.campaignId, contentItemId: 'dated-0', plannedDate: changed } });
+  f.state.items[0].scheduledFor = plan.dateValue(changed);
+  f.state.items[1].status = 'published';
+  const before = JSON.stringify(f.state), view = await f.service.weeklyView(f.context);
+  assert.equal(view.items.length, 7); assert.equal(view.items[0].id, 'dated-0');
+  assert.equal(view.items[0].date, original); assert.equal(view.items[0].plannedDate, changed);
+  assert.equal(view.items[0].canChangeDate, true); assert.equal(view.items[1].canChangeDate, false);
+  assert.equal(view.weekStart, pack.payload.weekStart); assert.equal(JSON.stringify(f.state), before);
+});
 test('a paid larger pack remains intact after the customer changes plans', async () => {
   const f = fixture({ planName: 'business', status: 'active' });
   const result = await f.service.prepareWeekly(f.context, f.request({ expectedCredits: 29 }));

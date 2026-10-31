@@ -96,7 +96,7 @@ export default function WeeklyWorkspace({ isAdmin = false }: { isAdmin?: boolean
   }
 
   return <div className={styles.workspace}>
-    <header className={styles.header}><div><span className={styles.eyebrow}>{data?.brand?.name || "Your business"}</span><h1>This Week</h1><p>Your ready-made posts, in one place. Review, approve and download your posts here. Approved and published posts stay in their weekly slots.</p></div>{isAdmin && <a href="/admin">Return to Admin →</a>}</header>
+    <header className={styles.header}><div><span className={styles.eyebrow}>{data?.brand?.name || "Your business"}</span><h1>This Week</h1><p>Click a photo to enlarge it. Change its planned date below, then approve. Open Details for captions and posting.</p></div>{isAdmin && <a href="/admin">Return to Admin →</a>}</header>
     {error && <div role="alert" className={styles.failure}>{error}{!data && <div><button onClick={changed}>Try again</button></div>}</div>}
     {!data ? !error && <p role="status">Loading your week…</p> : <>
       <div className={styles.toolbar}>

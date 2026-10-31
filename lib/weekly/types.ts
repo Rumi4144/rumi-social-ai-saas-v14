@@ -15,6 +15,7 @@ export type WeeklyItemMapping = { slotKey: string; contentItemId: string };
 export type WeeklyDelivery = { id: string; connectionId: string; platform: string; account: string; status: string; scheduledFor: string; error: string | null; publishedAt: string | null };
 export type WeeklyItem = {
   id: string; campaignId: string; brandId: string; date: string; day: number;
+  plannedDate?: string; canChangeDate?: boolean;
   type: string; kind: WeeklyKind; headline: string; caption: string;
   status: string; isReady: boolean; approvalBlockedReason: string | null;
   previewUrl: string | null; mediaUrl: string | null; mediaKind: "image" | "video" | null;

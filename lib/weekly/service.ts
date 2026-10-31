@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { weeklyPackageSpec, validateWeeklyMix, checkWeeklyAllowance, weeklyMixQuote, type WeeklyMix } from "@/lib/billing/packages";
-import { savedItemMedia, downloadableStatuses, fullyPublished } from "@/components/weekly/item-policy";
+import { savedItemMedia, downloadableStatuses, fullyPublished, lockedDeliveryStatuses } from "@/components/weekly/item-policy";
 export { fullyPublished } from "@/components/weekly/item-policy";
 import { photoKey } from "@/lib/reels/product-photos";
 import { runwayConfigured } from "@/lib/video/runway";
@@ -66,12 +66,13 @@ export async function weeklyView(ctx: Context, options: Options = {}): Promise<W
   // Only its saved slots appear here; all other content stays in Admin.
   const items = brand && manifest && slotsByItem.size ? await prisma.contentItem.findMany({ where: { id: { in: [...slotsByItem.keys()] }, campaignId: manifest.campaignId, campaign: { brandId: brand.id, brand: { organizationId: ctx.organizationId } } }, orderBy: [{ scheduledFor: "asc" }, { createdAt: "asc" }] }) : [];
   const ids = items.map(item => item.id);
-  const [assets, publishJobs, connections, changes, preparationJobs] = await Promise.all([
+  const [assets, publishJobs, connections, changes, preparationJobs, plannedDates] = await Promise.all([
     ids.length ? prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, contentItemId: { in: ids }, status: "ready", kind: { in: ["social_creative", "campaign_video"] } } }) : [],
     ids.length ? prisma.publishJob.findMany({ where: { organizationId: ctx.organizationId, contentItemId: { in: ids } }, orderBy: { createdAt: "desc" } }) : [],
     prisma.socialConnection.findMany({ where: { organizationId: ctx.organizationId }, select: { id: true, accountName: true } }),
     ids.length ? prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: "CONTENT_CHANGE_REQUEST", status: "pending", OR: ids.map(id => ({ payload: { path: ["contentItemId"], equals: id } })) }, orderBy: { updatedAt: "desc" } }) : [],
     manifest ? prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: { in: ["CREATE_EVERYTHING", "GENERATE_IMAGE"] }, payload: { path: ["campaignId"], equals: manifest.campaignId } }, orderBy: { createdAt: "asc" } }) : [],
+    manifest ? prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: "WEEKLY_POST_DATE", payload: { path: ["campaignId"], equals: manifest.campaignId } } }) : [],
   ]);
   const output: WeeklyItem[] = [];
   for (const item of items) {
@@ -87,6 +88,11 @@ export async function weeklyView(ctx: Context, options: Options = {}): Promise<W
     const needsAttention = deliveries.some(row => ["failed", "retry", "verification_pending"].includes(row.status));
     const image = assets.find(a => a.contentItemId === item.id && a.kind === "social_creative");
     output.push({ id: item.id, campaignId: item.campaignId, brandId: brand!.id, date: slot?.date || item.scheduledFor?.toISOString().slice(0, 10) || weekStart, day: slot?.day || 1, type: item.type, kind, headline: item.headline || "", caption: item.caption || "", status: item.status, isReady: !approvalBlockedReason, approvalBlockedReason, mediaUrl: item.mediaUrl, previewUrl: correctMedia ? item.mediaUrl : image ? `/api/media/${image.id}` : null, mediaKind: correctMedia ? ref!.kind : image ? "image" : null, assetId: correctMedia ? asset!.id : null, downloadUrl: correctMedia && downloadableStatuses.includes(item.status) ? `/api/weekly/items/${item.id}/download` : null, platforms: item.platform.split(",").map(v => v.trim()).filter(Boolean), needsAttention, deliveries, changeRequest: requested ? { comment: String(object(requested.payload).comment || ""), createdAt: requested.updatedAt.toISOString() } : null, changesRequested: !!requested, nextAction: needsAttention ? "delivery_attention" : correctMedia ? "review" : kind === "motion_reel" ? "finish_motion_reel" : kind === "ai_video" ? "finish_ai_video" : "prepare" });
+  }
+  for (const item of output) {
+    const savedDate = plannedDates.find(row => row.id === `weekly-date-${item.id}` && object(row.payload).contentItemId === item.id);
+    item.plannedDate = object(savedDate?.payload).plannedDate || item.date;
+    item.canChangeDate = ["draft", "approved"].includes(item.status) && !publishJobs.some(row => row.contentItemId === item.id && lockedDeliveryStatuses.includes(row.status));
   }
   // Keep every saved slot in its original position, including after delivery.
   const slotOrder = new Map(manifest?.slots.map((slot, index) => [slot.key, index]));
