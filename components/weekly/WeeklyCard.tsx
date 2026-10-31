@@ -5,6 +5,8 @@ import type { WeeklyItem } from "@/lib/weekly/types";
 import { lockedDeliveryStatuses } from "./item-policy";
 import styles from "./weekly.module.css";
 
+const platformNames: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", google_business: "Google Business Profile", youtube: "YouTube", tiktok: "TikTok", x: "X" };
+
 export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy = false }: { item: WeeklyItem; canManage: boolean; onChanged: () => void; onFinish?: (item: WeeklyItem) => void; busy?: boolean }) {
   const [pending, setPending] = useState(false), [message, setMessage] = useState("");
   const [changesOpen, setChangesOpen] = useState(false), [comment, setComment] = useState("");
@@ -51,7 +53,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
       <details className={styles.caption}><summary>Read caption</summary><p>{item.caption || "Caption is being prepared."}</p></details>
       {item.approvalBlockedReason && !approved && <p className={styles.notice}>{item.approvalBlockedReason}</p>}
       {item.changeRequest && <p className={styles.notice}><strong>Requested change:</strong> {item.changeRequest.comment}</p>}
-      {item.deliveries.length > 0 && <ul className={styles.deliveries}>{item.deliveries.map(delivery => <li key={delivery.id}><strong>{delivery.account || delivery.platform}</strong>: {delivery.status === "published" ? "Posted" : delivery.status === "scheduled" ? `Scheduled ${new Date(delivery.scheduledFor).toLocaleString()}` : delivery.status === "failed" ? "Posting failed" : delivery.status === "verification_pending" ? "Check the existing post before retrying" : delivery.status === "retry" ? "Waiting to retry" : delivery.status === "processing" ? "Processing" : "Posting"}{delivery.error && delivery.status !== "published" && <span>{delivery.error}</span>}</li>)}</ul>}
+      {item.deliveries.length > 0 && <ul className={styles.deliveries}>{item.deliveries.map(delivery => <li key={delivery.id}><strong>{platformNames[delivery.platform] || delivery.platform}{delivery.account ? ` · ${delivery.account}` : ""}</strong>: {delivery.status === "published" ? "Posted" : delivery.status === "scheduled" ? `Scheduled ${new Date(delivery.scheduledFor).toLocaleString()}` : delivery.status === "failed" ? "Posting failed" : delivery.status === "verification_pending" ? "Check the existing post before retrying" : delivery.status === "retry" ? "Waiting to retry" : delivery.status === "processing" ? "Processing" : "Posting"}{delivery.error && delivery.status !== "published" && <span>{delivery.error}</span>}</li>)}</ul>}
       <div className={styles.actions}>
         {canManage && !approved && !item.changeRequest && <button className={styles.primary} disabled={pending || busy || !item.isReady || !!item.approvalBlockedReason} onClick={() => void review("approve")}>{pending ? "Saving…" : "Approve post"}</button>}
         {canManage && item.nextAction === "finish_motion_reel" && onFinish && !item.changeRequest && <button disabled={pending || busy} onClick={() => onFinish(item)}>Finish reel · 4 credits</button>}

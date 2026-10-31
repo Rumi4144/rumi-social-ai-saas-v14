@@ -6,6 +6,7 @@ import { decryptSecret } from "@/lib/security/crypto";
 import { campaignVideoId, publishFacebookVideo } from "./facebook-video";
 import {publishInstagramVideo} from "./instagram-video";
 import { publishInstagram } from "./instagram";
+import { facebookImageUrl } from "./facebook-image";
 
 export type PublishResult = {
   ok: boolean;
@@ -88,7 +89,10 @@ export async function publishToProvider(input: {
     }
 
     // Fetch the final raster creative from Rumi Social AI.
-    const mediaResponse = await fetch(input.mediaUrl, { cache: "no-store" });
+    let imageUrl: URL;
+    try { imageUrl = facebookImageUrl(input.mediaUrl); }
+    catch { return { ok: false, retryable: false, error: "Facebook requires a public HTTPS image URL." }; }
+    const mediaResponse = await fetch(imageUrl, { cache: "no-store" });
     if (!mediaResponse.ok) return { ok: false, code: mediaResponse.status, error: `FACEBOOK_MEDIA_FETCH_FAILED_${mediaResponse.status}` };
     const mediaBytes = await mediaResponse.arrayBuffer();
     if (mediaBytes.byteLength >= 10 * 1024 * 1024) return { ok: false, error: "FACEBOOK_IMAGE_TOO_LARGE" };
