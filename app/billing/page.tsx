@@ -32,7 +32,7 @@ export default async function Billing() {
     <section className="card" style={{ marginTop: 24 }}><h2>What your credits cover</h2>
       <p>A seven-post pack costs 15 credits to prepare. Completing each photo-motion reel adds 4 credits; generating three moving AI scenes adds 120 credits. You see the estimate before work begins. Extra generation or revisions use additional credits; downloading and posting saved content do not.</p>
       <p>Photo-motion reels use original product photos where available, or three AI-generated scene photos, with movement, music and short captions. AI videos generate new moving scenes from verified product photos. If a video option is unavailable, that slot becomes an image post and the estimate is reduced.</p>
-      <p>Weekly allowances cover the whole workspace. Unused weekly post slots do not accumulate. Monthly credits cover new work within those allowances; extra credits do not increase the weekly post limit. Your approved content and each customer’s separate history are preserved.</p>
+      <p>Weekly allowances cover the whole workspace. Unused weekly post slots do not accumulate. Monthly credits cover new work. Create extra lets you make individual ads, reels and presenters using your available credits, separately from the weekly pack allowance. Your approved content and each customer’s separate history are preserved.</p>
       <p>Prepare fresh content one week at a time on your monthly plan. Your plan must remain active for new packs; existing files stay available. Prices are in USD before any applicable tax.</p>
     </section>
   </div>;

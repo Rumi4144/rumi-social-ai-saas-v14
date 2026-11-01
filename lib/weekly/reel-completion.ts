@@ -52,7 +52,7 @@ export async function weeklyReelAction(tx: Prisma.TransactionClient, organizatio
     if (!input.consent || input.expectedCost !== WEEKLY_CREDIT_COST.motionReelCompletion) throw new ReelCompletionError("Review the four-credit reel estimate before continuing.", 400);
     const item = await tx.contentItem.findFirst({ where: { id: input.contentItemId, campaign: { brand: { organizationId } } } });
     if (!item) throw new ReelCompletionError("Post not found in this workspace.", 404);
-    const pack = await tx.job.findFirst({ where: { organizationId, type: "WEEKLY_PACK", payload: { path: ["campaignId"], equals: item.campaignId } } });
+    const pack = await tx.job.findFirst({ where: { organizationId, type: { in: ["WEEKLY_PACK", "EXTRA_CREATION"] }, payload: { path: ["campaignId"], equals: item.campaignId } } });
     const manifest = pack?.payload as unknown as WeeklyManifest | undefined;
     const mappings = (pack?.result as { items?: WeeklyItemMapping[] } | null)?.items;
     const mapping = mappings?.find(entry => entry.contentItemId === item.id);

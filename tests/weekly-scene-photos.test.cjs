@@ -16,12 +16,17 @@ test('three saved AI scene plans differ in framing and never claim exact product
   assert.throws(()=>weeklyScenePhotos({...input,caption:'Shop https://shop.test/products/godin-guitar'}),/specific product/);
 });
 
-function workerFixture() {
+function workerFixture(extra = false) {
   const packId='pack', slot={key:'slot',kind:'motion_reel',day:1,date:'2026-11-02',topic:'Music in everyday life',layout:'weekly-banner',reelPhotoSource:'ai'};
   const state={jobs:new Map(),assets:new Map(),posts:new Map(),calls:[],reviews:[],logoReads:[],decision:'passed',copies:0,interrupted:false};
   const business={...brand}; const campaign={id:'campaign',brandId:'brand',goal:'awareness',brand:business};
   const main={id:'generate',organizationId:'org',type:'CREATE_EVERYTHING',status:'queued',createdAt:new Date(),payload:{campaignId:'campaign',weeklyPackId:packId,weeklySlots:[slot],weeklySources:[],brief:'Prepare the week',days:7,goal:'awareness',photoSource:'ai',contentPlan:[{planKey:'slot',type:'reel_post',day:1,date:'2026-11-02',topics:[],platforms:[]}]}};
   state.jobs.set(main.id,main);state.jobs.set(packId,{id:packId,organizationId:'org',type:'WEEKLY_PACK',status:'queued',payload:{campaignId:'campaign',slots:[slot]}});
+  if (extra) {
+    delete main.payload.weeklyPackId;
+    main.payload.extraCreationId=packId;main.payload.days=1;
+    state.jobs.get(packId).type='EXTRA_CREATION';
+  }
   const matches=(row,where)=>Object.entries(where||{}).every(([k,v])=> k==='payload'?v.path.reduce((a,b)=>a?.[b],row.payload)===v.equals : k==='campaign'?true : v&&typeof v==='object'&&'in' in v?v.in.includes(row[k]):row[k]===v);
   const db={
     job:{findFirst:async({where})=>[...state.jobs.values()].find(row=>matches(row,where))||null,
@@ -75,6 +80,22 @@ test('weekly worker queues three included scenes, resumes saved photos and produ
     assert.equal(reelDuration(result.project),15);assert.equal(result.project.logo,'/original-logo');assert.equal(result.project.productSubject,undefined);
     assert.ok(result.project.scenes.every(scene=>scene.headline&&scene.kind==='image'));assert.equal(result.project.animation,'gentle');
     assert.equal((await f.run(jobs[0].id)).body.status,'idle');assert.equal(f.state.calls.length,3);
+  } finally {if(old===undefined)delete process.env.WORKER_SECRET;else process.env.WORKER_SECRET=old;}
+});
+
+test('an extra reel saves one draft and its three scene photos independently of weekly packs',async()=>{
+  const old=process.env.WORKER_SECRET;process.env.WORKER_SECRET='fixture-secret';
+  try {
+    const f=workerFixture(true);
+    assert.equal((await f.run('generate')).status,200);
+    const parent=f.state.jobs.get('pack'),jobs=[...f.state.jobs.values()].filter(j=>j.type==='GENERATE_IMAGE');
+    assert.equal(parent.type,'EXTRA_CREATION');assert.equal(parent.status,'running');
+    assert.deepEqual(JSON.parse(JSON.stringify(parent.result.items)),[{slotKey:'slot',contentItemId:'post'}]);
+    assert.equal(f.state.posts.size,1);assert.equal(jobs.length,3);
+    for(const job of jobs)assert.equal((await f.run(job.id)).status,200);
+    assert.equal(f.state.assets.size,3);assert.equal(f.state.calls.length,3);
+    assert.equal(f.state.posts.get('post').status,'draft');assert.equal(f.state.posts.get('post').mediaUrl,null);
+    assert.equal(f.state.logoReads.length,1);
   } finally {if(old===undefined)delete process.env.WORKER_SECRET;else process.env.WORKER_SECRET=old;}
 });
 

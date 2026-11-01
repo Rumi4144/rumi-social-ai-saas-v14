@@ -15,7 +15,7 @@ function fixture(options = {}) {
     contentItem: { findFirst: async q => { assert.equal(q.where.campaign.brand.organizationId, 'org'); reads++; return options.missing ? null : reads > 1 && options.race ? { ...item, [options.race]: 'changed' } : item; }, update: async q => { writes.push(['item', q.data]); Object.assign(item, q.data); } },
     publishJob: { findFirst: async q => { assert.equal(q.where.organizationId, 'org'); assert.ok(q.where.status.in.includes('verification_pending')); return options.delivery || (reads > 1 && options.raceDelivery) ? { id: 'delivery' } : null; } },
     job: {
-      findFirst: async q => { assert.equal(q.where.organizationId, 'org'); return q.where.type === 'WEEKLY_PACK' ? (options.noPack ? null : pack) : options.pendingChange ? { id: 'change' } : null; },
+      findFirst: async q => { assert.equal(q.where.organizationId, 'org'); return (q.where.type === 'WEEKLY_PACK' || q.where.type?.in?.includes('WEEKLY_PACK')) ? (options.noPack ? null : pack) : options.pendingChange ? { id: 'change' } : null; },
       update: async q => { writes.push(['pack', q.data]); assert.equal(q.where.id, 'pack'); },
     },
     mediaAsset: {

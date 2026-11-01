@@ -12,7 +12,7 @@ function fixture(options = {}) {
     },
     publishJob: { findFirst: async q => { assert.equal(q.where.organizationId, 'own'); assert.equal(q.where.contentItemId, 'post'); return q.where.status.in.includes(options.delivery) ? { id: 'delivery' } : null; } },
     job: {
-      findFirst: async q => { assert.equal(q.where.organizationId, 'own'); return q.where.type === 'WEEKLY_PACK' ? options.noPack ? null : pack : saved; },
+      findFirst: async q => { assert.equal(q.where.organizationId, 'own'); return (q.where.type === 'WEEKLY_PACK' || q.where.type?.in?.includes('WEEKLY_PACK')) ? options.noPack ? null : pack : saved; },
       create: async q => { assert.equal(q.data.organizationId, 'own'); saved = q.data; changes.push(['date', q.data]); },
       update: async q => { assert.equal(q.where.id, saved.id); saved = { ...saved, ...q.data }; changes.push(['date', q.data]); },
     },

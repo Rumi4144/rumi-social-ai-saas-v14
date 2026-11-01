@@ -14,7 +14,7 @@ const object = (value: unknown): Record<string, any> => value && typeof value ==
 const PAGE_SIZE = 6;
 
 async function weeklySlot(db: Database, ctx: Context, campaignId: string, id: string) {
-  const record = await db.job.findFirst({ where: { organizationId: ctx.organizationId, type: "WEEKLY_PACK", payload: { path: ["campaignId"], equals: campaignId } } });
+  const record = await db.job.findFirst({ where: { organizationId: ctx.organizationId, type: { in: ["WEEKLY_PACK", "EXTRA_CREATION"] }, payload: { path: ["campaignId"], equals: campaignId } } });
   const manifest = manifestOf(record?.payload);
   const items = object(record?.result).items;
   const mapping = Array.isArray(items) ? items.find(row => row?.contentItemId === id) : null;

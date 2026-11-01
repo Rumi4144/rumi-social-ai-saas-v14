@@ -3,7 +3,7 @@ const { load } = require('./helpers/weekly-load.cjs');
 const { weeklyReelAction, ReelCompletionError } = load('lib/weekly/reel-completion.ts');
 const { reelAssetId } = load('lib/reels/storage.ts');
 const requestId = '11111111-1111-4111-8111-111111111111';
-function fixture() {
+function fixture(packType = 'WEEKLY_PACK') {
   let state = { credits: 20, status: 'active', item: { id: 'item', campaignId: 'camp', status: 'draft' }, kind: 'motion_reel', jobs: [], ledger: [], assets: [], active: false }, tail = Promise.resolve();
   const belongs = q => q.where.organizationId === 'org';
   const tx = {
@@ -16,7 +16,7 @@ function fixture() {
       findUnique: async q => state.jobs.find(j => j.id === q.where.id) || null,
       findFirst: async q => {
         if (!belongs(q)) return null;
-        if (q.where.type === 'WEEKLY_PACK') return { payload: { slots: [{ key: 'slot', kind: state.kind }] }, result: { items: [{ slotKey: 'slot', contentItemId: 'item' }] } };
+        if ((q.where.type === packType || q.where.type?.in?.includes(packType))) return { payload: { slots: [{ key: 'slot', kind: state.kind }] }, result: { items: [{ slotKey: 'slot', contentItemId: 'item' }] } };
         return state.jobs.find(j => j.type === q.where.type && (!q.where.id || j.id === q.where.id) && (!q.where.status || q.where.status.in.includes(j.status))) || null;
       },
       findMany: async q => state.jobs.filter(j => q.where.id.in.includes(j.id) && j.type === q.where.type && j.status === q.where.status),
@@ -46,6 +46,14 @@ test('repeat/concurrent finish clicks reserve once; exact MP4 completes as draft
   await f.run({ action:'complete', reservationId:a.reservationId, assetId:asset.id });
   await f.run({ action:'cancel', reservationId:a.reservationId });
   assert.equal(f.state().credits,16); assert.equal(f.state().ledger.length,1);
+});
+test('an extra reel finishes using the same four-credit export without approval or repeat charges',async()=>{
+  const f=fixture('EXTRA_CREATION'),a=await f.run(reserve),asset=f.addAsset(a.pathname);
+  await f.run({action:'complete',reservationId:a.reservationId,assetId:asset.id});
+  assert.equal(f.state().item.mediaUrl,'/api/video/media/'+asset.id);
+  assert.equal(f.state().item.status,'draft');assert.equal(f.state().credits,16);
+  assert.equal((await f.run(reserve)).alreadyCompleted,true);
+  assert.equal(f.state().ledger.length,1);
 });
 test('canceled attempts refund once and cannot complete or recharge under the same request', async () => {
   const f=fixture(), a=await f.run(reserve), asset=f.addAsset(a.pathname);

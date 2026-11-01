@@ -12,7 +12,7 @@ type Options = { brandId?: string; weekStart?: string };
 export class WeeklyError extends Error { constructor(message: string, public status = 400) { super(message); } }
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 function selectedWeek(value?: string) { const week = value || monday(); dateValue(week); if (monday(week) !== week) throw new WeeklyError("Choose the Monday that starts this week."); return week; }
-async function brandSources(organizationId: string, brand: { id: string; products: Array<{ name: string; imageUrl: string | null; sourceUrl: string | null }> }) {
+export async function brandSources(organizationId: string, brand: { id: string; products: Array<{ name: string; imageUrl: string | null; sourceUrl: string | null }> }) {
   const assets = await prisma.mediaAsset.findMany({ where: { organizationId, kind: "product_photo", status: "ready", url: { not: null }, OR: [{ campaignId: null, metadata: { path: ["brandId"], equals: brand.id } }, { campaignId: { in: (await prisma.campaign.findMany({ where: { brandId: brand.id, brand: { organizationId } }, select: { id: true } })).map(c => c.id) } }] }, select: { id: true, url: true, metadata: true }, orderBy: { createdAt: "desc" }, take: 300 });
   const photos: WeeklyPhoto[] = brand.products.flatMap(p => p.imageUrl && p.sourceUrl ? [{ imageUrl: p.imageUrl, sourceUrl: p.sourceUrl, productName: p.name }] : []);
   for (const asset of assets) {
@@ -54,49 +54,7 @@ export async function weeklyView(ctx: Context, options: Options = {}): Promise<W
   const allowance = checkWeeklyAllowance(spec, { ...usage, requestedPosts: quote.posts });
   const record = brand ? records.find(row => row.id === weeklyPackId(ctx.organizationId, brand.id, weekStart)) : undefined;
   const manifest = record ? manifestOf(record.payload) : null;
-  const savedMapping = object(record?.result).items;
-  const mapping: WeeklyItemMapping[] = Array.isArray(savedMapping) ? savedMapping : [];
-  const slotsByItem = new Map<string, WeeklyManifest["slots"][number]>(), assignedSlots = new Set<string>();
-  for (const entry of mapping) {
-    const slot = manifest?.slots.find(slot => slot.key === entry?.slotKey);
-    if (!slot || typeof entry?.contentItemId !== "string" || !entry.contentItemId || assignedSlots.has(slot.key) || slotsByItem.has(entry.contentItemId)) continue;
-    assignedSlots.add(slot.key); slotsByItem.set(entry.contentItemId, slot);
-  }
-  // Calendar dates do not make older campaign drafts part of a weekly pack.
-  // Only its saved slots appear here; all other content stays in Admin.
-  const items = brand && manifest && slotsByItem.size ? await prisma.contentItem.findMany({ where: { id: { in: [...slotsByItem.keys()] }, campaignId: manifest.campaignId, campaign: { brandId: brand.id, brand: { organizationId: ctx.organizationId } } }, orderBy: [{ scheduledFor: "asc" }, { createdAt: "asc" }] }) : [];
-  const ids = items.map(item => item.id);
-  const [assets, publishJobs, connections, changes, preparationJobs, plannedDates] = await Promise.all([
-    ids.length ? prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, contentItemId: { in: ids }, status: "ready", kind: { in: ["social_creative", "campaign_video"] } } }) : [],
-    ids.length ? prisma.publishJob.findMany({ where: { organizationId: ctx.organizationId, contentItemId: { in: ids } }, orderBy: { createdAt: "desc" } }) : [],
-    prisma.socialConnection.findMany({ where: { organizationId: ctx.organizationId }, select: { id: true, accountName: true } }),
-    ids.length ? prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: "CONTENT_CHANGE_REQUEST", status: "pending", OR: ids.map(id => ({ payload: { path: ["contentItemId"], equals: id } })) }, orderBy: { updatedAt: "desc" } }) : [],
-    manifest ? prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: { in: ["CREATE_EVERYTHING", "GENERATE_IMAGE"] }, payload: { path: ["campaignId"], equals: manifest.campaignId } }, orderBy: { createdAt: "asc" } }) : [],
-    manifest ? prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: "WEEKLY_POST_DATE", payload: { path: ["campaignId"], equals: manifest.campaignId } } }) : [],
-  ]);
-  const output: WeeklyItem[] = [];
-  for (const item of items) {
-    const jobs = latestDeliveries(publishJobs.filter(row => row.contentItemId === item.id));
-    const slot = slotsByItem.get(item.id)!;
-    const kind = slot.kind;
-    const ref = savedItemMedia(item.mediaUrl);
-    const asset = ref && assets.find(a => a.id === ref.id && a.contentItemId === item.id && a.campaignId === item.campaignId && a.kind === (ref.kind === "image" ? "social_creative" : "campaign_video"));
-    const correctMedia = !!asset?.url && (kind === "image" ? ref?.kind === "image" : ref?.kind === "video" && object(asset.metadata).contentType === "video/mp4");
-    const requested = changes.find(row => object(row.payload).contentItemId === item.id);
-    const approvalBlockedReason = requested ? "Your changes are with Admin. Review the revised post when they are complete." : !item.headline?.trim() ? "This post still needs its headline." : !correctMedia ? kind === "image" ? "The finished design is still being prepared." : kind === "motion_reel" ? "Finish the reel to create its moving scenes, music and captions." : "Create and review the three AI moving scenes, then finish the video." : null;
-    const deliveries: WeeklyDelivery[] = jobs.map(row => ({ id: row.id, connectionId: row.socialConnectionId, platform: row.platform, account: connections.find(c => c.id === row.socialConnectionId)?.accountName || row.platform, status: row.status, scheduledFor: row.scheduledFor.toISOString(), error: row.lastError, publishedAt: row.publishedAt?.toISOString() || null }));
-    const needsAttention = deliveries.some(row => ["failed", "retry", "verification_pending"].includes(row.status));
-    const image = assets.find(a => a.contentItemId === item.id && a.kind === "social_creative");
-    output.push({ id: item.id, campaignId: item.campaignId, brandId: brand!.id, date: slot?.date || item.scheduledFor?.toISOString().slice(0, 10) || weekStart, day: slot?.day || 1, type: item.type, kind, headline: item.headline || "", caption: item.caption || "", status: item.status, isReady: !approvalBlockedReason, approvalBlockedReason, mediaUrl: item.mediaUrl, previewUrl: correctMedia ? item.mediaUrl : image ? `/api/media/${image.id}` : null, mediaKind: correctMedia ? ref!.kind : image ? "image" : null, assetId: correctMedia ? asset!.id : null, downloadUrl: correctMedia && downloadableStatuses.includes(item.status) ? `/api/weekly/items/${item.id}/download` : null, platforms: item.platform.split(",").map(v => v.trim()).filter(Boolean), needsAttention, deliveries, changeRequest: requested ? { comment: String(object(requested.payload).comment || ""), createdAt: requested.updatedAt.toISOString() } : null, changesRequested: !!requested, nextAction: needsAttention ? "delivery_attention" : correctMedia ? "review" : kind === "motion_reel" ? "finish_motion_reel" : kind === "ai_video" ? "finish_ai_video" : "prepare" });
-  }
-  for (const item of output) {
-    const savedDate = plannedDates.find(row => row.id === `weekly-date-${item.id}` && object(row.payload).contentItemId === item.id);
-    item.plannedDate = object(savedDate?.payload).plannedDate || item.date;
-    item.canChangeDate = ["draft", "approved"].includes(item.status) && !publishJobs.some(row => row.contentItemId === item.id && lockedDeliveryStatuses.includes(row.status));
-  }
-  // Keep every saved slot in its original position, including after delivery.
-  const slotOrder = new Map(manifest?.slots.map((slot, index) => [slot.key, index]));
-  output.sort((a, b) => (slotOrder.get(slotsByItem.get(a.id)!.key) ?? 0) - (slotOrder.get(slotsByItem.get(b.id)!.key) ?? 0));
+  const { output, preparationJobs } = await savedPackCards(ctx, record, brand, weekStart);
   const complete = !!manifest && output.length === manifest.slots.length && output.every(item => fullyPublished(item.status, item.deliveries));
   const pending = preparationJobs.filter(job => ["queued", "running"].includes(job.status)), failed = preparationJobs.find(job => job.status === "failed" || object(job.result).needsReview === true);
   const warnings = [];
@@ -159,4 +117,52 @@ export async function prepareWeekly(ctx: Context, input: PrepareWeeklyRequest): 
     await tx.creditLedger.create({ data: { organizationId: ctx.organizationId, delta: -quote.preparationCredits, balanceAfter: after.credits, reason: "weekly_pack_preparation", referenceId: id } });
     return { packId: id, campaignId: campaign.id, jobId: generationJobId, preparationCredits: quote.preparationCredits, reused: false };
   }, { timeout: 15000 });
+}
+
+export async function savedPackCards(ctx: Context, record: {payload: unknown; result: unknown} | undefined, brand: {id: string} | undefined, weekStart: string) {
+  const manifest = record ? manifestOf(record.payload) : null;
+  const savedMapping = object(record?.result).items;
+  const mapping: WeeklyItemMapping[] = Array.isArray(savedMapping) ? savedMapping : [];
+  const slotsByItem = new Map<string, WeeklyManifest["slots"][number]>(), assignedSlots = new Set<string>();
+  for (const entry of mapping) {
+    const slot = manifest?.slots.find(slot => slot.key === entry?.slotKey);
+    if (!slot || typeof entry?.contentItemId !== "string" || !entry.contentItemId || assignedSlots.has(slot.key) || slotsByItem.has(entry.contentItemId)) continue;
+    assignedSlots.add(slot.key); slotsByItem.set(entry.contentItemId, slot);
+  }
+  // Calendar dates do not make older campaign drafts part of a weekly pack.
+  // Only its saved slots appear here; all other content stays in Admin.
+  const items = brand && manifest && slotsByItem.size ? await prisma.contentItem.findMany({ where: { id: { in: [...slotsByItem.keys()] }, campaignId: manifest.campaignId, campaign: { brandId: brand.id, brand: { organizationId: ctx.organizationId } } }, orderBy: [{ scheduledFor: "asc" }, { createdAt: "asc" }] }) : [];
+  const ids = items.map(item => item.id);
+  const [assets, publishJobs, connections, changes, preparationJobs, plannedDates] = await Promise.all([
+    ids.length ? prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, contentItemId: { in: ids }, status: "ready", kind: { in: ["social_creative", "campaign_video"] } } }) : [],
+    ids.length ? prisma.publishJob.findMany({ where: { organizationId: ctx.organizationId, contentItemId: { in: ids } }, orderBy: { createdAt: "desc" } }) : [],
+    prisma.socialConnection.findMany({ where: { organizationId: ctx.organizationId }, select: { id: true, accountName: true } }),
+    ids.length ? prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: "CONTENT_CHANGE_REQUEST", status: "pending", OR: ids.map(id => ({ payload: { path: ["contentItemId"], equals: id } })) }, orderBy: { updatedAt: "desc" } }) : [],
+    manifest ? prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: { in: ["CREATE_EVERYTHING", "GENERATE_IMAGE"] }, payload: { path: ["campaignId"], equals: manifest.campaignId } }, orderBy: { createdAt: "asc" } }) : [],
+    manifest ? prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: "WEEKLY_POST_DATE", payload: { path: ["campaignId"], equals: manifest.campaignId } } }) : [],
+  ]);
+  const output: WeeklyItem[] = [];
+  for (const item of items) {
+    const jobs = latestDeliveries(publishJobs.filter(row => row.contentItemId === item.id));
+    const slot = slotsByItem.get(item.id)!;
+    const kind = slot.kind;
+    const ref = savedItemMedia(item.mediaUrl);
+    const asset = ref && assets.find(a => a.id === ref.id && a.contentItemId === item.id && a.campaignId === item.campaignId && a.kind === (ref.kind === "image" ? "social_creative" : "campaign_video"));
+    const correctMedia = !!asset?.url && (kind === "image" ? ref?.kind === "image" : ref?.kind === "video" && object(asset.metadata).contentType === "video/mp4");
+    const requested = changes.find(row => object(row.payload).contentItemId === item.id);
+    const approvalBlockedReason = requested ? "Your changes are with Admin. Review the revised post when they are complete." : !item.headline?.trim() ? "This post still needs its headline." : !correctMedia ? kind === "image" ? "The finished design is still being prepared." : item.type === "presenter_post" ? "Your presenter is being prepared." : kind === "motion_reel" ? "Finish the reel to create its moving scenes, music and captions." : "Create and review the three AI moving scenes, then finish the video." : null;
+    const deliveries: WeeklyDelivery[] = jobs.map(row => ({ id: row.id, connectionId: row.socialConnectionId, platform: row.platform, account: connections.find(c => c.id === row.socialConnectionId)?.accountName || row.platform, status: row.status, scheduledFor: row.scheduledFor.toISOString(), error: row.lastError, publishedAt: row.publishedAt?.toISOString() || null }));
+    const needsAttention = deliveries.some(row => ["failed", "retry", "verification_pending"].includes(row.status));
+    const image = assets.find(a => a.contentItemId === item.id && a.kind === "social_creative");
+    output.push({ id: item.id, campaignId: item.campaignId, brandId: brand!.id, date: slot?.date || item.scheduledFor?.toISOString().slice(0, 10) || weekStart, day: slot?.day || 1, type: item.type, kind, headline: item.headline || "", caption: item.caption || "", status: item.status, isReady: !approvalBlockedReason, approvalBlockedReason, mediaUrl: item.mediaUrl, previewUrl: correctMedia ? item.mediaUrl : image ? `/api/media/${image.id}` : null, mediaKind: correctMedia ? ref!.kind : image ? "image" : null, assetId: correctMedia ? asset!.id : null, downloadUrl: correctMedia && downloadableStatuses.includes(item.status) ? `/api/weekly/items/${item.id}/download` : null, platforms: item.platform.split(",").map(v => v.trim()).filter(Boolean), needsAttention, deliveries, changeRequest: requested ? { comment: String(object(requested.payload).comment || ""), createdAt: requested.updatedAt.toISOString() } : null, changesRequested: !!requested, nextAction: needsAttention ? "delivery_attention" : correctMedia ? "review" : item.type === "presenter_post" ? "prepare" : kind === "motion_reel" ? "finish_motion_reel" : kind === "ai_video" ? "finish_ai_video" : "prepare" });
+  }
+  for (const item of output) {
+    const savedDate = plannedDates.find(row => row.id === `weekly-date-${item.id}` && object(row.payload).contentItemId === item.id);
+    item.plannedDate = object(savedDate?.payload).plannedDate || item.date;
+    item.canChangeDate = ["draft", "approved"].includes(item.status) && !publishJobs.some(row => row.contentItemId === item.id && lockedDeliveryStatuses.includes(row.status));
+  }
+  // Keep every saved slot in its original position, including after delivery.
+  const slotOrder = new Map(manifest?.slots.map((slot, index) => [slot.key, index]));
+  output.sort((a, b) => (slotOrder.get(slotsByItem.get(a.id)!.key) ?? 0) - (slotOrder.get(slotsByItem.get(b.id)!.key) ?? 0));
+  return { output, preparationJobs };
 }

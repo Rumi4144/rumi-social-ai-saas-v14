@@ -84,6 +84,7 @@ export default async function RootLayout({
           </div>
           <nav aria-label="Main navigation">
             <Link href="/dashboard">This Week</Link>
+            <Link href="/extras">Create extra</Link>
             <Link href="/scheduled">Scheduled</Link>
             <Link href="/settings">Settings</Link>
             {isSuperAdmin && <>

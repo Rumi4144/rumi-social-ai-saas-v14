@@ -28,7 +28,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (!["draft", "approved"].includes(item.status)) return { status: 409, error: "Only draft and approved posts can change their planned date. Scheduled and posted dates are kept with their delivery history." };
       const delivery = await tx.publishJob.findFirst({ where: { organizationId: ctx.organizationId, contentItemId: id, status: { in: lockedDeliveryStatuses } } });
       if (delivery) return { status: 409, error: "This post has an active or completed delivery. Its planned date cannot be changed here." };
-      const pack = await tx.job.findFirst({ where: { organizationId: ctx.organizationId, type: "WEEKLY_PACK", payload: { path: ["campaignId"], equals: item.campaignId } } });
+      const pack = await tx.job.findFirst({ where: { organizationId: ctx.organizationId, type: { in: ["WEEKLY_PACK", "EXTRA_CREATION"] }, payload: { path: ["campaignId"], equals: item.campaignId } } });
       const manifest = manifestOf(pack?.payload), mappings = object(pack?.result).items;
       const mapping = Array.isArray(mappings) ? mappings.find(row => row.contentItemId === id) : null;
       const slot = manifest?.campaignId === item.campaignId && manifest.slots.find(row => row.key === mapping?.slotKey);

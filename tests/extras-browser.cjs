@@ -1,0 +1,42 @@
+// Actual customer screen with isolated fixture responses; no paid generations.
+const {chromium}=require('playwright'),esbuild=require('esbuild'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),http=require('node:http'),assert=require('node:assert/strict');
+const repo=path.resolve(__dirname,'..'),out=fs.mkdtempSync(path.join(os.tmpdir(),'extras-browser-')),qa=process.env.EXTRAS_QA_DIR||path.join(out,'screens');fs.mkdirSync(qa,{recursive:true});
+let server,browser,state,mode='active',requestLog=[],paid=0;
+const makeItem=(kind,id)=>({id:'post-'+id,campaignId:'campaign',brandId:'brand',date:'2026-11-01',plannedDate:'2026-11-01',day:1,canChangeDate:true,type:kind==='presenter'?'presenter_post':kind==='reel'?'reel_post':'post',kind:kind==='ad'?'image':kind==='reel'?'motion_reel':'ai_video',headline:'Find your sound',caption:'Make a little music today.',status:'draft',isReady:true,approvalBlockedReason:null,previewUrl:kind==='ad'?'/fixture.svg':null,mediaUrl:'/api/media/asset',mediaKind:kind==='ad'?'image':'video',assetId:'asset',downloadUrl:null,platforms:[],needsAttention:false,deliveries:[],changeRequest:null,changesRequested:false,nextAction:'review'});
+const reset=()=>{state={organizationId:'org',canManage:true,availableCredits:100,canCreate:true,reason:null,brands:[{id:'brand',name:'Rumi Guitars',products:[{id:'one',name:'Original guitar',reelAvailable:false}]}],configured:{ad:true,reel:true,presenter:true},extras:[]};requestLog=[];paid=0;};reset();
+(async()=>{
+ fs.writeFileSync(path.join(out,'entry.tsx'),`import React from 'react';import{createRoot}from'react-dom/client';import Workspace from ${JSON.stringify(repo+'/components/extras/ExtraWorkspace')};import ${JSON.stringify(repo+'/app/globals.css')};createRoot(document.getElementById('root')!).render(<Workspace/>);`);
+ await esbuild.build({entryPoints:[path.join(out,'entry.tsx')],bundle:true,outfile:path.join(out,'app.js'),nodePaths:[repo+'/node_modules'],jsx:'automatic',define:{'process.env.NODE_ENV':'"production"','process.env.NEXT_PUBLIC_APP_URL':'"https://rumisocialai.com"'}});
+ server=http.createServer(async(req,res)=>{
+  const url=new URL(req.url,'http://fixture');
+  if(['/app.js','/app.css'].includes(url.pathname)){res.setHeader('Content-Type',url.pathname.endsWith('.js')?'application/javascript':'text/css');return res.end(fs.readFileSync(path.join(out,url.pathname.slice(1))));}
+  if(url.pathname.startsWith('/presenters/')){res.setHeader('Content-Type','image/png');return res.end(fs.readFileSync(path.join(repo,'public',url.pathname)));}
+  if(url.pathname==='/fixture.svg'){res.setHeader('Content-Type','image/svg+xml');return res.end('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="800" height="1000" fill="#e6c88f"/><text x="70" y="150" font-size="56">Find your sound</text></svg>');}
+  const json=v=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(v));};
+  if(url.pathname==='/api/extras'&&req.method==='GET'){
+   if(url.searchParams.has('id'))return json(state.extras.find(e=>e.id===url.searchParams.get('id')));
+   return json({...state,...(mode==='low'?{availableCredits:2}:mode==='viewer'?{canManage:false,canCreate:false,reason:'Your access is read-only.'}:mode==='inactive'?{canCreate:false,reason:'An active plan is needed.'}:mode==='unconfigured'?{configured:{ad:true,reel:true,presenter:false}}:{})});
+  }
+  if(url.pathname==='/api/extras'&&req.method==='POST'){
+   let raw='';for await(const part of req)raw+=part;const body=JSON.parse(raw);requestLog.push(body);
+   if(body.action==='create'){paid+=body.expectedCredits;state.availableCredits-=body.expectedCredits;const id='extra-'+'a'.repeat(39)+state.extras.length;state.extras.unshift({id,kind:body.kind,title:body.brief,createdAt:new Date().toISOString(),status:'queued',error:null,nextJobId:body.kind==='presenter'?null:'generate',pendingJobs:body.kind==='presenter'?0:1,item:null});return json({id});}
+   const current=state.extras.find(e=>e.id===body.id);current.item=makeItem(current.kind,current.id);current.status='ready';return json(current);
+  }
+  if(url.pathname==='/api/campaigns/process'){requestLog.push({action:'process'});const current=state.extras[0];current.nextJobId=null;current.pendingJobs=0;current.item=makeItem(current.kind,current.id);current.status='ready';return json({status:'succeeded'});}
+  if(url.pathname.startsWith('/api/')){requestLog.push({unexpected:url.pathname});res.statusCode=500;return json({error:'Unexpected test request'});}
+  res.setHeader('Content-Type','text/html');res.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"></head><body class="authenticated"><main id="root"></main><script src="/app.js"></script></body></html>');
+ });await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ browser=await chromium.launch(require('./browser-launch.cjs')());const page=await browser.newPage({viewport:{width:1366,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));const base='http://127.0.0.1:'+server.address().port;
+ await page.goto(base);await page.getByText('100 Rumi credits available',{exact:true}).waitFor();assert.equal(requestLog.length,0,'Opening the page never starts generation');
+ assert.equal(await page.getByRole('button',{name:/^Image ad/}).count(),1);assert.equal(await page.getByRole('button',{name:/^Extra reel/}).count(),1);assert.equal(await page.getByRole('button',{name:/^Talking presenter/}).count(),1);
+ assert.ok(await page.getByRole('button',{name:'Create ad · 3 credits',exact:true}).isDisabled());
+ await page.getByLabel('What would you like to promote?').fill('Warm daylight and a little inspiration');
+ for(const width of [1366,390]){await page.setViewportSize({width,height:900});await page.screenshot({path:path.join(qa,`extras-${width}.png`),fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow');}
+ await page.getByRole('button',{name:'Create ad · 3 credits',exact:true}).click();await page.getByText('Ready to review below.',{exact:false}).waitFor();assert.equal(paid,3);assert.equal(requestLog.filter(r=>r.action==='create').length,1);assert.ok(await page.getByRole('button',{name:'Approve post',exact:true}).isEnabled());assert.equal(requestLog.filter(r=>r.unexpected).length,0);
+ await page.reload();await page.getByRole('button',{name:'Approve post',exact:true}).waitFor();assert.equal(paid,3,'Reload cannot repurchase or hide the draft');
+ await page.getByRole('button',{name:/^Extra reel/}).click();await page.getByLabel('What would you like to promote?').fill('A musical moment');await page.getByLabel('Feature',{exact:true}).selectOption('one');assert.ok(await page.getByRole('button',{name:'Create reel · 7 credits',exact:true}).isDisabled());await page.getByLabel('Feature',{exact:true}).selectOption('');assert.ok(await page.getByRole('button',{name:'Create reel · 7 credits',exact:true}).isEnabled());
+ await page.getByRole('button',{name:/^Talking presenter/}).click();assert.equal(await page.getByLabel('Feature',{exact:true}).count(),0);await page.getByLabel('What should the presenter say?').fill('Discover our guitar collection and find your sound.');await page.getByRole('button',{name:'Morgan',exact:true}).click();await page.screenshot({path:path.join(qa,'extras-presenter.png'),fullPage:true});
+ await page.getByRole('button',{name:'Create presenter · 30 credits',exact:true}).click();await page.getByText('Ready to review below.',{exact:false}).waitFor();assert.equal(paid,33);assert.equal(requestLog.find(r=>r.kind==='presenter').presenter,'morgan');assert.equal(requestLog.filter(r=>r.action==='advance').length,1);
+ for(const setting of ['low','viewer','inactive','unconfigured']){mode=setting;await page.reload();await page.getByRole('button',{name:/^Talking presenter/}).click();await page.getByLabel('What should the presenter say?').fill('A small welcome to our business.');assert.ok(await page.getByRole('button',{name:'Create presenter · 30 credits',exact:true}).isDisabled(),setting+' must block creation');}
+ assert.equal(paid,33);assert.deepEqual(errors,[]);console.log('Extras browser passed: minimal choices, mobile fit, explicit cost, draft recovery, presenter flow, balance and role guards. Screens:',qa);
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await browser?.close();await new Promise(resolve=>server?server.close(resolve):resolve());});

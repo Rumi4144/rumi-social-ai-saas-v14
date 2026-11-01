@@ -87,7 +87,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
       {canManage && item.nextAction === "finish_motion_reel" && onFinish && !item.changeRequest && <button className={styles.finish} disabled={pending || busy} onClick={() => onFinish(item)}>Finish reel · 4 credits</button>}
       {canManage && item.nextAction === "finish_ai_video" && onFinish && !item.changeRequest && <button className={styles.finish} disabled={pending || busy} onClick={() => onFinish(item)}>Finish AI video · up to 120 credits</button>}
       {detailsOpen && <section className={styles.postDetails} aria-label={`Post details: ${item.headline}`}>
-      <span className={styles.kind}>{item.kind === "image" ? "Image post" : item.kind === "motion_reel" ? "Motion reel" : "AI video"}</span>
+      <span className={styles.kind}>{item.type === "presenter_post" ? "Presenter" : item.kind === "image" ? "Image post" : item.kind === "motion_reel" ? "Motion reel" : "AI video"}</span>
       <h2>{item.headline || "Your next post"}</h2>
       <div className={styles.secondaryActions}>
         <button disabled={!item.caption} onClick={async () => { try { await navigator.clipboard.writeText(item.caption); setMessage("Caption copied."); } catch { setMessage("Open Read caption and select its text to copy."); } }}>Copy caption</button>

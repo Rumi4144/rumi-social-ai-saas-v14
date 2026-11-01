@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     const [assets, posts, jobs] = await Promise.all([
       read("loading saved photo details", prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, campaignId: { in: ids }, status: { in: ["ready", "superseded"] }, url: { not: null }, kind: { in: ["ai_image", "product_photo", "reel_scene_image"] } }, select: { id: true, organizationId: true, campaignId: true, contentItemId: true, kind: true, status: true, prompt: true, metadata: true }, orderBy: [{ createdAt: "desc" }, { id: "asc" }] })),
       read("loading saved captions", prisma.contentItem.findMany({ where: { campaignId: { in: ids } }, select: { id: true, campaignId: true, type: true, headline: true, caption: true } })),
-      read("loading saved campaign history", prisma.job.findMany({ where: { organizationId: ctx.organizationId, AND: [{ OR: [{ type: "CREATE_EVERYTHING", status: "succeeded" }, { type: "WEEKLY_PACK" }] }, { OR: ids.map(id => ({ payload: { path: ["campaignId"], equals: id } })) }] }, select: { type: true, payload: true, result: true }, orderBy: { createdAt: "desc" } })),
+      read("loading saved campaign history", prisma.job.findMany({ where: { organizationId: ctx.organizationId, AND: [{ OR: [{ type: "CREATE_EVERYTHING", status: "succeeded" }, { type: { in: ["WEEKLY_PACK", "EXTRA_CREATION"] } }] }, { OR: ids.map(id => ({ payload: { path: ["campaignId"], equals: id } })) }] }, select: { type: true, payload: true, result: true }, orderBy: { createdAt: "desc" } })),
     ]);
     // Generated photos are stored as multi-megabyte data URLs. Planning needs
     // their identity, not their pixels: hash them in PostgreSQL so the photo
@@ -48,13 +48,13 @@ export async function POST(req: Request) {
     const photoUrls = new Map(identities.map(asset => [asset.id, asset.url]));
     step = "reading the saved campaign plan";
     function enrich(item: { id: string; campaignId: string; type: string; headline: string | null; caption: string | null }): AutoPlanPost {
-      const job = jobs.find(job => job.type !== "WEEKLY_PACK" && (job.payload as { campaignId?: string })?.campaignId === item.campaignId);
+      const job = jobs.find(job => job.type === "CREATE_EVERYTHING" && (job.payload as { campaignId?: string })?.campaignId === item.campaignId);
       const planned = (job?.result as { posts?: Array<{ type?: string; headline?: string; caption?: string; visualDirection?: string; planKey?: string }> })?.posts;
       const saved = Array.isArray(planned) ? planned.find(saved => saved.type === item.type && saved.headline === item.headline && saved.caption === item.caption) : undefined;
       const slots = (job?.payload as {contentPlan?: Array<{planKey?: string;topics?: string[]}>})?.contentPlan;
       const topics = Array.isArray(slots) && saved?.planKey ? slots.find(slot=>slot.planKey===saved.planKey)?.topics : undefined;
       const weeklySlots = (job?.payload as { weeklySlots?: WeeklySlot[] })?.weeklySlots;
-      const weeklyRecord = jobs.find(row => row.type === "WEEKLY_PACK" && (row.payload as { campaignId?: string })?.campaignId === item.campaignId);
+      const weeklyRecord = jobs.find(row => ["WEEKLY_PACK", "EXTRA_CREATION"].includes(row.type) && (row.payload as { campaignId?: string })?.campaignId === item.campaignId);
       const mapped = (weeklyRecord?.result as { items?: Array<{ slotKey: string; contentItemId: string }> })?.items?.find(entry => entry.contentItemId === item.id);
       const manifestSlots = (weeklyRecord?.payload as { slots?: WeeklySlot[] })?.slots;
       const weekly = mapped && Array.isArray(manifestSlots) ? manifestSlots.find(slot => slot.key === mapped.slotKey)

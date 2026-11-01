@@ -65,6 +65,9 @@ jobs:
       - run: node tests/compact-publishing-browser.cjs
       - run: node tests/instagram-connection-browser.cjs
       - run: node tests/user-activity-browser.cjs
+      - run: node tests/extras-browser.cjs
+        env:
+          EXTRAS_QA_DIR: qa-weekly/extras
       - run: node tests/weekly-customer-browser.cjs
       - run: node tests/weekly-picture-browser.cjs
         env:

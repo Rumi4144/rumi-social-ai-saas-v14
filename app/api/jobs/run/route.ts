@@ -394,6 +394,7 @@ export async function POST(req: Request) {
       days: number;
       contentPlan?: ContentSlot[];
       weeklyPackId?: string;
+      extraCreationId?: string;
       weeklySlots?: WeeklySlot[];
       weeklySources?: WeeklyPhoto[];
     dailyPlan?: Array<{
@@ -432,7 +433,7 @@ export async function POST(req: Request) {
       throw new Error("CAMPAIGN_NOT_FOUND");
     }
 
-    if (p.weeklyPackId && !campaign.brand.logoUrl) campaign.brand.logoUrl = await importWeeklyLogo(job.organizationId, campaign.brand);
+    if ((p.weeklyPackId || p.extraCreationId) && !campaign.brand.logoUrl) campaign.brand.logoUrl = await importWeeklyLogo(job.organizationId, campaign.brand);
 
     const plannedDates=calendarDraftPlan(p.dailyPlan,p.days);
 
@@ -470,12 +471,12 @@ export async function POST(req: Request) {
 
     // Preserve the purchased copy before validation/rendering. An Admin retry
     // can resume this exact result without another model request or debit.
-    if (p.weeklyPackId && !cachedPack) await prisma.job.update({ where: { id: job.id }, data: { result: { generatedPack: pack } as any } });
+    if ((p.weeklyPackId || p.extraCreationId) && !cachedPack) await prisma.job.update({ where: { id: job.id }, data: { result: { generatedPack: pack } as any } });
 
     pack.posts = applyContentPlan(pack.posts, p.contentPlan);
     if(plannedDates.size&&pack.posts.some(post=>!plannedDates.has(post.day)))throw new Error("A campaign post does not match its planned calendar day.");
     await prisma.$transaction(async (tx: any) => {
-      if (p.weeklyPackId && await tx.contentItem.count({ where: { campaignId: campaign.id } })) throw new Error("This weekly pack already has saved items. Review the existing items instead of recreating them.");
+      if ((p.weeklyPackId || p.extraCreationId) && await tx.contentItem.count({ where: { campaignId: campaign.id } })) throw new Error("This weekly pack already has saved items. Review the existing items instead of recreating them.");
       await tx.contentItem.deleteMany({
         where: { campaignId: campaign.id },
       });
@@ -642,6 +643,7 @@ IMPORTANT: Generate ONLY the underlying photography/artwork. The final image mus
         }
       }
 
+      if (p.extraCreationId) await tx.job.updateMany({ where: { id: p.extraCreationId, organizationId: job.organizationId, type: "EXTRA_CREATION" }, data: { status: "running", progress: 25, result: { items: weeklyItems } } });
       if (p.weeklyPackId) await tx.job.updateMany({ where: { id: p.weeklyPackId, organizationId: job.organizationId, type: "WEEKLY_PACK" }, data: { status: "running", progress: 25, result: { items: weeklyItems } } });
 
     for (const x of (p.contentPlan?.length ? [] : pack.stories)) {
