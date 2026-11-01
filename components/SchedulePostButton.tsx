@@ -5,6 +5,8 @@ import TikTokPostOptions from "./TikTokPostOptions";
 import type {TikTokPostOptions as TikTokOptions} from "@/lib/tiktok/options";
 import PostDeliveryStatus from "./PostDeliveryStatus";
 import XCaptionReview, { useXCaptionReview } from "./XCaptionReview";
+import YouTubePostOptions from "./YouTubePostOptions";
+import styles from "./PostOptions.module.css";
 
 type Connection = {
   id: string;
@@ -254,18 +256,11 @@ export default function SchedulePostButton({
       {open && (
         <div
         ref={schedulePanelRef}
-          style={{
-            marginTop: 12,
-            padding: 16,
-            border: "1px solid rgba(0,0,0,.12)",
-            borderRadius: 12,
-            width: "100%",
-          }}
+          className={styles.panel}
         >
           <strong>{allowPostNow ? "Post or schedule" : "Schedule Post"}</strong>
           <PostDeliveryStatus contentItemId={contentItemId} refreshKey={completed ? 1 : 0} />
-          <p>Select a destination for this post.</p>
-          {isVideo && <p>Google Business Profile is available for text and photo posts. Choose a photo for a Google post.</p>}
+          <p>Post to</p>
 
           <div style={{ marginTop: 12 }}>
             {loading && <p>Loading connected accounts...</p>}
@@ -277,20 +272,17 @@ export default function SchedulePostButton({
             {connections.map((connection) => (
               <label
                 key={connection.id}
-                style={{
-                  display: "block",
-                  marginBottom: 8,
-                }}
+                className={`${styles.check} ${styles.account}`}
               >
                 <input
                   type="checkbox"
                   disabled={busy || completed || loading || (connection.provider === "x" && connection.status !== "connected")}
                   checked={selected.includes(connection.id)}
                   onChange={() => toggleConnection(connection.id)}
-                />{" "}
+                /><span>
                 {connection.provider === "google_business" ? "Google Business Profile" : connection.provider === "instagram" ? "Instagram" : connection.provider === "x" ? "X (Twitter)" : connection.provider}
                 {connection.accountName ? ` · ${connection.accountName}` : ""}
-                {connection.provider === "x" && connection.status !== "connected" && <> · <a href="/settings/x" target="_blank" rel="noopener noreferrer">Enable X posting</a></>}
+                {connection.provider === "x" && connection.status !== "connected" && <> · <a href="/settings/x" target="_blank" rel="noopener noreferrer">Enable X posting</a></>}</span>
               </label>
             ))}
             {connectionsLoaded && !loading && !completed && !connections.some(connection => connection.provider.toLowerCase() === "instagram") && (
@@ -302,15 +294,14 @@ export default function SchedulePostButton({
             )}
             {!completed && <button type="button" disabled={busy || loading} onClick={() => setConnectionRefresh(value => value + 1)}>{loading ? "Loading accounts…" : "Refresh accounts"}</button>}
             {connections.some(connection => connection.provider === "x" && connection.status !== "connected") && <p>Enable X posting in the new tab, then return here and refresh accounts. Your post stays open.</p>}
-            {xSelected && <p>X will receive the caption reviewed below and the selected photo or reel. X may charge your developer balance for publishing.</p>}
           </div>
 
           {xSelected && !completed && <XCaptionReview state={xCaption} disabled={busy} />}
 
           {tikTokSelected&&<TikTokPostOptions connectionId={tikTokSelected.id} contentItemId={contentItemId} assetId={videoAssetId} disabled={busy||completed} onChange={setTikTokOptions}/>}
-          {youtubeSelected && <div><p>The selected video, post headline and caption will be uploaded at the scheduled time.</p><label>Visibility <select disabled={busy || completed} value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label><input type="checkbox" disabled={busy || completed} checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /> This video is made for kids</label><label><input type="checkbox" disabled={busy || completed} checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /> Contains realistic altered or synthetic content</label><label><input type="checkbox" disabled={busy || completed} checked={youtubeCertified} onChange={e=>setYoutubeCertified(e.target.checked)} /> I authorize this YouTube upload with the selected visibility, have rights to the video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</label></div>}
+          {youtubeSelected && <YouTubePostOptions disabled={busy || completed} privacy={privacy} onPrivacyChange={setPrivacy} madeForKids={madeForKids} onMadeForKidsChange={setMadeForKids} synthetic={synthetic} onSyntheticChange={setSynthetic} certified={youtubeCertified} onCertifiedChange={setYoutubeCertified} />}
           {tikTokSelected&&!tikTokOptions&&!completed&&<p role="status">Complete TikTok’s visibility, disclosure and upload permission settings to enable posting.</p>}
-          {allowPostNow && <label>When<select value={postNow ? "now" : "later"} disabled={busy || completed} onChange={event => setPostNow(event.target.value === "now")}><option value="now">Post now</option><option value="later">Schedule for later</option></select></label>}
+          {allowPostNow && <label className={`${styles.field} ${styles.when}`}>When<select value={postNow ? "now" : "later"} disabled={busy || completed} onChange={event => setPostNow(event.target.value === "now")}><option value="now">Post now</option><option value="later">Schedule for later</option></select></label>}
           {!postNow && <input
             type="datetime-local"
             disabled={busy || completed}
@@ -331,7 +322,7 @@ export default function SchedulePostButton({
             {completed ? "✓ Submitted" : busy ? "Preparing your post…" : postNow ? "Approve and post now" : allowPostNow || xSelected ? "Approve and schedule" : "Schedule Post"}
           </button>
 
-          <p role="status" aria-live="polite" style={{minHeight:"3em",marginTop:10}}>{completed ? "Submitted. Delivery status updates above." : ""}</p>
+          {completed && <p role="status" aria-live="polite">Submitted. Delivery status updates above.</p>}
           {error && (
             <p
               style={{

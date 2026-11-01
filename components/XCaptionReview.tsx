@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useId, useState } from "react";
 import { xCaptionMetrics, type XCaptionReview as Review } from "@/lib/x/caption";
+import styles from "./PostOptions.module.css";
 
 type Draft = { contentItemId: string; sourceText: string; text: string; hasMedia: boolean };
 export function useXCaptionReview(contentItemId: string, enabled: boolean) {
@@ -35,12 +36,22 @@ export function useXCaptionReview(contentItemId: string, enabled: boolean) {
 
 export default function XCaptionReview({ state, disabled = false }: { state: ReturnType<typeof useXCaptionReview>; disabled?: boolean }) {
   const id = useId();
-  return <section aria-label="X caption review" style={{ marginTop: 16 }}>
+  return <section aria-label="X caption review" className={styles.options}>
     <strong>Caption for X</strong>
-    <p>A shorter draft is prepared automatically when needed. Your full caption stays unchanged for other platforms. Review this version before approving and posting.</p>
     {state.loading && <p role="status">Preparing X caption…</p>}
-    {state.error && <p role="alert">{state.error}</p>}
-    <button type="button" onClick={state.refresh} disabled={disabled || state.loading}>Refresh X caption</button>
-    {state.draft && <><label htmlFor={id}>Edit X caption</label><textarea id={id} rows={5} value={state.draft.text} disabled={disabled} onChange={event => state.setText(event.target.value)} style={{ display: "block", width: "100%", boxSizing: "border-box" }} /><p role="status">{state.metrics.weightedLength} / 280 characters</p>{!state.metrics.valid && <p role="alert">{state.metrics.weightedLength > 280 ? "Shorten this X caption to 280 characters or fewer." : "Add valid text or select a photo or video."}</p>}</>}
+    {state.error && <><p role="alert">{state.error}</p><button type="button" onClick={state.refresh} disabled={disabled || state.loading}>Retry X caption</button></>}
+    {state.draft && <>
+      <p className={styles.caption}>{state.draft.text || "Media only"}</p>
+      <details>
+        <summary>Edit caption</summary>
+        <div className={styles.editor}>
+          <label htmlFor={id}>Edit X caption</label>
+          <textarea id={id} rows={4} value={state.draft.text} disabled={disabled} onChange={event => state.setText(event.target.value)} />
+          <span role="status">{state.metrics.weightedLength} / 280 characters</span>
+          <button type="button" onClick={state.refresh} disabled={disabled || state.loading}>Reset X caption</button>
+        </div>
+      </details>
+      {!state.metrics.valid && <p role="alert">{state.metrics.weightedLength > 280 ? "Shorten this X caption to 280 characters or fewer." : "Add valid text or select a photo or video."}</p>}
+    </>}
   </section>;
 }

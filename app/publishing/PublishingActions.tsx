@@ -4,6 +4,7 @@ import { useState } from "react";
 import PostDeliveryStatus from "@/components/PostDeliveryStatus";
 import { deliveryMessage, deliveryUrl, type ExistingDelivery } from "@/lib/publishing/eligibility";
 import XCaptionReview, { useXCaptionReview } from "@/components/XCaptionReview";
+import YouTubePostOptions from "@/components/YouTubePostOptions";
 
 export default function PublishingActions({
   contentItemId,
@@ -143,14 +144,7 @@ export default function PublishingActions({
   return (
     <div style={{ marginTop: "16px" }}>
       {isX && !completed && <XCaptionReview state={xCaption} disabled={busy} />}
-      {isX && <p>X will receive the caption reviewed here and the selected photo or reel. X may charge your developer balance for publishing.</p>}
-      {isYouTube && <div style={{ display: "grid", gap: 16, marginBottom: 16 }}>
-        <p>Uses this post’s selected video, headline and caption.</p>
-        <label style={{ display: "grid", gap: 8 }}>Visibility <select aria-label="Visibility" disabled={busy || completed} value={privacy} onChange={e=>setPrivacy(e.target.value as "public" | "unlisted" | "private")}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label>
-        <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}><input style={{ flexShrink: 0, marginTop: 5 }} type="checkbox" disabled={busy || completed} checked={madeForKids} onChange={e=>setMadeForKids(e.target.checked)} /><span>Made for kids</span></label>
-        <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}><input style={{ flexShrink: 0, marginTop: 5 }} type="checkbox" disabled={busy || completed} checked={synthetic} onChange={e=>setSynthetic(e.target.checked)} /><span>Realistic altered or synthetic content</span></label>
-        <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}><input style={{ flexShrink: 0, marginTop: 5 }} type="checkbox" disabled={busy || completed} checked={certified} onChange={e=>setCertified(e.target.checked)} /><span>I authorize the upload with the selected visibility, have rights to this video, and confirm it complies with YouTube’s Community Guidelines and Terms of Service.</span></label>
-      </div>}
+      {isYouTube && <YouTubePostOptions disabled={busy || completed} privacy={privacy} onPrivacyChange={setPrivacy} madeForKids={madeForKids} onMadeForKidsChange={setMadeForKids} synthetic={synthetic} onSyntheticChange={setSynthetic} certified={certified} onCertifiedChange={setCertified} />}
       <button
         type="button"
         disabled={busy || completed || (isX && !xCaption.ready)}

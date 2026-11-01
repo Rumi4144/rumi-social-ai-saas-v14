@@ -59,6 +59,7 @@ jobs:
       - run: node tests/tiktok-posting-browser.cjs
       - run: node tests/publishing-position-browser.cjs
       - run: node tests/social-account-selection-browser.cjs
+      - run: node tests/compact-publishing-browser.cjs
       - run: node tests/instagram-connection-browser.cjs
       - run: node tests/user-activity-browser.cjs
       - run: node tests/weekly-customer-browser.cjs

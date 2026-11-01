@@ -1,0 +1,57 @@
+.options {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.options p { margin: 0; }
+.caption { white-space: pre-wrap; }
+.options summary { cursor: pointer; font-weight: 600; }
+.editor { display: grid; gap: 8px; margin-top: 8px; }
+.editor textarea { display: block; width: 100%; box-sizing: border-box; }
+.editor button { justify-self: start; }
+
+.field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.field select { flex: 1; min-width: 110px; width: 100%; }
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+.check input[type="checkbox"] {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 2px 0 0;
+  padding: 0;
+}
+.check span { min-width: 0; }
+.consent { border-top: 1px solid #dce5e1; padding-top: 10px; }
+
+.panel {
+  box-sizing: border-box;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #dce5e1;
+  border-radius: 12px;
+  width: 100%;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.panel > p { margin: 8px 0; }
+.account { margin-bottom: 8px; }
+.when { margin: 12px 0; }

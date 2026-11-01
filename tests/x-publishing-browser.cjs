@@ -43,6 +43,9 @@ let browser, server;
   const receipt = page.getByRole('link', { name: 'View X post', exact: true });
 
   const xCaption = page.getByLabel('Edit X caption', {exact:true});
+  await page.getByRole('paragraph').filter({hasText:'Meet Rumi Guitars. Explore the collection.'}).waitFor();
+  assert.equal(await xCaption.isVisible(), false, 'The prepared caption is visible without opening an editor');
+  await page.getByText('Edit caption', {exact:true}).click();
   await xCaption.waitFor();
   assert.equal(await xCaption.inputValue(),'Meet Rumi Guitars. Explore the collection.');
   await xCaption.fill('a'.repeat(281));
@@ -107,7 +110,7 @@ let browser, server;
   const upload = page.getByRole('button', { name: 'Upload to YouTube · Rumi Guitars', exact: true });
   const kids = page.getByLabel('Made for kids', { exact: true });
   const synthetic = page.getByLabel('Realistic altered or synthetic content', { exact: true });
-  const consent = page.getByLabel(/I authorize the upload/);
+  const consent = page.getByLabel(/I approve this upload/);
   assert.equal(await kids.isChecked(), false); assert.equal(await synthetic.isChecked(), true); assert.equal(await consent.isChecked(), false);
   await upload.click();
   await page.getByText('Confirm YouTube upload settings first.', { exact: true }).waitFor();
