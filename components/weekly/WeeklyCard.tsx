@@ -10,12 +10,15 @@ import ChangeDesign from "./ChangeDesign";
 
 const platformNames: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", google_business: "Google Business Profile", youtube: "YouTube", tiktok: "TikTok", x: "X" };
 
-export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy = false }: { item: WeeklyItem; canManage: boolean; onChanged: () => void; onFinish?: (item: WeeklyItem) => void; busy?: boolean }) {
+export type ReelFeedback = { running: boolean; message: string; progress: number; error?: string };
+
+export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy = false, reelFeedback, onPauseReel }: { item: WeeklyItem; canManage: boolean; onChanged: () => void; onFinish?: (item: WeeklyItem) => void; busy?: boolean; reelFeedback?: ReelFeedback; onPauseReel?: () => void }) {
   const [pending, setPending] = useState(false), [message, setMessage] = useState("");
   const [changesOpen, setChangesOpen] = useState(false), [comment, setComment] = useState("");
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [pictureOpen, setPictureOpen] = useState(false);
   const [designOpen, setDesignOpen] = useState(false);
+  const [finishOpen, setFinishOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false), [dateOpen, setDateOpen] = useState(false);
   const [dateDraft, setDateDraft] = useState(item.plannedDate || item.date);
   const preview = useRef<HTMLDialogElement>(null);
@@ -23,7 +26,8 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
   const approved = published || ["approved", "scheduled", "published"].includes(item.status);
   const locked = ["scheduled", "published"].includes(item.status) || item.deliveries.some(delivery => lockedDeliveryStatuses.includes(delivery.status));
   const excludedAccounts = item.deliveries.filter(delivery => lockedDeliveryStatuses.includes(delivery.status)).map(delivery => delivery.connectionId);
-  const title = item.changeRequest ? "Changes requested" : item.needsAttention ? "Needs attention" : published ? "Posted" : item.status === "scheduled" ? "Scheduled" : approved ? "Approved" : item.isReady ? "Ready to review" : "Being prepared";
+  const canFinish = canManage && ["finish_motion_reel", "finish_ai_video"].includes(item.nextAction) && !!onFinish && !item.changeRequest;
+  const title = item.changeRequest ? "Changes requested" : item.needsAttention || reelFeedback?.error ? "Needs attention" : published ? "Posted" : item.status === "scheduled" ? "Scheduled" : approved ? "Approved" : item.isReady ? "Ready to review" : reelFeedback?.running ? "Preparing reel" : canFinish ? "Not finished" : "Being prepared";
   const plannedDate = item.plannedDate || item.date;
   const canEditDate = canManage && item.canChangeDate && !locked;
   const canReplacePicture = canManage && !locked && ["draft", "approved"].includes(item.status) && item.kind === "image" && item.mediaKind === "image" && item.isReady && !item.changeRequest;
@@ -72,7 +76,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
     <div className={styles.postBody}>
       <div className={styles.dateRow}>
         {canEditDate ? <button className={styles.dateButton} disabled={pending || busy} aria-label={`Change planned date: ${item.headline}`} aria-expanded={dateOpen} onClick={() => { setDateDraft(plannedDate); setDateOpen(!dateOpen); }}><CalendarDays size={15} aria-hidden="true" /><span><small>Planned date</small>{formattedDate}</span></button> : <span className={styles.savedDate}><CalendarDays size={15} aria-hidden="true" /><span><small>Planned date</small><time dateTime={plannedDate}>{formattedDate}</time></span></span>}
-        <span className={styles.badge} data-attention={item.needsAttention || undefined}>{title}</span>
+        <span className={styles.badge} data-attention={item.needsAttention || !!reelFeedback?.error || undefined}>{title}</span>
       </div>
       {dateOpen && canEditDate && <form className={styles.dateForm} onSubmit={event => { event.preventDefault(); void saveDate(); }}><label htmlFor={`date-${item.id}`}>Planned post date</label><input id={`date-${item.id}`} type="date" value={dateDraft} onChange={event => setDateDraft(event.target.value)} required disabled={pending} /><p>Choose when you plan to post. This does not start automatic posting.</p><div><button className={styles.primary} disabled={pending || busy || !dateDraft}>Save date</button><button type="button" disabled={pending} onClick={() => setDateOpen(false)}>Cancel</button></div></form>}
       <div className={styles.actions}>
@@ -84,8 +88,15 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
         <button disabled={pending || busy} onClick={() => setPictureOpen(true)}><ImagePlus size={14} aria-hidden="true" />Replace picture</button>
         <button disabled={pending || busy} onClick={() => setDesignOpen(true)}><LayoutTemplate size={14} aria-hidden="true" />Change design</button>
       </div>}
-      {canManage && item.nextAction === "finish_motion_reel" && onFinish && !item.changeRequest && <button className={styles.finish} disabled={pending || busy} onClick={() => onFinish(item)}>Finish reel · 4 credits</button>}
-      {canManage && item.nextAction === "finish_ai_video" && onFinish && !item.changeRequest && <button className={styles.finish} disabled={pending || busy} onClick={() => onFinish(item)}>Finish AI video · up to 120 credits</button>}
+      {canFinish && !finishOpen && <button className={styles.finish} disabled={pending || busy} onClick={() => setFinishOpen(true)}>{reelFeedback?.running ? "Preparing reel…" : item.kind === "ai_video" ? "Finish AI video · up to 120 credits" : "Finish reel · 4 credits"}</button>}
+      {canFinish && finishOpen && <section className={styles.reelFeedback} aria-label="Finish reel confirmation">
+        <p>{item.kind === "ai_video" ? "Create three moving product scenes, music and captions for up to 120 Rumi credits?" : "Finish three photo scenes, music and captions for 4 Rumi credits?"} Saved paid requests resume without a second charge. Review the finished draft before posting.</p>
+        <div className={styles.actions}><button className={styles.primary} disabled={pending || busy} onClick={() => { setFinishOpen(false); onFinish?.(item); }}>{item.kind === "ai_video" ? "Start AI video · up to 120 credits" : "Start reel · 4 credits"}</button><button disabled={pending || busy} onClick={() => setFinishOpen(false)}>Cancel</button></div>
+      </section>}
+      {reelFeedback && <section className={styles.reelFeedback} aria-label="Reel preparation">
+        {reelFeedback.error ? <p role="alert" className={styles.reelError}>{reelFeedback.error}</p> : <p role="status">{reelFeedback.message}</p>}
+        {reelFeedback.running && <><progress value={reelFeedback.progress} max={100} aria-label="Reel preparation progress" />{onPauseReel && <button className={styles.finish} onClick={onPauseReel}>Pause this reel</button>}</>}
+      </section>}
       {detailsOpen && <section className={styles.postDetails} aria-label={`Post details: ${item.headline}`}>
       <span className={styles.kind}>{item.type === "presenter_post" ? "Presenter" : item.kind === "image" ? "Image post" : item.kind === "motion_reel" ? "Motion reel" : "AI video"}</span>
       <h2>{item.headline || "Your next post"}</h2>

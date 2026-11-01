@@ -91,6 +91,10 @@
 .secondaryActions { display:flex; flex-wrap:wrap; gap:6px; }
 .secondaryActions button { font-size:12px; padding:8px; flex:1 1 auto; }
 .workspace button.finish { margin-top:6px; width:100%; font-size:12px; padding:8px; }
+.reelFeedback { margin-top:8px; padding:10px; border:1px solid #bcd4c7; border-radius:10px; background:#f2faf5; font-size:12px; overflow-wrap:anywhere; }
+.reelFeedback p { margin:0; line-height:1.5; }
+.reelFeedback progress { display:block; width:100%; margin-top:8px; }
+.reelError { color:#783720; }
 .workspace .actions button.primary { background:#176c5e; border-color:#176c5e; color:white; }
 .workspace .actions button.primary:hover:not(:disabled) { background:#12594d; border-color:#12594d; }
 .notice { color:#75501d; background:#fff5df; border-radius:10px; padding:12px; font-size:14px; line-height:1.5; }

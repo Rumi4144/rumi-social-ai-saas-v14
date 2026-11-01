@@ -2,8 +2,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WeeklyItem, WeeklyResponse } from "@/lib/weekly/types";
 import { weeklyMixQuote } from "@/lib/billing/packages";
-import WeeklyCard from "./WeeklyCard";
+import WeeklyCard, { type ReelFeedback } from "./WeeklyCard";
 import { finishWeeklyReel, finishWeeklyAIReel } from "./finish-reel";
+import { resumeReelAudio } from "@/lib/reels/browser-audio";
 import styles from "./weekly.module.css";
 
 export default function WeeklyWorkspace({ isAdmin = false }: { isAdmin?: boolean }) {
@@ -11,6 +12,7 @@ export default function WeeklyWorkspace({ isAdmin = false }: { isAdmin?: boolean
   const [brandId, setBrandId] = useState(""), [weekStart, setWeekStart] = useState("");
   const [imagesOnly, setImagesOnly] = useState(false), [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(""), [progress, setProgress] = useState(0);
+  const [reelFeedback, setReelFeedback] = useState<Record<string, ReelFeedback>>({});
   const controller = useRef<AbortController | null>(null), mounted = useRef(true);
   const selection = `${brandId}:${weekStart}`;
   const currentSelection = useRef(selection); currentSelection.current = selection;
@@ -24,7 +26,7 @@ export default function WeeklyWorkspace({ isAdmin = false }: { isAdmin?: boolean
   }, [queryText]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort(); }; }, []);
   useEffect(() => {
-    const active = new AbortController(); setError(""); setData(null); setMessage("");
+    const active = new AbortController(); setError(""); setData(null); setMessage(""); setReelFeedback({});
     void refresh(active.signal).catch(err => { if (!active.signal.aborted) setError(err.message); });
     return () => active.abort();
   }, [refresh]);
@@ -37,17 +39,24 @@ export default function WeeklyWorkspace({ isAdmin = false }: { isAdmin?: boolean
   const mix = data ? imagesOnly ? { images: data.plan.weeklyPosts, motionReels: 0, aiVideos: 0 } : data.prepare.mix : null;
   const quote = mix ? weeklyMixQuote(mix) : null;
   const weekItems = data?.pack ? data.items : [];
+  const updateReel = (id: string, feedback: ReelFeedback) => { if (mounted.current) setReelFeedback(previous => ({ ...previous, [id]: feedback })); };
 
   async function run(prepareNew: boolean, single?: WeeklyItem) {
-    if (!data || busy || !data.canManage || !mix || !quote || (!prepareNew && !data.pack)) return;
-    if (single && !window.confirm(single.kind === "ai_video" ? "Create three moving product scenes, music and captions for 120 Rumi credits? An existing saved request is resumed without a second charge. Review the finished product details before approving." : "Finish this reel with three photos, music and captions for 4 Rumi credits? It will stay a draft for your review.")) return;
+    if (!data || controller.current || !data.canManage || !mix || !quote || (!prepareNew && !data.pack)) return;
     const active = new AbortController(); controller.current = active; setBusy(true); setError(""); setProgress(0);
     const key = selection;
+    let activeReelId = single?.id;
+    setMessage(single ? "Starting your reel. Keep this tab visible." : "Starting preparation…");
+    if (single) updateReel(single.id, { running: true, message: "Starting your reel. Keep this tab visible.", progress: 0 });
     let audio: AudioContext | undefined;
-    try { audio = new AudioContext(); await audio.resume(); } catch { /* Image-only preparation does not require audio. */ }
     const pauseHidden = () => { if (document.hidden) active.abort(); };
     document.addEventListener("visibilitychange", pauseHidden);
     try {
+      if (single || ((prepareNew || data.pack?.pendingJobs) && mix.motionReels + mix.aiVideos > 0) || weekItems.some(item => ["finish_motion_reel", "finish_ai_video"].includes(item.nextAction) && !item.changeRequest)) {
+        if (typeof AudioContext === "undefined") throw new Error("Use a recent Chrome or Safari browser to finish your reels.");
+        audio = new AudioContext();
+        await resumeReelAudio(audio, active.signal);
+      }
       let latest = data;
       if (prepareNew) {
         const storageKey = `rumi-weekly-pack:${data.organizationId}:${data.brand?.id}:${data.weekStart}`;
@@ -78,17 +87,35 @@ export default function WeeklyWorkspace({ isAdmin = false }: { isAdmin?: boolean
       const reels = single ? [single] : latest.items.filter(item => ["finish_motion_reel", "finish_ai_video"].includes(item.nextAction) && !item.changeRequest);
       const issues: string[] = [];
       for (const reel of reels) {
+        activeReelId = reel.id;
         if (active.signal.aborted || currentSelection.current !== key) throw new Error("Paused. Completed posts are saved.");
-        if (!audio) { issues.push("Use a recent Chrome or Safari browser to finish your reels."); break; }
-        try { await (reel.kind === "ai_video" ? finishWeeklyAIReel : finishWeeklyReel)({ item: reel, organizationId: data.organizationId, audio, signal: active.signal, progress: (value, text) => { setProgress(value); setMessage(text); } }); }
-        catch (failure) { if (active.signal.aborted) throw failure; issues.push(`${reel.headline}: ${failure instanceof Error ? failure.message : "Needs Admin attention."}`); }
+        updateReel(reel.id, { running: true, message: "Starting your reel. Keep this tab visible.", progress: 0 });
+        try {
+          if (!audio) throw new Error("Use a recent Chrome or Safari browser to finish your reels.");
+          await (reel.kind === "ai_video" ? finishWeeklyAIReel : finishWeeklyReel)({ item: reel, organizationId: data.organizationId, audio, signal: active.signal, progress: (value, text) => { setProgress(value); setMessage(text); updateReel(reel.id, { running: true, message: text, progress: value }); } });
+          updateReel(reel.id, { running: false, message: "Reel saved. Review it before approving.", progress: 100 });
+        }
+        catch (failure) {
+          if (active.signal.aborted) throw failure;
+          const reason = failure instanceof Error ? failure.message : "Needs Admin attention.";
+          issues.push(`${reel.headline}: ${reason}`);
+          updateReel(reel.id, { running: false, message: "", progress: 0, error: reason });
+        }
+        activeReelId = undefined;
         latest = await refresh(active.signal);
       }
       latest = await refresh(active.signal);
       if (issues.length) setError(issues.join(" "));
-      setProgress(100); setMessage(latest.items.some(item => !item.isReady) ? "Your finished posts are ready to review. The remaining items show what they need below." : "Your week is ready to review. Approve each post, then download, schedule or post it.");
-    } catch (failure) { if (mounted.current) setError(active.signal.aborted ? "Paused. Your completed posts are saved. Resume to finish the remaining items." : failure instanceof Error ? failure.message : "Could not finish preparation."); }
-    finally { document.removeEventListener("visibilitychange", pauseHidden); await audio?.close().catch(() => {}); controller.current = null; if (mounted.current) { setBusy(false); void refresh().catch(() => {}); } }
+      if (!issues.length) setProgress(100);
+      setMessage(issues.length ? "Some reels could not finish. See the message on each reel below." : latest.items.some(item => !item.isReady) ? "Your finished posts are ready to review. The remaining items show what they need below." : "Your week is ready to review. Approve each post, then download, schedule or post it.");
+    } catch (failure) {
+      if (mounted.current) {
+        const reason = active.signal.aborted ? "Paused. Your completed posts are saved. Resume to finish the remaining items." : failure instanceof Error ? failure.message : "Could not finish preparation.";
+        setError(reason); setMessage("");
+        if (activeReelId) updateReel(activeReelId, { running: false, message: "", progress: 0, error: reason });
+      }
+    }
+    finally { document.removeEventListener("visibilitychange", pauseHidden); void audio?.close().catch(() => {}); controller.current = null; if (mounted.current) { setBusy(false); void refresh().catch(() => {}); } }
   }
 
   function moveWeek(direction: number) {
@@ -109,7 +136,7 @@ export default function WeeklyWorkspace({ isAdmin = false }: { isAdmin?: boolean
       {data.pack && data.canManage && !busy && (data.pack.pendingJobs > 0 || weekItems.some(item => ["finish_motion_reel", "finish_ai_video"].includes(item.nextAction))) && <section className={styles.progress}><h2>Finish your week</h2><p>Completed posts are saved. Remaining motion reels cost 4 credits each; new AI videos cost 120 credits each. Existing paid requests are resumed without another charge. Keep this tab visible while videos are created.</p><button className={styles.primary} onClick={() => void run(false)}>Resume remaining posts</button></section>}
       {(busy || message) && <section className={styles.progress} aria-live="polite"><p>{message}</p>{busy && <><progress value={progress} max={100} aria-label="Weekly preparation progress" /><button onClick={() => controller.current?.abort()}>Pause preparation</button></>}</section>}
       {isAdmin && <p><a href="/campaigns">View older drafts and campaigns in Admin →</a></p>}
-      <div className={styles.grid}>{weekItems.map(item => <WeeklyCard key={item.id} item={item} canManage={data.canManage} busy={busy} onChanged={changed} onFinish={item => void run(false, item)} />)}</div>
+      <div className={styles.grid}>{weekItems.map(item => <WeeklyCard key={item.id} item={item} canManage={data.canManage} busy={busy} onChanged={changed} onFinish={item => void run(false, item)} reelFeedback={reelFeedback[item.id]} onPauseReel={() => controller.current?.abort()} />)}</div>
       {data.pack && !weekItems.length && <section className={styles.empty}><h2>{data.pack.status === "complete" ? "All done for this week" : "Your week is being prepared"}</h2><p>{data.pack.status === "complete" ? "Your published posts stay in this week. Refresh to load their previews." : data.pack.error || "Your post previews will appear here as they finish."}</p></section>}
       <footer className={styles.plan}><strong>Your saved weeks</strong> · {data.annualPlan.preparedWeeks} prepared.<br />New posts are prepared one week at a time under your current plan; approved and published posts stay in their original week. Use the week arrows to revisit them.</footer>
     </>}

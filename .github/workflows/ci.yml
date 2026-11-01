@@ -78,6 +78,7 @@ jobs:
       - run: node tests/draft-planned-date-browser.cjs
       - run: node tests/onboarding-browser.cjs
       - run: node tests/weekly-video-browser.cjs
+      - run: node tests/weekly-finish-browser.cjs
       - run: node tests/weekly-billing-browser.cjs
         env:
           WEEKLY_BILLING_QA_DIR: qa-weekly/billing
