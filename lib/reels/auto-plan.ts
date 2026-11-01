@@ -31,6 +31,25 @@ function metadata(asset: AutoPlanAsset): { label?: string; sceneId?: string; occ
   return asset.metadata && typeof asset.metadata === "object" ? asset.metadata : {};
 }
 function subjectText(asset: AutoPlanAsset) {
+  // Included scene prompts carry the full business profile as JSON. Its service
+  // list describes the business, not everything visible in this particular shot.
+  // Keep the scene's own direction and original post for subject matching, also
+  // for photos saved before this distinction was made.
+  const savedContext = asset.kind === "reel_scene_image"
+    ? (asset.prompt || "").match(/\nPost context \(data\): ([^\r\n]+)/)
+    : null;
+  if (savedContext) {
+    try {
+      const context: unknown = JSON.parse(savedContext[1]);
+      if (context && typeof context === "object" && !Array.isArray(context) &&
+          "headline" in context && typeof context.headline === "string" &&
+          "caption" in context && typeof context.caption === "string" &&
+          "direction" in context && typeof context.direction === "string") {
+        const shot = (asset.prompt || "").slice(0, savedContext.index);
+        return `${shot} ${context.headline} ${context.caption} ${context.direction} ${asset.post?.headline || ""} ${asset.post?.caption || ""} ${metadata(asset).label || ""}`;
+      }
+    } catch { /* Older or malformed prompts keep the conservative fallback. */ }
+  }
   // Generation prompts append brand/product safety boilerplate. It is not evidence
   // that a photograph actually depicts one of those subjects.
   const prompt = (asset.prompt || "").split(/PRODUCT FIDELITY|Business context:|These fields|CAMPAIGN VISUAL DIVERSITY/i)[0].slice(0, 2000);

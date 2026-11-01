@@ -108,6 +108,22 @@ test('AI scene plan never fills a missing or rejected shot with another customer
   }
 });
 
+test('included scene selection uses the post subject rather than unrelated services in the business profile',()=>{
+  const business={...brand,name:'Master Mind Advanced Hypnosis',industry:'Hypnotherapy',description:'Support for smoking cessation, weight management, sleep and phobias.',targetAudience:'Adults exploring support for smoking, sleep or weight management.'};
+  const post={id:'post',type:'reel_post',headline:'Are You Still in Control?',caption:'Discuss your goals and remain in control during guided practice.',plannedAIPhotos:true};
+  const scenes=weeklyScenePhotos({...input,brand:business,headline:post.headline,caption:post.caption,direction:'An adult asking a practitioner questions in a bright consultation room.'});
+  const assets=scenes.map((scene,index)=>({id:`scene-${index}`,organizationId:'org',brandId:'brand',campaignId:'campaign',contentItemId:'post',kind:'reel_scene_image',status:'ready',url:`https://photo.test/${index}.png`,prompt:scene.prompt,metadata:{sceneId:scene.sceneId,photoReview:{status:'passed',issues:[]}},post}));
+  const make=photos=>automaticReelPlan({organizationId:'org',campaignId:'campaign',brand:{...business,color:'#123456',accent:'#abcdef',website:''},post,assets:photos});
+  assert.equal(make(assets).sources.length,3,'The full service list does not describe each scene');
+  for(const wrongContext of [{direction:'An adult holding a cigarette.'},{headline:'Weight loss consultation'},{caption:'Help with insomnia and sleep.'}]) {
+    const context={...scenes[0].context,...wrongContext};
+    const wrong={...assets[0],prompt:scenes[0].prompt.replace(JSON.stringify(scenes[0].context),JSON.stringify(context))};
+    assert.equal(make([wrong,...assets.slice(1)]).sources.length,2,'Actual wrong scene subjects remain excluded');
+  }
+  assert.equal(make([{...assets[0],metadata:{...assets[0].metadata,photoReview:{status:'failed'}}},...assets.slice(1)]).sources.length,2);
+  assert.equal(make([{...assets[0],prompt:'A cigarette beside an adult.\nPost context (data): {malformed'},...assets.slice(1)]).sources.length,2);
+});
+
 test('failed weekly scene review permits only one replacement, and missing scenes remain incomplete',async()=>{
   const old=process.env.WORKER_SECRET;process.env.WORKER_SECRET='fixture-secret';
   try {
