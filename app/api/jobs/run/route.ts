@@ -8,7 +8,8 @@ import { recentBrandConcepts, regenerationVariationIndex } from "@/lib/ai/visual
 import { generateCampaign } from "@/lib/ai/campaign";
 import { applyContentPlan, type ContentSlot } from "@/lib/campaign/content-plan";
 import { matchingWebsitePhoto, modelCodes, type PhotoEvidence } from "@/lib/campaign/photo-matching";
-import { renderSocialSvg } from "@/lib/render/svg";
+import { pictureRecipe } from "@/lib/render/picture-recipe";
+import { renderSocialSvg, type SocialSvgInput } from "@/lib/render/svg";
 import { automaticShowcaseStyle } from "@/lib/render/showcase";
 import { occasionVisualConcept, savedPostOccasion } from "@/lib/ai/occasion";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
@@ -307,7 +308,7 @@ export async function POST(req: Request) {
 
         const designStyle = p.designStyle || automaticShowcaseStyle(contentItem.id, brand.designStyle);
         const logoUrl = await logoToPngDataUrl(brand.logoUrl, brand.websiteUrl);
-        const svg = renderSocialSvg({
+        const renderInput: SocialSvgInput = {
           headline: contentItem.headline || "Campaign Creative",
           cta: "Discover More",
           brand: brand.name,
@@ -322,7 +323,8 @@ export async function POST(req: Request) {
           bodyFont: brand.bodyFont || undefined,
           designStyle,
           ...(designStyle.startsWith("weekly-") ? { designFonts: await weeklyDesignFonts() } : {}),
-        });
+        };
+        const svg = renderSocialSvg(renderInput);
 
         const creativeJpeg = await svgToPublishJpeg(svg);
         const creativeUrl = `data:image/jpeg;base64,${creativeJpeg.toString("base64")}`;
@@ -342,6 +344,8 @@ export async function POST(req: Request) {
               format === "story" ? 1920 : format === "portrait" ? 1350 : 1080,
             brandId: brand.id,
             designStyle,
+            textPosition: renderInput.textPosition,
+            pictureRecipe: pictureRecipe(renderInput),
           },
         };
 

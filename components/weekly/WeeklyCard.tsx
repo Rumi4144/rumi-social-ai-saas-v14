@@ -1,10 +1,11 @@
 "use client";
 import { useRef, useState } from "react";
-import { CalendarDays, Check, Download, MoreHorizontal, ZoomIn } from "lucide-react";
+import { CalendarDays, Check, Download, ImagePlus, MoreHorizontal, ZoomIn } from "lucide-react";
 import SchedulePostButton from "@/components/SchedulePostButton";
 import type { WeeklyItem } from "@/lib/weekly/types";
 import { fullyPublished, lockedDeliveryStatuses } from "./item-policy";
 import styles from "./weekly.module.css";
+import ReplacePicture from "./ReplacePicture";
 
 const platformNames: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", google_business: "Google Business Profile", youtube: "YouTube", tiktok: "TikTok", x: "X" };
 
@@ -12,6 +13,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
   const [pending, setPending] = useState(false), [message, setMessage] = useState("");
   const [changesOpen, setChangesOpen] = useState(false), [comment, setComment] = useState("");
   const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [pictureOpen, setPictureOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false), [dateOpen, setDateOpen] = useState(false);
   const [dateDraft, setDateDraft] = useState(item.plannedDate || item.date);
   const preview = useRef<HTMLDialogElement>(null);
@@ -22,6 +24,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
   const title = item.changeRequest ? "Changes requested" : item.needsAttention ? "Needs attention" : published ? "Posted" : item.status === "scheduled" ? "Scheduled" : approved ? "Approved" : item.isReady ? "Ready to review" : "Being prepared";
   const plannedDate = item.plannedDate || item.date;
   const canEditDate = canManage && item.canChangeDate && !locked;
+  const canReplacePicture = canManage && !locked && ["draft", "approved"].includes(item.status) && item.kind === "image" && item.mediaKind === "image" && item.isReady && !item.changeRequest;
   const formattedDate = new Date(`${plannedDate.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 
   async function saveDate() {
@@ -63,6 +66,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
     <div className={styles.media}>
       {item.mediaKind === "video" && item.previewUrl ? <video src={item.previewUrl} controls preload="metadata" playsInline aria-label={`Preview ${item.headline}`} /> : item.previewUrl ? <button className={styles.imageButton} aria-haspopup="dialog" aria-label={`Enlarge image: ${item.headline}`} onClick={() => preview.current?.showModal()}><img src={item.previewUrl} alt={item.headline || "Post preview"} loading="lazy" /><span className={styles.enlarge}><ZoomIn size={16} aria-hidden="true" /><span>Enlarge</span></span></button> : <div className={styles.placeholder}><strong>{item.kind === "image" ? "Your design is on its way" : "Your video is not finished yet"}</strong><span>Finished media will appear here.</span></div>}
       {item.kind !== "image" && item.mediaKind !== "video" && !item.isReady && <span className={styles.unfinished}>Source photo · video not finished</span>}
+      {canReplacePicture && <button className={styles.replacePicture} disabled={pending || busy} onClick={() => setPictureOpen(true)}><ImagePlus size={15} aria-hidden="true" />Replace picture</button>}
     </div>
     <div className={styles.postBody}>
       <div className={styles.dateRow}>
@@ -99,5 +103,6 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
       <div className={styles.previewHeader}><strong>{item.headline || "Post preview"}</strong><button autoFocus onClick={() => preview.current?.close()} aria-label="Close image preview">Close ✕</button></div>
       <img src={item.previewUrl} alt={item.headline || "Full-size post preview"} />
     </dialog>}
+    {pictureOpen && <ReplacePicture item={item} onClose={() => setPictureOpen(false)} onSaved={() => { setPictureOpen(false); setDeliveryOpen(false); setMessage("Picture replaced. Review the updated ad, then approve it again."); onChanged(); }} />}
   </article>;
 }

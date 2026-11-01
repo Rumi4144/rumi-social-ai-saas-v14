@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { renderSocialSvg } from "@/lib/render/svg";
+import { pictureRecipe } from "@/lib/render/picture-recipe";
+import { renderSocialSvg, type SocialSvgInput } from "@/lib/render/svg";
 import { businessVisualMode } from "@/lib/ai/visual-plan";
 import { isShowcaseStyle, automaticShowcaseStyle } from "@/lib/render/showcase";
 import { isWeeklyDesign } from "@/lib/render/weekly-layouts";
@@ -54,6 +55,42 @@ export async function POST(req: Request) {
 
     const designStyle = parsed.data.designStyle && parsed.data.designStyle !== "automatic" ? parsed.data.designStyle : automaticShowcaseStyle(post?.id||parsed.data.headline,brand.designStyle);
 
+    let embeddedImageUrl = parsed.data.imageUrl;
+    if (embeddedImageUrl) {
+      embeddedImageUrl = await imageToJpegDataUrl(embeddedImageUrl);
+    }
+
+    const embeddedImages: string[] = [];
+    if (isShowcaseStyle(designStyle) && post) {
+      const photos = await prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, campaignId: post.campaignId, contentItemId: post.id, kind: { in: ["ai_image", "product_photo", "reel_scene_image"] }, status: "ready", url: { not: null } }, select: { url: true }, orderBy: { createdAt: "asc" }, take: 12 });
+      const extras = [...new Set(photos.map(photo => photo.url).filter((url): url is string => Boolean(url) && url !== parsed.data.imageUrl))].slice(0, 2);
+      const results = await Promise.allSettled(extras.map(url => imageToJpegDataUrl(url)));
+      for (const result of results) if (result.status === "fulfilled") embeddedImages.push(result.value);
+    }
+
+    const logoUrl = await logoToPngDataUrl(brand.logoUrl, brand.websiteUrl);
+    const renderInput: SocialSvgInput = {
+      headline: parsed.data.headline,
+      subheadline: parsed.data.subheadline,
+      cta: parsed.data.cta,
+      imageUrl: embeddedImageUrl,
+      imageUrls: embeddedImages,
+      detailCrops: businessVisualMode({ industry: brand.industry, description: brand.description }) === "product",
+      format: parsed.data.format,
+      textPosition: parsed.data.textPosition || "left",
+
+      brand: brand.name,
+      logoUrl,
+      primaryColor: brand.primaryColor || undefined,
+      secondaryColor: brand.secondaryColor || undefined,
+      accentColor: brand.accentColor || undefined,
+      headingFont: brand.headingFont || undefined,
+      bodyFont: brand.bodyFont || undefined,
+      designStyle,
+      ...(isWeeklyDesign(designStyle) ? { designFonts: await weeklyDesignFonts() } : {}),
+    };
+    const svg = renderSocialSvg(renderInput);
+
     // Browser-captured raster is the source of truth: save exactly what the user saw.
     if (parsed.data.browserRasterDataUrl) {
       if (!parsed.data.browserRasterDataUrl.startsWith("data:image/jpeg;base64,")) {
@@ -76,6 +113,7 @@ export async function POST(req: Request) {
           designStyle,
           textPosition: parsed.data.textPosition || "left",
           rasterizedInBrowser: true,
+          pictureRecipe: pictureRecipe(renderInput),
         },
       };
 
@@ -84,41 +122,6 @@ export async function POST(req: Request) {
 
       return NextResponse.json({ assetId: asset.id, url: parsed.data.browserRasterDataUrl, format: parsed.data.format });
     }
-
-    let embeddedImageUrl = parsed.data.imageUrl;
-    if (embeddedImageUrl) {
-      embeddedImageUrl = await imageToJpegDataUrl(embeddedImageUrl);
-    }
-
-    const embeddedImages: string[] = [];
-    if (isShowcaseStyle(designStyle) && post) {
-      const photos = await prisma.mediaAsset.findMany({ where: { organizationId: ctx.organizationId, campaignId: post.campaignId, contentItemId: post.id, kind: { in: ["ai_image", "product_photo", "reel_scene_image"] }, status: "ready", url: { not: null } }, select: { url: true }, orderBy: { createdAt: "asc" }, take: 12 });
-      const extras = [...new Set(photos.map(photo => photo.url).filter((url): url is string => Boolean(url) && url !== parsed.data.imageUrl))].slice(0, 2);
-      const results = await Promise.allSettled(extras.map(url => imageToJpegDataUrl(url)));
-      for (const result of results) if (result.status === "fulfilled") embeddedImages.push(result.value);
-    }
-
-    const logoUrl = await logoToPngDataUrl(brand.logoUrl, brand.websiteUrl);
-    const svg = renderSocialSvg({
-      headline: parsed.data.headline,
-      subheadline: parsed.data.subheadline,
-      cta: parsed.data.cta,
-      imageUrl: embeddedImageUrl,
-      imageUrls: embeddedImages,
-      detailCrops: businessVisualMode({ industry: brand.industry, description: brand.description }) === "product",
-      format: parsed.data.format,
-      textPosition: parsed.data.textPosition || "left",
-
-      brand: brand.name,
-      logoUrl,
-      primaryColor: brand.primaryColor || undefined,
-      secondaryColor: brand.secondaryColor || undefined,
-      accentColor: brand.accentColor || undefined,
-      headingFont: brand.headingFont || undefined,
-      bodyFont: brand.bodyFont || undefined,
-      designStyle,
-      ...(isWeeklyDesign(designStyle) ? { designFonts: await weeklyDesignFonts() } : {}),
-    });
 
     if (parsed.data.prepareOnly) {
       return NextResponse.json({
@@ -150,6 +153,7 @@ export async function POST(req: Request) {
         brandId: brand.id,
         designStyle,
         textPosition: parsed.data.textPosition || "left",
+        pictureRecipe: pictureRecipe(renderInput),
       },
     };
 

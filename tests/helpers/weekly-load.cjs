@@ -12,7 +12,7 @@ function load(file, mocks = {}, cache = new Map()) {
     }
     return require(name);
   };
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText, { module, exports: module.exports, require: req, process, console, URL, Response, Request, Buffer }, { filename: file });
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText, { module, exports: module.exports, require: req, process, console, URL, Response, Request, Buffer, Blob, Uint8Array }, { filename: file });
   return module.exports;
 }
 module.exports = { load };
