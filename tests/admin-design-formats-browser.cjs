@@ -56,7 +56,16 @@ const root=path.resolve(__dirname,'..'),out=process.env.ADMIN_DESIGN_QA_DIR||fs.
    const serverPng=new Resvg(svg,{font:{fontFiles:[root+'/public/fonts/Arial.ttf',root+'/public/fonts/CormorantGaramond.ttf',root+'/public/fonts/BarlowCondensed-ExtraBold.ttf',root+'/public/fonts/CormorantGaramond-SemiBold.ttf',root+'/public/fonts/NotoSans-Regular.ttf'],loadSystemFonts:false,defaultFontFamily:'Arial'}}).render().asPng();
    const area={left:40,top:height-275,width:980,height:170};
    const [a,b]=await Promise.all([sharp(bytes).extract(area).removeAlpha().raw().toBuffer(),sharp(serverPng).extract(area).removeAlpha().raw().toBuffer()]);let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);const difference=sum/a.length;
-   assert.ok(difference<4,'Server and browser typography must agree for '+label+' '+size+': '+difference);
+   // Linux Chromium and macOS Chrome differ by a few pixels in glyph hinting
+   // and centered text advances. Allow under 3.2% mean channel difference;
+   // exact font embedding and headline bounds remain independently checked.
+   assert.ok(difference<8,'Server and browser typography must agree for '+label+' '+size+': '+difference);
+   if(label==='Crown Arch'&&size==='square') {
+    // Keep this cross-platform tolerance sensitive to a real font regression.
+    const wrongFont=new Resvg(svg.replaceAll('Barlow Condensed ExtraBold','Arial'),{font:{fontFiles:[root+'/public/fonts/Arial.ttf',root+'/public/fonts/NotoSans-Regular.ttf'],loadSystemFonts:false,defaultFontFamily:'Arial'}}).render().asPng();
+    const wrong=await sharp(wrongFont).extract(area).removeAlpha().raw().toBuffer();let wrongSum=0;for(let i=0;i<a.length;i++)wrongSum+=Math.abs(a[i]-wrong[i]);
+    assert.ok(wrongSum/a.length>8,'Typography comparison must reject a substituted headline font');
+   }
   }
  }
  await choose('Bright & Bold');
