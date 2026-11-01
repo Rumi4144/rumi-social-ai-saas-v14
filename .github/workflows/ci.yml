@@ -66,6 +66,12 @@ jobs:
       - run: node tests/instagram-connection-browser.cjs
       - run: node tests/user-activity-browser.cjs
       - run: node tests/weekly-customer-browser.cjs
+      - run: node tests/weekly-picture-browser.cjs
+        env:
+          PICTURE_QA_DIR: qa-weekly/picture
+      - run: node tests/weekly-design-change-browser.cjs
+        env:
+          DESIGN_CHANGE_QA_DIR: qa-weekly/design-change
       - run: node tests/draft-planned-date-browser.cjs
       - run: node tests/onboarding-browser.cjs
       - run: node tests/weekly-video-browser.cjs

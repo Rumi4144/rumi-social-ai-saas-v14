@@ -17,7 +17,7 @@ type Database = PrismaClient | Prisma.TransactionClient;
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 const photoKinds = ["product_photo", "ai_image", "reel_scene_image"];
 
-async function editablePicture(db: Database, ctx: Context, id: string) {
+export async function editablePicture(db: Database, ctx: Context, id: string) {
   const item = await db.contentItem.findFirst({ where: { id, campaign: { brand: { organizationId: ctx.organizationId } } }, include: { campaign: { include: { brand: true } } } });
   if (!item) throw new PictureError("Post not found in this workspace.", 404);
   if (requiresVideo(item.type)) throw new PictureError("Picture replacement is available for image ads. Request a change for a reel.");
@@ -31,6 +31,17 @@ async function editablePicture(db: Database, ctx: Context, id: string) {
   const creative = await db.mediaAsset.findFirst({ where: { id: reference.id, organizationId: ctx.organizationId, campaignId: item.campaignId, contentItemId: id, kind: "social_creative", status: "ready", url: { not: null } } });
   if (!creative) throw new PictureError("The finished design is unavailable. Request a change from Admin.");
   return { item, creative };
+}
+
+export async function savedPictureRecipe({ item, creative }: Awaited<ReturnType<typeof editablePicture>>): Promise<SocialSvgInput> {
+  const meta = object(creative.metadata), brand = item.campaign.brand;
+  return meta.pictureRecipe || {
+    headline: item.headline || "", cta: "Discover More", brand: brand.name,
+    format: meta.format || "portrait", designStyle: meta.designStyle || brand.designStyle || "classic",
+    textPosition: meta.textPosition || "left", logoUrl: await logoToPngDataUrl(brand.logoUrl, brand.websiteUrl),
+    primaryColor: brand.primaryColor || undefined, secondaryColor: brand.secondaryColor || undefined,
+    accentColor: brand.accentColor || undefined, headingFont: brand.headingFont || undefined, bodyFont: brand.bodyFont || undefined,
+  };
 }
 
 async function sourceWhere(ctx: Context, brandId: string): Promise<Prisma.MediaAssetWhereInput> {
@@ -79,13 +90,7 @@ export async function replacePicture(ctx: Context, id: string, input: { expected
   const meta = object(creative.metadata), brand = item.campaign.brand;
   // Older exports did not store a full recipe. Recover their saved format/layout;
   // new exports retain the exact brand settings, wording and supporting images.
-  const recipe: SocialSvgInput = meta.pictureRecipe || {
-    headline: item.headline || "", cta: "Discover More", brand: brand.name,
-    format: meta.format || "portrait", designStyle: meta.designStyle || brand.designStyle || "classic",
-    textPosition: meta.textPosition || "left", logoUrl: await logoToPngDataUrl(brand.logoUrl, brand.websiteUrl),
-    primaryColor: brand.primaryColor || undefined, secondaryColor: brand.secondaryColor || undefined,
-    accentColor: brand.accentColor || undefined, headingFont: brand.headingFont || undefined, bodyFont: brand.bodyFont || undefined,
-  };
+  const recipe = await savedPictureRecipe(snapshot);
   const rendered = await svgToPublishJpeg(renderSocialSvg({ ...recipe, imageUrl, ...(isWeeklyDesign(recipe.designStyle) ? { designFonts: await weeklyDesignFonts() } : {}) }));
   // Rendering happens before this transaction: failed fetches/exports leave the
   // original artwork and approval intact. Recheck delivery and review races here.

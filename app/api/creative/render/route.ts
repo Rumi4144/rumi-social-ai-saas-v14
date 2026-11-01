@@ -114,6 +114,7 @@ export async function POST(req: Request) {
           textPosition: parsed.data.textPosition || "left",
           rasterizedInBrowser: true,
           pictureRecipe: pictureRecipe(renderInput),
+          sourceImageUrl: embeddedImageUrl || null,
         },
       };
 
@@ -154,6 +155,7 @@ export async function POST(req: Request) {
         designStyle,
         textPosition: parsed.data.textPosition || "left",
         pictureRecipe: pictureRecipe(renderInput),
+        sourceImageUrl: embeddedImageUrl || null,
       },
     };
 

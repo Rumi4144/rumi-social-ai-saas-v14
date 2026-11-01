@@ -346,6 +346,7 @@ export async function POST(req: Request) {
             designStyle,
             textPosition: renderInput.textPosition,
             pictureRecipe: pictureRecipe(renderInput),
+            sourceAssetId: asset.id,
           },
         };
 
