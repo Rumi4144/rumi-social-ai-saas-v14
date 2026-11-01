@@ -19,11 +19,13 @@ test('52 planned weeks supply 364 distinct angles without nearby design or photo
     const next = plan.planWeek(input);
     assert.deepEqual(serialize(next), serialize(plan.planWeek(input)), 'identical state has identical plans');
     assert.equal(next.weekNumber, week + 1); assert.equal(next.slots.length, 7);
+    assert.equal(new Set(next.slots.map(slot => slot.layout)).size, 7, "Every week uses seven different complete compositions");
+    assert.ok(next.slots.every(slot => slot.layout.startsWith("weekly-")));
     assert.equal(new Set(next.slots.map(slot => slot.date)).size, 7);
     for (const slot of next.slots) { assert.ok(!layouts.slice(-5).includes(slot.layout)); assert.notEqual(sources.at(-1), slot.sourceImageUrl); layouts.push(slot.layout); sources.push(slot.sourceImageUrl); angles.add(slot.topic); }
     history.push({ brandId: 'brand', weekStart: input.weekStart, slots: next.slots });
   }
-  assert.equal(angles.size, 364); assert.equal(new Set(layouts).size, 12);
+  assert.equal(angles.size, 364); assert.equal(new Set(layouts).size, 7);
   const other = plan.planWeek({ organizationId: 'other', brandId: 'other', brandName: 'Other business', weekStart: '2026-10-26', startsOn: '2026-10-26', mix: { images: 7, motionReels: 0, aiVideos: 0 }, photos: [], history });
   assert.ok(other.slots.every(slot => !slot.sourceImageUrl && slot.topic.startsWith('Other business:')));
 });
@@ -295,9 +297,9 @@ test('new weekly layouts preserve original logo and photo across export sizes wi
   const designs = new Set(), photoCompositions = new Set();
   for (const style of WEEKLY_DESIGNS) for (const [format, height] of [['square',1080],['portrait',1350],['story',1920]]) {
     const svg = renderWeeklyDesign({ brand:'Actual & Business', headline:'Find your sound', cta:'Learn more', imageUrl:'data:image/png;base64,PHOTO', logoUrl:'data:image/png;base64,LOGO', primaryColor:'bad" onload="alert(1)', accentColor:'#fe5739', format },style);
-    assert.match(svg,new RegExp(`height="${height}"`)); assert.match(svg,/data:image\/png;base64,PHOTO/); assert.match(svg,/data:image\/png;base64,LOGO/); assert.match(svg,/ACTUAL &amp; BUSINESS/);
+    assert.match(svg,new RegExp(`height="${height}"`)); assert.match(svg,/data:image\/png;base64,PHOTO/); assert.match(svg,/data:image\/png;base64,LOGO/); assert.match(svg,/Actual &amp; Business/);
     assert.ok(!/onload=|NaN|undefined|<script/.test(svg)); assert.ok([...svg.matchAll(/font-size="([0-9]+)"/g)].some(m=>Number(m[1])>=110)); assert.equal((svg.match(/<image /g)||[]).length,2);
-    if(format==='portrait'){designs.add(svg);photoCompositions.add(svg.match(/<image href="data:image\/png;base64,PHOTO"[^>]+/)[0]);}
+    if(format==='portrait'){designs.add(svg);photoCompositions.add(svg.match(/<image data-role="product-photo" href="data:image\/png;base64,PHOTO"[^>]+/)[0]);}
   }
-  assert.equal(designs.size,5);assert.equal(photoCompositions.size,5,'The five formats must change the photograph composition, not just border decoration');
+  assert.equal(designs.size,7);assert.equal(photoCompositions.size,7,'The seven formats must change the photograph composition, not just border decoration');
 });

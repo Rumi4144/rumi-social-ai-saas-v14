@@ -54,6 +54,17 @@ async function originalLogo(url: string) {
   return `data:image/png;base64,${png.toString("base64")}`;
 }
 
+/** Recover an actual, explicitly labelled logo for older brands that predate
+ * website onboarding. This does not run AI, change Brand Brain, or use a favicon. */
+export async function readWebsiteLogo(value: string): Promise<string | undefined> {
+  const website = normalizedWebsite(value), page = await fetchPublicBytes(website, 1_000_000);
+  if (!/text\/html|application\/xhtml/i.test(page.contentType)) return undefined;
+  for (const candidate of websiteIdentity(page.bytes.toString("utf8"), website).logos) {
+    try { return await originalLogo(candidate); } catch { /* Try another explicit website logo. */ }
+  }
+  return undefined;
+}
+
 export async function readWebsiteSetup(value: string, brandName: string): Promise<WebsiteSetup> {
   const website = normalizedWebsite(value), page = await fetchPublicBytes(website, 1_000_000);
   if (!/text\/html|application\/xhtml/i.test(page.contentType)) throw new Error("Use a public page on your business website.");

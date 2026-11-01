@@ -306,7 +306,7 @@ export async function POST(req: Request) {
         }
 
         const designStyle = p.designStyle || automaticShowcaseStyle(contentItem.id, brand.designStyle);
-        const logoUrl = await logoToPngDataUrl(brand.logoUrl);
+        const logoUrl = await logoToPngDataUrl(brand.logoUrl, brand.websiteUrl);
         const svg = renderSocialSvg({
           headline: contentItem.headline || "Campaign Creative",
           cta: "Discover More",

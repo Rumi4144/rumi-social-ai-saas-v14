@@ -32,8 +32,12 @@ async function imageBytes(url: string): Promise<Buffer> {
 }
 
 /** Embed logos so both browser previews and the offline SVG renderer see them. */
-export async function logoToPngDataUrl(url?: string | null): Promise<string | undefined> {
-  if (!url) return undefined;
+export async function logoToPngDataUrl(url?: string | null, website?: string | null): Promise<string | undefined> {
+  if (!url) {
+    if (!website) return undefined;
+    try { return await (await import("../onboarding/website")).readWebsiteLogo(website); }
+    catch { return undefined; }
+  }
   try {
     const png = await sharp(await imageBytes(url))
       .rotate()

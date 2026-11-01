@@ -98,7 +98,7 @@ export async function POST(req: Request) {
       for (const result of results) if (result.status === "fulfilled") embeddedImages.push(result.value);
     }
 
-    const logoUrl = await logoToPngDataUrl(brand.logoUrl);
+    const logoUrl = await logoToPngDataUrl(brand.logoUrl, brand.websiteUrl);
     const svg = renderSocialSvg({
       headline: parsed.data.headline,
       subheadline: parsed.data.subheadline,

@@ -106,3 +106,22 @@ test('website reading rejects viewers before fetching or saving reviews', async 
   const api = load('app/api/onboarding/website/route.ts', { 'next/server': { NextResponse: { json } }, '@/lib/prisma': { prisma: {} }, '@/lib/auth/context': { tenantContext: async () => ({ organizationId: 'org', role: 'viewer', isSuperAdmin: false }) }, '@/lib/http/errors': { apiError: e => { throw e; } }, '@/lib/security/rate-limit': {}, '@/lib/onboarding/website': {} });
   assert.equal((await api.POST({})).status, 403);
 });
+
+test('older brands recover only an actual website logo without AI, favicon substitution or profile changes', async () => {
+  const sharp = require('sharp');
+  const logo = await sharp({ create: { width: 200, height: 70, channels: 4, background: '#dbaa43' } }).png().toBuffer();
+  const calls = []; let html = '<link rel="icon" href="/favicon.png"><img src="/product.png"><img class="custom-logo" src="/actual-logo.png">';
+  const photos = load('lib/reels/product-photos.ts');
+  const helper = load('lib/onboarding/website.ts', {
+    '@/lib/reels/public-fetch': { fetchPublicBytes: async (url, limit) => { calls.push({ url, limit }); return url.endsWith('actual-logo.png') ? { bytes: logo, contentType: 'image/png' } : { bytes: Buffer.from(html), contentType: 'text/html' }; } },
+    '@/lib/website/brand-profile': { normalizedWebsite, websiteBrandProfile: () => { throw Error('No paid generation'); } },
+    '@/lib/campaign/website-catalog': { catalogText: String }, '@/lib/reels/product-photos': photos, '@/lib/reels/product-identity': {},
+  });
+  const data = await helper.readWebsiteLogo('https://shop.test/');
+  assert.match(data, /^data:image\/png;base64,/);
+  assert.deepEqual(calls.map(c => c.url), ['https://shop.test/', 'https://shop.test/actual-logo.png']);
+  assert.deepEqual(await sharp(Buffer.from(data.split(',')[1], 'base64')).raw().toBuffer(), await sharp(logo).raw().toBuffer(), 'The real logo pixels and colors are preserved');
+  calls.length = 0; html = '<link rel="icon" href="/favicon.png"><img src="/portrait.png">';
+  assert.equal(await helper.readWebsiteLogo('https://shop.test/'), undefined);
+  assert.equal(calls.length, 1, 'Unlabelled photos and favicon must not become logos');
+});
