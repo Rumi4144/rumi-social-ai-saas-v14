@@ -55,7 +55,7 @@ export default function SchedulePostButton({
   const [madeForKids, setMadeForKids] = useState(false);
   const [synthetic, setSynthetic] = useState(true);
   const [open, setOpen] = useState(openByDefault);
-  const [postNow, setPostNow] = useState(allowPostNow);
+  const [postNow, setPostNow] = useState(() => allowPostNow && !scheduleInputValue(initialScheduledFor, initialStatus));
   const [queuedNow, setQueuedNow] = useState(false);
   const schedulePanelRef = useRef<HTMLDivElement>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -84,8 +84,10 @@ export default function SchedulePostButton({
   useEffect(() => {
     setStatus(initialStatus);
     setSavedTime(initialScheduledFor || "");
-    setScheduledFor(scheduleInputValue(initialScheduledFor,initialStatus));
-  }, [initialStatus, initialScheduledFor]);
+    const plannedTime = scheduleInputValue(initialScheduledFor, initialStatus);
+    setScheduledFor(plannedTime);
+    setPostNow(allowPostNow && !plannedTime);
+  }, [initialStatus, initialScheduledFor, allowPostNow]);
 
   useEffect(() => {
     function handleApproved(event: Event) {
@@ -304,6 +306,7 @@ export default function SchedulePostButton({
           {allowPostNow && <label className={`${styles.field} ${styles.when}`}>When<select value={postNow ? "now" : "later"} disabled={busy || completed} onChange={event => setPostNow(event.target.value === "now")}><option value="now">Post now</option><option value="later">Schedule for later</option></select></label>}
           {!postNow && <input
             type="datetime-local"
+            aria-label="Posting date and time"
             disabled={busy || completed}
             value={scheduledFor}
             onChange={(e) => setScheduledFor(e.target.value)}

@@ -60,6 +60,29 @@ const data=(viewer,legacy=false,compact=false)=>({organizationId:'org',canManage
  requests.length=0;
  await ready.getByRole('button',{name:'Approve post',exact:true}).click();await ready.getByRole('button',{name:'Download post',exact:true}).waitFor();assert.equal(requests[0].body.action,'approve');assert.equal(requests.length,1,'Approval must not schedule or post');const download=page.waitForEvent('download');await ready.getByRole('button',{name:'Download post',exact:true}).click();const savedDownload=await download;assert.equal(savedDownload.suggestedFilename(),'approved-post.jpg');const downloaded=await sharp(await savedDownload.path()).metadata();assert.equal(downloaded.format,'jpeg');assert.equal(downloaded.width,800);assert.equal(downloaded.height,1000);assert.equal(requests.filter(r=>r.method==='PATCH').length,1,'Download does not change status');
 
+ // A changed planned date is the default delivery choice, including while the panel is open.
+ await ready.getByRole('button',{name:'Show post details',exact:true}).click();
+ await ready.getByRole('button',{name:'Post or schedule',exact:true}).click();
+ await ready.getByLabel('Posting date and time',{exact:true}).waitFor();
+ assert.equal(await ready.getByRole('combobox',{name:/^When/}).inputValue(),'later');
+ assert.equal(await ready.getByLabel('Posting date and time',{exact:true}).inputValue(),'2026-11-10T10:00');
+ await ready.getByRole('combobox',{name:/^When/}).selectOption('now');
+ await page.getByRole('button',{name:'Refresh',exact:true}).click();
+ assert.equal(await ready.getByRole('combobox',{name:/^When/}).inputValue(),'now','Unchanged data must preserve an explicit Post now choice');
+ await ready.getByRole('button',{name:/Change planned date/}).click();
+ await ready.getByLabel('Planned post date',{exact:true}).fill('2026-11-12');
+ await ready.getByRole('button',{name:'Save date',exact:true}).click();
+ await ready.getByText(/Thu, Nov 12/).waitFor();
+ assert.equal(await ready.getByRole('combobox',{name:/^When/}).inputValue(),'later','Saving a different date switches the open panel to scheduling');
+ assert.equal(await ready.getByLabel('Posting date and time',{exact:true}).inputValue(),'2026-11-12T10:00');
+ await page.reload();await ready.getByText(/Thu, Nov 12/).waitFor();
+ await ready.getByRole('button',{name:'Show post details',exact:true}).click();
+ await ready.getByRole('button',{name:'Post or schedule',exact:true}).click();
+ assert.equal(await ready.getByRole('combobox',{name:/^When/}).inputValue(),'later');
+ assert.equal(await ready.getByLabel('Posting date and time',{exact:true}).inputValue(),'2026-11-12T10:00','Reload must retain the saved date');
+ await ready.getByRole('button',{name:'Post or schedule',exact:true}).click();
+ await ready.getByRole('button',{name:'Hide post details',exact:true}).click();
+
  // A confirmed delivery updates this card in place instead of removing it.
  const originalOrder=await page.locator('[data-testid^=weekly-post-]').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-testid')));
  items=items.map(value=>value.id==='ready'?{...value,status:'published',deliveries:[{id:'posted',connectionId:'facebook',platform:'facebook',account:'Rumi Guitars',status:'published',scheduledFor:'2026-11-02T10:00:00Z',publishedAt:'2026-11-02T10:00:00Z',error:null}]}:value);

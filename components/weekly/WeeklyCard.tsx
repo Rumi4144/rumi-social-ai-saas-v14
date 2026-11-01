@@ -29,7 +29,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
     try {
       const response = await fetch(`/api/weekly/items/${encodeURIComponent(item.id)}/date`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plannedDate: dateDraft, expectedDate: plannedDate }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not save the date.");
-      setDateOpen(false); setMessage("Planned date saved. Use Post or schedule to arrange delivery."); onChanged();
+      setDateOpen(false); setMessage("Date saved. Post or schedule will use this date."); onChanged();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save the date."); }
     finally { setPending(false); }
   }
