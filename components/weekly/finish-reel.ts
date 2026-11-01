@@ -107,7 +107,7 @@ export async function finishWeeklyReel({ item, organizationId, audio, signal, pr
     const context = { organizationId, campaignId: item.campaignId, contentItemId: item.id };
     const plan: AutoReelPlan = await jsonRequest("/api/reels/auto-plan", context, signal);
     if (!autoPlanMatches(plan, context)) throw new Error("Your workspace changed. Reopen this week before finishing its reel.");
-    if (plan.project.scenes.length < 3 || new Set(plan.sources.map(source => source.src)).size < 3) throw new Error("Admin needs to add three distinct, relevant photos to finish this reel. Use Request changes; no reel credits were charged.");
+    if (plan.project.scenes.length < 3 || new Set(plan.sources.map(source => source.src)).size < 3) throw new Error("This reel needs three distinct, ready scene photos. Resume preparation or use Request changes for photos that need review; no reel credits were charged.");
     const reservation = await jsonRequest("/api/weekly/reel-completion", { action: "reserve", contentItemId: item.id, requestId: saved.requestId, expectedCost: 4, consent: true }, signal);
     saved.reservationId = reservation.reservationId; saved.pathname = reservation.pathname; persist();
     if (reservation.alreadyCompleted && reservation.assetId) { localStorage.removeItem(storageKey); progress(100, "Your reel is already saved."); return; }

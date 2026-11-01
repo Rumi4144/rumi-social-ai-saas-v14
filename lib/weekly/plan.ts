@@ -111,7 +111,7 @@ export function planWeek(input: { organizationId: string; brandId: string; brand
     if (source) photos.push(photoKey(source.imageUrl));
     const theme = `${PILLARS[(weekNumber - 1) % 4]} ${THEMES[Math.floor((weekNumber - 1) / 4)]}`;
     const topic = `${source?.productName || input.brandName}: ${theme}; ${ANGLES[(index + cycle - 1) % 7]}${count > 7 ? `, perspective ${Math.floor(index / 7) + 1}` : ""}`;
-    slots.push({ key: `week-${cycle}-${weekNumber}-slot-${index + 1}`, day, date: addDays(input.weekStart, day - 1), kind, topic, layout, ...(source ? { sourceImageUrl: source.imageUrl, sourceUrl: source.sourceUrl, productName: source.productName } : {}) });
+    slots.push({ key: `week-${cycle}-${weekNumber}-slot-${index + 1}`, day, date: addDays(input.weekStart, day - 1), kind, topic, layout, ...(kind === "motion_reel" ? { reelPhotoSource: source ? "website" as const : "ai" as const } : {}), ...(source ? { sourceImageUrl: source.imageUrl, sourceUrl: source.sourceUrl, productName: source.productName } : {}) });
   }
   return { slots, weekNumber, cycle };
 }

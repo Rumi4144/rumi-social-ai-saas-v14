@@ -77,7 +77,7 @@ test('worker saves daily mixed drafts and extras without media jobs, and validat
    '@/lib/weekly/plan':require('./helpers/weekly-load.cjs').load('lib/weekly/plan.ts'),
    'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},openai:class {},'@/lib/ai/image-provider':{ImageRejectedError:class extends Error{},generateImage:async()=>{throw Error('No image expected');},imageConfiguration:()=>({provider:'bfl',model:'flux-3-image-klein'})},
    '@/lib/prisma':{prisma:{job:{findFirst:async()=>job,updateMany:async()=>({count:1}),update:async()=>{}},campaign:{findUnique:async q=>{assert.equal(q.where.brand.organizationId,'master-mind');return {id:'campaign',brandId:'brand',brand:{name:'Master Mind',description:'Hypnosis service'}};}},$transaction:async fn=>{transactions++;return fn(tx);}}},
-   '@/lib/creative/save-revision':{},'@/lib/render/picture-recipe':{},
+   '@/lib/weekly/scene-photos':{},'@/lib/reels/reviewed-scene-photo':{},'@/lib/weekly/website-logo':{},'@/lib/creative/save-revision':{},'@/lib/render/picture-recipe':{},
    '@/lib/ai/occasion':load('lib/ai/occasion.ts'),'@/lib/campaign/content-plan':plan,'@/lib/ai/visual-history':{recentBrandConcepts:async()=>[]},
    '@/lib/ai/campaign':{generateCampaign:async()=>{const p=pack();if(invalid)p.posts[1].planKey=p.posts[0].planKey;return p;}},
    '@/lib/campaign/photo-matching':{matchingWebsitePhoto:()=>null,modelCodes:()=>[]},'@/lib/render/svg':{},'@/lib/render/showcase':{automaticShowcaseStyle:()=> 'modern-gradient'},'@/lib/render/raster':{},'@/lib/ai/visual-director':{},

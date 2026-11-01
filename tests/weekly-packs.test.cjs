@@ -239,16 +239,16 @@ test('foreign business, viewer, stale quote, inactive subscription and insuffici
     const f = fixture(options); await assert.rejects(f.service.prepareWeekly({ ...f.context, ...context }, f.request(request)), expected); assert.equal(f.state.ledger.length, 0); assert.equal(f.state.campaigns.length, 0);
   }
 });
-test('reels are quoted only with three actual product views; stored copy topics retain exact product identity', async () => {
-  const previous = process.env.BLOB_READ_WRITE_TOKEN; process.env.BLOB_READ_WRITE_TOKEN = 'test-only-no-network';
+test('without an image provider reels still need three original views; product topics retain identity', async () => {
+  const previous = process.env.BLOB_READ_WRITE_TOKEN, previousAI = process.env.OPENAI_API_KEY; process.env.BLOB_READ_WRITE_TOKEN = 'test-only-no-network'; delete process.env.OPENAI_API_KEY;
   try {
   const f = fixture(); const view = await f.service.weeklyView(f.context); assert.equal(view.prepare.mix.images, 7); assert.equal(view.prepare.mix.motionReels, 0);
-  await assert.rejects(f.service.prepareWeekly(f.context, f.request({ mix: { images: 6, motionReels: 1, aiVideos: 0 } })), /Three distinct saved photos/); assert.equal(f.state.ledger.length, 0);
+  await assert.rejects(f.service.prepareWeekly(f.context, f.request({ mix: { images: 6, motionReels: 1, aiVideos: 0 } })), /not configured/); assert.equal(f.state.ledger.length, 0);
   const g = fixture({ gallery: true }); await g.service.prepareWeekly(g.context, g.request());
   const generation = g.state.jobs.find(job => job.type === 'CREATE_EVERYTHING'); assert.equal(g.state.subscription.credits, 85);
   assert.ok(generation.payload.contentPlan.every(slot => slot.topics[0] === 'Martinez MF-17'));
   assert.equal(g.state.jobs.find(job => job.type === 'WEEKLY_PACK').payload.completionCredits, 4);
-  } finally { if (previous === undefined) delete process.env.BLOB_READ_WRITE_TOKEN; else process.env.BLOB_READ_WRITE_TOKEN = previous; }
+  } finally { if (previousAI === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previousAI; if (previous === undefined) delete process.env.BLOB_READ_WRITE_TOKEN; else process.env.BLOB_READ_WRITE_TOKEN = previous; }
 });
 test('weekly views retain partial failures and distinguish source image previews from finished reels', async () => {
   const previous = process.env.BLOB_READ_WRITE_TOKEN; process.env.BLOB_READ_WRITE_TOKEN = 'test-only-no-network';
@@ -302,4 +302,32 @@ test('new weekly layouts preserve original logo and photo across export sizes wi
     if(format==='portrait'){designs.add(svg);photoCompositions.add(svg.match(/<image data-role="product-photo" href="data:image\/png;base64,PHOTO"[^>]+/)[0]);}
   }
   assert.equal(designs.size,90);assert.ok(photoCompositions.size>=85,'The library must vary photograph geometry as well as headlines and decorative shapes');
+});
+
+
+test('AI photos enable the promised weekly motion reel without a product gallery or extra preparation charge', async () => {
+  const oldAI = process.env.OPENAI_API_KEY, oldBlob = process.env.BLOB_READ_WRITE_TOKEN;
+  process.env.OPENAI_API_KEY = 'mock-only'; process.env.BLOB_READ_WRITE_TOKEN = 'mock-only';
+  try {
+    const f = fixture(); const view = await f.service.weeklyView(f.context);
+    assert.equal(view.prepare.motionAvailable, true); assert.equal(view.prepare.mix.motionReels, 1);
+    assert.equal(view.prepare.mix.images, 6); assert.equal(view.prepare.preparationCredits, 15); assert.equal(view.prepare.totalCredits, 19);
+    assert.ok(view.prepare.warnings.some(text => /three AI-generated scene photos/.test(text)));
+    const first = await f.service.prepareWeekly(f.context, f.request());
+    const repeat = await f.service.prepareWeekly(f.context, f.request());
+    assert.equal(first.packId, repeat.packId); assert.equal(repeat.reused, true); assert.equal(f.state.ledger.length, 1);
+    assert.equal(f.state.subscription.credits, 85);
+    const generation = f.state.jobs.find(job => job.type === 'CREATE_EVERYTHING');
+    const ai = generation.payload.weeklySlots.find(slot => slot.reelPhotoSource === 'ai');
+    assert.equal(ai.kind, 'motion_reel'); assert.equal(ai.productName, undefined); assert.equal(ai.sourceImageUrl, undefined);
+    assert.equal(generation.payload.contentPlan.find(slot => slot.planKey === ai.key).topics.length, 0);
+    const g = fixture({gallery: true}); await g.service.prepareWeekly(g.context, g.request());
+    const original = g.state.jobs.find(job => job.type === 'CREATE_EVERYTHING').payload.weeklySlots.find(slot => slot.kind === 'motion_reel');
+    assert.equal(original.reelPhotoSource, 'website'); assert.equal(original.productName, 'Martinez MF-17');
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    assert.equal((await fixture().service.weeklyView(f.context)).prepare.motionAvailable, false);
+  } finally {
+    if (oldAI === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldAI;
+    if (oldBlob === undefined) delete process.env.BLOB_READ_WRITE_TOKEN; else process.env.BLOB_READ_WRITE_TOKEN = oldBlob;
+  }
 });

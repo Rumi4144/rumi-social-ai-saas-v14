@@ -20,7 +20,7 @@ export function automaticReelStyle(brand: AutoPlanBrand, holiday = false): ReelS
   if (/fitness|sport|restaurant|food|entertainment|event/i.test(business)) return "bold";
   return "boutique";
 }
-export type AutoPlanPost = { id: string; headline: string | null; caption: string | null; type: string; visualDirection?: string | null; occasion?: string; topics?: string[] };
+export type AutoPlanPost = { id: string; headline: string | null; caption: string | null; type: string; visualDirection?: string | null; occasion?: string; topics?: string[]; plannedAIPhotos?: boolean };
 export type AutoPlanAsset = { id: string; organizationId: string; brandId: string; campaignId: string; contentItemId?: string | null; kind: string; status: string; url: string | null; prompt?: string | null; metadata?: unknown; post?: AutoPlanPost };
 const ignored = new Set("a an and are as at be by can do for from has have how in is it its may more of on or our that the their them there these they this to with you your photo image scene text shot close wide calm moment business brand premium campaign create realistic vertical photograph background lighting caption product fidelity critical no not people person adult hypnosis hypnotherapy session support journey step discover learn today help helping feel feeling take taking change positive advanced mind master explore book appointment consultation gentle safe natural practice personal professional approach".split(" "));
 function tokens(value: string): Set<string> {
@@ -94,7 +94,7 @@ export function automaticReelPlan(input: { organizationId: string; campaignId: s
   for (const word of tokens(brand.name)) headlineTopic.delete(word);
   if (holiday && !post.occasion) warnings.push("The saved holiday slot could not be identified. Choose an occasion photo before exporting.");
   const productSubject = reelProductSubject(post, brand);
-  const eligible = input.assets.filter(asset => asset.organizationId === input.organizationId && asset.brandId === brand.id && ["ready", "superseded"].includes(asset.status) && ["ai_image", "product_photo", "reel_scene_image"].includes(asset.kind) && photoAllowsAutomaticUse(asset.metadata) && !!asset.url && reelPhotoMatchesProduct(productSubject, asset) && subjectCompatible(asset, targetText) && (!holiday || (!!post.occasion && occasionMatches(asset, post.occasion))));
+  const eligible = input.assets.filter(asset => (!post.plannedAIPhotos || (asset.contentItemId === post.id && asset.kind === "reel_scene_image" && asset.status === "ready")) && asset.organizationId === input.organizationId && asset.brandId === brand.id && ["ready", "superseded"].includes(asset.status) && ["ai_image", "product_photo", "reel_scene_image"].includes(asset.kind) && photoAllowsAutomaticUse(asset.metadata) && !!asset.url && reelPhotoMatchesProduct(productSubject, asset) && subjectCompatible(asset, targetText) && (!holiday || (!!post.occasion && occasionMatches(asset, post.occasion))));
   if (productSubject && !eligible.length) warnings.push(`No verified photos match ${productSubject}. Load this product’s gallery; another product will not be substituted.`);
   const used = new Set<string>();
   const sources: ReelSource[] = [];
@@ -102,7 +102,7 @@ export function automaticReelPlan(input: { organizationId: string; campaignId: s
   for (let index = 0; index < slots.length; index++) {
     const slot = slots[index], sceneId = `${post.id}-planned-${index + 1}`;
     const direction = tokens(slot.direction), captionTopic = tokens(slot.headline);
-    const ranked = eligible.filter(asset => !used.has(photoIdentity(asset.url!))).map(asset => {
+    const ranked = eligible.filter(asset => !used.has(photoIdentity(asset.url!)) && (!post.plannedAIPhotos || metadata(asset).sceneId === sceneId)).map(asset => {
       const words = tokens(subjectText(asset));
       for (const word of tokens(brand.name)) words.delete(word);
       const semantic = overlap(topic, words), shot = overlap(direction, words);

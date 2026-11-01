@@ -18,6 +18,9 @@ import { imageToJpegDataUrl, logoToPngDataUrl, svgToPublishJpeg, weeklyDesignFon
 import type { WeeklySlot, WeeklyItemMapping } from "@/lib/weekly/types";
 import { photoGroups, weeklyProductKey, type WeeklyPhoto } from "@/lib/weekly/plan";
 import type { Job } from "@prisma/client";
+import { weeklyScenePhotos } from "@/lib/weekly/scene-photos";
+import { reviewedScenePhoto, type ScenePhotoPlan } from "@/lib/reels/reviewed-scene-photo";
+import { importWeeklyLogo } from "@/lib/weekly/website-logo";
 
 
 function calendarDraftPlan(plan: Array<{day:number;date:string}>|undefined,days:number): Map<number,Date> {
@@ -165,6 +168,7 @@ export async function POST(req: Request) {
         recentConcepts?: RecentVisualConcept[];
         occasion?: string;
         designStyle?: string;
+        scenePhotoPlan?: ScenePhotoPlan;
       };
 
       const format = p.format || "portrait";
@@ -182,6 +186,14 @@ export async function POST(req: Request) {
 
     if (!visualContentItem) {
       throw new Error("CONTENT_ITEM_NOT_FOUND");
+    }
+
+    if (p.scenePhotoPlan) {
+      const scene = p.scenePhotoPlan;
+      if (scene.campaignId !== p.campaignId || scene.contentItemId !== p.contentItemId || scene.context.brandId !== visualContentItem.campaign.brandId) throw new Error("Scene does not belong to this post.");
+      imageRequested = true;
+      await reviewedScenePhoto(job.id, job.organizationId, scene, "GENERATE_IMAGE");
+      return NextResponse.json({ status: "succeeded", type: "GENERATE_IMAGE", jobId: job.id });
     }
 
     if (p.photoSource === "website") {
@@ -420,6 +432,8 @@ export async function POST(req: Request) {
       throw new Error("CAMPAIGN_NOT_FOUND");
     }
 
+    if (p.weeklyPackId && !campaign.brand.logoUrl) campaign.brand.logoUrl = await importWeeklyLogo(job.organizationId, campaign.brand);
+
     const plannedDates=calendarDraftPlan(p.dailyPlan,p.days);
 
     const businessContext: VisualBusinessContext = {
@@ -492,8 +506,9 @@ export async function POST(req: Request) {
       const weeklySlot = p.weeklySlots?.find(slot => slot.key === x.planKey);
       const slotTopics = p.contentPlan?.find(slot => slot.planKey === x.planKey)?.topics;
       const assignedPhoto = weeklySlot?.sourceImageUrl ? photoChoices.find(photo => photo.imageUrl === weeklySlot.sourceImageUrl && photo.sourceUrl === weeklySlot.sourceUrl) : undefined;
-      const matchedPhoto = p.photoSource === "website" ? assignedPhoto || matchingWebsitePhoto({ headline: x.headline, caption: x.caption, topics: slotTopics }, photoChoices, websitePhotos) : null;
-      if (p.photoSource === "website" && !matchedPhoto && x.type !== "holiday_post") photoWarnings.push(`${x.headline}: choose a matching website photo; no unrelated image was assigned.`);
+      const aiReel = weeklySlot?.kind === "motion_reel" && weeklySlot.reelPhotoSource === "ai";
+      const matchedPhoto = !aiReel && p.photoSource === "website" ? assignedPhoto || matchingWebsitePhoto({ headline: x.headline, caption: x.caption, topics: slotTopics }, photoChoices, websitePhotos) : null;
+      if (!aiReel && p.photoSource === "website" && !matchedPhoto && x.type !== "holiday_post") photoWarnings.push(`${x.headline}: choose a matching website photo; no unrelated image was assigned.`);
       const occasion = p.contentPlan?.find(slot=>slot.planKey===x.planKey && slot.extra)?.occasion;
       const concept = occasion ? occasionVisualConcept(occasion) : buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });
       const priorConcepts = plannedConcepts.slice(-6);
@@ -529,6 +544,17 @@ export async function POST(req: Request) {
             const gallery = photoGroups(p.weeklySources || []).find(group => weeklyProductKey(group[0]) === weeklyProductKey(weeklySlot)) || [];
             for (const [index, photo] of gallery.entries()) await tx.mediaAsset.create({ data: { organizationId: job.organizationId, campaignId: campaign.id, contentItemId: item.id, kind: "product_photo", provider: "product-website", status: "ready", url: photo.imageUrl, metadata: { brandId: campaign.brandId, productName: photo.productName, sourceUrl: photo.sourceUrl, label: `Product view ${index + 1}`, sourceEvidence: { imageUrl: photo.imageUrl, sourceUrl: photo.sourceUrl, title: photo.productName } } } });
           }
+        }
+
+        if (aiReel) {
+          const scenes = weeklyScenePhotos({ campaignId: campaign.id, contentItemId: item.id, brand: campaign.brand, goal: campaign.goal || "", headline: item.headline || "", caption: item.caption || "", direction: x.visualDirection || weeklySlot!.topic });
+          for (const scene of scenes) await tx.job.create({ data: {
+            id: `${item.id}-weekly-scene-${scene.sceneNumber}`, organizationId: job.organizationId, type: "GENERATE_IMAGE",
+            payload: { campaignId: campaign.id, contentItemId: item.id, weeklyPackId: p.weeklyPackId, weeklySlotKey: weeklySlot!.key, scenePhotoPlan: scene },
+          } });
+          imageJobsCreated += scenes.length;
+          creativeLayoutIndex++;
+          continue;
         }
 
         if(setupPhotos.length && x.type !== "holiday_post") await attachSetupPhoto(tx,job.organizationId,campaign.id,item.id,setupPhotos[setupPhotoIndex++ % setupPhotos.length]);

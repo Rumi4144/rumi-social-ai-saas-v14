@@ -9,16 +9,19 @@ export type ScenePhotoPlan = {
 };
 export type ScenePhotoResult = {assetId: string; needsReview: boolean; review: PhotoReview; candidateIds: string[]};
 
-/** One credit reservation, at most two generated images, with both originals retained. */
-export async function reviewedScenePhoto(id: string, organizationId: string, plan: ScenePhotoPlan) {
-  const where = {id, organizationId, type: 'REEL_SCENE_PHOTO'};
+/** A paid scene reservation or included weekly scene; at most one replacement,
+ * with both originals retained and the same provider IDs on every resume. */
+export async function reviewedScenePhoto(id: string, organizationId: string, plan: ScenePhotoPlan, jobType: "REEL_SCENE_PHOTO" | "GENERATE_IMAGE" = "REEL_SCENE_PHOTO") {
+  const where = {id, organizationId, type: jobType};
   const job = await prisma.job.findFirst({where});
-  if (job?.status === 'succeeded' || job?.status === 'failed') return;
+  if (!job) throw new Error("Scene preparation not found in this workspace.");
+  if (job.status === 'succeeded' || job.status === 'failed') return;
   async function candidate(attempt: number, prompt: string) {
     const assetId = attempt ? `${id}-replacement` : id;
     const saved = await prisma.mediaAsset.findFirst({where: {id: assetId, organizationId, campaignId: plan.campaignId, contentItemId: plan.contentItemId}});
     if (saved) return saved;
-    const generated = await generateImage({organizationId, requestId: attempt ? `${id}:replacement` : id, prompt, format: 'story'});
+    const requestId = jobType === 'GENERATE_IMAGE' ? `worker:${id}` : id;
+    const generated = await generateImage({organizationId, requestId: attempt ? `${requestId}:replacement` : requestId, prompt, format: 'story'});
     if (!generated.base64) throw new ImageRejectedError();
     return prisma.mediaAsset.upsert({where: {id: assetId}, update: {}, create: {
       id: assetId, organizationId, campaignId: plan.campaignId, contentItemId: plan.contentItemId,
