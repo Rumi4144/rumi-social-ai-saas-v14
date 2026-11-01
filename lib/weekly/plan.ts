@@ -3,6 +3,7 @@ import { WEEKLY_DESIGNS } from "../render/weekly-layouts";
 import { photoKey } from "../reels/product-photos";
 import type { WeeklyMix } from "../billing/packages";
 import type { WeeklyManifest, WeeklySlot, WeeklyKind } from "./types";
+import { nextWeeklyLayout } from "./layout-rotation";
 
 // New packs use the same complete branded compositions as the admin previews.
 // Saved legacy layouts and approved artwork remain unchanged.
@@ -74,6 +75,8 @@ export function planWeek(input: { organizationId: string; brandId: string; brand
   for (let index = 0; index < videoCount; index++) kinds[Math.min(count - 1, Math.floor((index + 1) * count / (videoCount + 1)))] = index < input.mix.motionReels ? "motion_reel" : "ai_video";
   const prior = input.history.filter(row => row.brandId === input.brandId && row.weekStart < input.weekStart).sort((a, b) => a.weekStart.localeCompare(b.weekStart)).flatMap(row => row.slots);
   const layouts = prior.map(slot => slot.layout), photos = prior.map(slot => photoKey(slot.sourceImageUrl || ""));
+  const upcomingLayouts = input.history.filter(row => row.brandId === input.brandId && row.weekStart > input.weekStart)
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart)).flatMap(row => row.slots.map(slot => slot.layout));
   const products = prior.map(weeklyProductKey).filter(Boolean);
   const groups = photoGroups(input.photos).map(rows => ({ key: weeklyProductKey(rows[0]), rows }));
   const assignments = new Map<number, WeeklyPhoto[]>();
@@ -101,13 +104,7 @@ export function planWeek(input: { organizationId: string; brandId: string; brand
   for (let index = 0; index < count; index++) {
     const day = Math.floor(index * 7 / count) + 1, kind = kinds[index];
     const seed = `${input.organizationId}:${input.brandId}:${input.weekStart}:${index}`;
-    const blockLength = index % WEEKLY_LAYOUTS.length;
-    const usedInBlock = blockLength ? slots.slice(-blockLength).map(slot => slot.layout) : [];
-    const available = WEEKLY_LAYOUTS.filter(layout => !layouts.slice(-5).includes(layout) && !usedInBlock.includes(layout));
-    const lastWeek = input.history.find(row => row.brandId === input.brandId && row.weekStart === addDays(input.weekStart, -7))?.slots[index]?.layout;
-    // Seeded variation avoids locking the same composition to every Monday,
-    // while each seven-slot block still contains seven different designs.
-    const layout = [...available].sort((a, b) => Number(a === lastWeek) - Number(b === lastWeek) || rank(seed, a).localeCompare(rank(seed, b)))[0];
+    const layout = nextWeeklyLayout(seed, layouts, upcomingLayouts, slots.map(slot => slot.layout));
     layouts.push(layout);
     const candidates = assignments.get(index) || [];
     const source = [...candidates].sort((a, b) => photos.lastIndexOf(photoKey(a.imageUrl)) - photos.lastIndexOf(photoKey(b.imageUrl)) || rank(seed, a.imageUrl).localeCompare(rank(seed, b.imageUrl)))[0];

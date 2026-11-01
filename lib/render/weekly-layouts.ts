@@ -1,18 +1,22 @@
 import type { SocialSvgInput } from "./svg";
 import { lightBrandPalette, mixColor } from "./light-palette";
 import { weeklyFontMetrics, weeklyFontVerticalMetrics } from "./weekly-font-metrics";
+import { WEEKLY_COMPOSITIONS, COMPOSITION_BY_ID, type CompositionDesign } from "./weekly-compositions";
 
-export const WEEKLY_DESIGNS = ["weekly-banner", "weekly-orbit", "weekly-editorial", "weekly-diagonal", "weekly-frame", "weekly-ribbon", "weekly-duotone"] as const;
+export const WEEKLY_DESIGNS = ["weekly-banner", "weekly-orbit", "weekly-editorial", "weekly-diagonal", "weekly-frame", "weekly-ribbon", "weekly-duotone", ...WEEKLY_COMPOSITIONS.map(item => item.value)] as const;
 export type WeeklyDesign = typeof WEEKLY_DESIGNS[number];
 export const WEEKLY_DESIGN_CHOICES = [
-  { value: "weekly-banner", label: "Color Banner", description: "Giant display lettering and a sweeping color field beside the original product." },
-  { value: "weekly-orbit", label: "Color Orbit", description: "An immersive photograph, luminous rings and a bold two-tone headline." },
-  { value: "weekly-editorial", label: "Editorial Feature", description: "Oversized serif lettering, an offset photograph and sculpted color bands." },
-  { value: "weekly-diagonal", label: "Diagonal Spotlight", description: "A full product view meets a dramatic angled headline panel." },
-  { value: "weekly-frame", label: "Signature Frame", description: "A vivid typographic poster with a large photograph and graphic corner accents." },
-  { value: "weekly-ribbon", label: "Ribbon Spotlight", description: "Flowing brand-color ribbons and a prominent headline around the photograph." },
-  { value: "weekly-duotone", label: "Split Statement", description: "Contrasting color fields, a tall product view and stacked display lettering." },
+  { value: "weekly-banner", label: "Color Banner", family: "Color Blocks", description: "Giant display lettering and a sweeping color field beside the original product." },
+  { value: "weekly-orbit", label: "Color Orbit", family: "Circular", description: "An immersive photograph, luminous rings and a bold two-tone headline." },
+  { value: "weekly-editorial", label: "Editorial Feature", family: "Editorial", description: "Oversized serif lettering, an offset photograph and sculpted color bands." },
+  { value: "weekly-diagonal", label: "Diagonal Spotlight", family: "Angles", description: "A full product view meets a dramatic angled headline panel." },
+  { value: "weekly-frame", label: "Signature Frame", family: "Frames", description: "A vivid typographic poster with a large photograph and graphic corner accents." },
+  { value: "weekly-ribbon", label: "Ribbon Spotlight", family: "Flow", description: "Flowing brand-color ribbons and a prominent headline around the photograph." },
+  { value: "weekly-duotone", label: "Split Statement", family: "Color Blocks", description: "Contrasting color fields, a tall product view and stacked display lettering." },
+  ...WEEKLY_COMPOSITIONS.map(({ value, label, family, description }) => ({ value, label, family, description })),
 ] as const;
+export const WEEKLY_DESIGN_FAMILIES = [...new Set(WEEKLY_DESIGN_CHOICES.map(item => item.family))].sort();
+export function weeklyDesignFamily(value: string) { return WEEKLY_DESIGN_CHOICES.find(item => item.value === value)?.family || "Legacy"; }
 export function isWeeklyDesign(value?: string): value is WeeklyDesign { return WEEKLY_DESIGNS.some(style => style === value); }
 const esc = (value: string) => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!);
 type Face = "display" | "editorial" | "body";
@@ -63,21 +67,35 @@ export function renderWeeklyDesign(input: SocialSvgInput, style: WeeklyDesign) {
   const fonts = `<style>${font(family.display, input.designFonts?.display, 800)}${font(family.editorial, input.designFonts?.editorial, 600)}${font(family.body, input.designFonts?.body, 400)}</style>`;
   const text = (value: string, x: number, y: number, size: number, fill: string, face: Face = "body", extra = "") => `<text x="${x}" y="${y}" fill="${fill}" font-family="${family[face]}, ${face === "editorial" ? "Georgia, serif" : "Arial, sans-serif"}" font-size="${size}" font-weight="${face === "display" ? 800 : face === "editorial" ? 600 : 400}" font-kerning="none" ${extra}>${esc(value)}</text>`;
   const photo = (x: number, y: number, w: number, height: number) => input.imageUrl ? `<image data-role="product-photo" href="${esc(input.imageUrl)}" x="${x}" y="${y}" width="${w}" height="${height}" preserveAspectRatio="xMidYMid meet"/>` : "";
-  const title = (x: number, y: number, w: number, height: number, fill: string, highlight = fill, face: Face = "display", preferred = 150) => {
-    const fitted = weeklyHeadline(input.headline, w, height, preferred, face);
-    return `<g data-role="headline" data-box="${x},${y},${w},${height}">${fitted.lines.map((line, i) => text(line, x, y + fitted.baseline + i * fitted.size * 1.04, fitted.size, i === fitted.lines.length - 1 ? highlight : fill, face)).join("")}</g>`;
+  const title = (x: number, y: number, w: number, height: number, fill: string, highlight = fill, face: Face = "display", preferred = 150, align: "left" | "center" | "right" = "left", centered = false) => {
+    // Serif glyphs can extend past their advance width. In the new compositions
+    // reserve a small side bearing so their visible edges stay inside the box.
+    const inset = centered ? 8 : 0;
+    const fitted = weeklyHeadline(input.headline, w - inset * 2, height, preferred, face);
+    const tx = x + (align === "center" ? w / 2 : align === "right" ? w - inset : inset), dy = centered ? Math.max(0, (height - fitted.height) / 2) : 0;
+    const anchor = align === "left" ? "" : `text-anchor="${align === "center" ? "middle" : "end"}"`;
+    return `<g data-role="headline" data-box="${x},${y},${w},${height}">${fitted.lines.map((line, i) => text(line, tx, y + dy + fitted.baseline + i * fitted.size * 1.04, fitted.size, i === fitted.lines.length - 1 ? highlight : fill, face, anchor)).join("")}</g>`;
   };
   const logo = input.logoUrl ? `<g data-role="logo-lockup"><rect x="44" y="${top - 8}" width="326" height="142" rx="4" fill="#fff"/><image data-role="brand-logo" href="${esc(input.logoUrl)}" x="52" y="${top}" width="310" height="126" preserveAspectRatio="xMidYMid meet"/></g>` : "";
   const brandSize = Math.min(42, 900 / Math.max(1, measure(input.brand.toUpperCase(), 1, "body")));
   const brandName = text(input.brand.toUpperCase(), 52, top + 65, brandSize, ink);
-  const button = (x: number, y: number, fill: string, foreground: string, maxWidth = 520) => {
+  const button = (x: number, y: number, fill: string, foreground: string, maxWidth = 520, shape: "pill" | "square" | "outline" = "pill") => {
     const value = input.cta || "Explore more", size = Math.min(29, (maxWidth - 100) / Math.max(1, measure(value, 1, "body")));
     const width = Math.min(maxWidth, Math.max(320, measure(value, size, "body") + 100));
-    return `<g data-role="call-to-action"><rect x="${x}" y="${y}" width="${width}" height="78" rx="39" fill="${fill}"/>${text(value, x + 28, y + 49, size, foreground)}<path d="M${x + width - 58} ${y + 39}h28m-10-10 10 10-10 10" stroke="${foreground}" stroke-width="2.5" fill="none"/></g>`;
+    const fg = shape === "outline" ? fill : foreground;
+    return `<g data-role="call-to-action"><rect x="${x}" y="${y}" width="${width}" height="78" rx="${shape === "pill" ? 39 : 4}" fill="${shape === "outline" ? "none" : fill}" ${shape === "outline" ? `stroke="${fill}" stroke-width="2"` : ""}/>${text(value, x + 28, y + 49, size, fg)}<path d="M${x + width - 58} ${y + 39}h28m-10-10 10 10-10 10" stroke="${fg}" stroke-width="2.5" fill="none"/></g>`;
   };
   const py = top + 155, ctaY = h - bottom - 78;
   let artwork = "", headerColor = ink;
-  if (style === "weekly-banner") {
+  const composition = COMPOSITION_BY_ID.get(style as CompositionDesign);
+  if (composition) {
+    const colors = { ink, paper, brand, accent, warm, glow, white: "#ffffff" };
+    const height = ctaY - py - 28;
+    const box = ([x, y, w, bh]: readonly number[]) => [40 + x, py + y * height / 1000, w, bh * height / 1000] as const;
+    const art = composition.art.replace(/\{(ink|paper|brand|accent|warm|glow|white)\}/g, (_, tone: keyof typeof colors) => colors[tone]);
+    const [x, y, w, bh] = box(composition.headline), fill = colors[composition.titleTone];
+    artwork = `<rect width="1080" height="${h}" fill="${colors[composition.background]}"/><svg data-role="composition" data-layout="${style}" x="40" y="${py}" width="1000" height="${height}" viewBox="0 0 1000 1000" preserveAspectRatio="none">${art}</svg>${photo(...box(composition.photo))}${title(x, y, w, bh, fill, fill, composition.face, composition.face === "editorial" ? 138 : 164, composition.align, true)}${button(composition.ctaX, ctaY, ink, "#ffffff", Math.min(520, 1028 - composition.ctaX), composition.ctaShape)}`;
+  } else if (style === "weekly-banner") {
     // Color and lettering share a tall split composition; the product has its own
     // uninterrupted area, including catalog photos with narrow/black backgrounds.
     artwork = `<rect width="1080" height="${h}" fill="${warm}"/><path d="M620 0H1080V${h}H380Q820 ${h * .6} 620 0" fill="${accent}"/><path d="M710 0Q950 ${h * .6} 460 ${h}" stroke="${glow}" stroke-width="3" fill="none"/><rect x="492" y="${py}" width="536" height="${h - py - bottom - 120}" rx="268" fill="${ink}"/>${photo(512, py + 20, 496, h - py - bottom - 160)}<path d="M52 ${py + 105}h80" stroke="${accent}" stroke-width="9"/>${title(52, py + 155, 430, Math.min(520, ctaY - py - 190), ink, accent, "display", 168)}${button(52, ctaY, ink, "#ffffff", 440)}`;

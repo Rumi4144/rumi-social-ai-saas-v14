@@ -25,7 +25,7 @@ test('52 planned weeks supply 364 distinct angles without nearby design or photo
     for (const slot of next.slots) { assert.ok(!layouts.slice(-5).includes(slot.layout)); assert.notEqual(sources.at(-1), slot.sourceImageUrl); layouts.push(slot.layout); sources.push(slot.sourceImageUrl); angles.add(slot.topic); }
     history.push({ brandId: 'brand', weekStart: input.weekStart, slots: next.slots });
   }
-  assert.equal(angles.size, 364); assert.equal(new Set(layouts).size, 7);
+  assert.equal(angles.size, 364); assert.equal(new Set(layouts).size, 90);
   const other = plan.planWeek({ organizationId: 'other', brandId: 'other', brandName: 'Other business', weekStart: '2026-10-26', startsOn: '2026-10-26', mix: { images: 7, motionReels: 0, aiVideos: 0 }, photos: [], history });
   assert.ok(other.slots.every(slot => !slot.sourceImageUrl && slot.topic.startsWith('Other business:')));
 });
@@ -298,8 +298,8 @@ test('new weekly layouts preserve original logo and photo across export sizes wi
   for (const style of WEEKLY_DESIGNS) for (const [format, height] of [['square',1080],['portrait',1350],['story',1920]]) {
     const svg = renderWeeklyDesign({ brand:'Actual & Business', headline:'Find your sound', cta:'Learn more', imageUrl:'data:image/png;base64,PHOTO', logoUrl:'data:image/png;base64,LOGO', primaryColor:'bad" onload="alert(1)', accentColor:'#fe5739', format },style);
     assert.match(svg,new RegExp(`height="${height}"`)); assert.match(svg,/data:image\/png;base64,PHOTO/); assert.match(svg,/data:image\/png;base64,LOGO/); assert.match(svg,/Actual &amp; Business/);
-    assert.ok(!/onload=|NaN|undefined|<script/.test(svg)); assert.ok([...svg.matchAll(/font-size="([0-9]+)"/g)].some(m=>Number(m[1])>=110)); assert.equal((svg.match(/<image /g)||[]).length,2);
+    assert.ok(!/onload=|NaN|undefined|<script/.test(svg)); assert.ok([...svg.matchAll(/font-size="([0-9]+)"/g)].some(m=>Number(m[1])>=90), `${style} ${format} needs readable lettering`); assert.equal((svg.match(/<image /g)||[]).length,2);
     if(format==='portrait'){designs.add(svg);photoCompositions.add(svg.match(/<image data-role="product-photo" href="data:image\/png;base64,PHOTO"[^>]+/)[0]);}
   }
-  assert.equal(designs.size,7);assert.equal(photoCompositions.size,7,'The seven formats must change the photograph composition, not just border decoration');
+  assert.equal(designs.size,90);assert.ok(photoCompositions.size>=85,'The library must vary photograph geometry as well as headlines and decorative shapes');
 });

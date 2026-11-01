@@ -56,6 +56,9 @@ jobs:
       - run: node tests/admin-design-formats-browser.cjs
         env:
           ADMIN_DESIGN_QA_DIR: qa-admin-design-formats
+      - run: node tests/weekly-library-browser.cjs
+        env:
+          WEEKLY_LIBRARY_QA_DIR: qa-weekly/library
       - run: node tests/tiktok-posting-browser.cjs
       - run: node tests/publishing-position-browser.cjs
       - run: node tests/social-account-selection-browser.cjs

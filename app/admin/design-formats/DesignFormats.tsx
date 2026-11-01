@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DESIGN_FORMATS, DESIGN_SIZES, designHeadline, renderDesignFormat, type DesignFormat, type DesignSize, type DesignFonts, type MeasureDesignText } from "@/lib/render/design-formats";
-import { WEEKLY_DESIGN_CHOICES, renderWeeklyDesign, type WeeklyDesign } from "@/lib/render/weekly-layouts";
+import { WEEKLY_DESIGN_CHOICES, WEEKLY_DESIGN_FAMILIES, renderWeeklyDesign, isWeeklyDesign, type WeeklyDesign } from "@/lib/render/weekly-layouts";
 import styles from "./DesignFormats.module.css";
 
 const dataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
@@ -13,6 +13,9 @@ const loadImage = (src: string) => new Promise<HTMLImageElement>((resolve, rejec
 const svgUrl = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 const faces = { display: "RumiDisplay", editorial: "RumiEditorial", italic: "RumiEditorialItalic", body: "RumiBody" } as const;
 type PreviewFormat = DesignFormat | WeeklyDesign;
+const FORMATS = [...WEEKLY_DESIGN_CHOICES.map((item, index) => ({ ...item, number: String(index + 1).padStart(2, "0"), collection: "weekly" })),
+  ...DESIGN_FORMATS.map((item, index) => ({ ...item, number: `S${index + 1}`, family: "Studio studies", collection: "studies" }))];
+const PAGE_SIZE = 12;
 async function bundledImage(path: string) {
   const response = await fetch(path); if (!response.ok) throw new Error("The sample assets could not load. Try again or choose your own images.");
   const source = await dataUrl(await response.blob()); await loadImage(source); return source;
@@ -31,6 +34,7 @@ export default function DesignFormats() {
   const [customAccent, setCustomAccent] = useState(false), [accent, setAccent] = useState("#ef653d"), [fonts, setFonts] = useState<DesignFonts | null>(null);
   const [selected, setSelected] = useState<PreviewFormat | null>(null), [downloading, setDownloading] = useState<PreviewFormat | null>(null), [message, setMessage] = useState("");
   const [loadingPhoto, setLoadingPhoto] = useState(true), [loadingLogo, setLoadingLogo] = useState(true), [fontError, setFontError] = useState(false), [fontAttempt, setFontAttempt] = useState(0);
+  const [collection, setCollection] = useState("weekly"), [family, setFamily] = useState("all"), [search, setSearch] = useState(""), [page, setPage] = useState(0);
   const dialog = useRef<HTMLDialogElement>(null), upload = useRef<HTMLInputElement>(null), logoUpload = useRef<HTMLInputElement>(null), photoRequest = useRef(0), logoRequest = useRef(0);
   async function resetSample() {
     const photoId = ++photoRequest.current, logoId = ++logoRequest.current;
@@ -60,7 +64,13 @@ export default function DesignFormats() {
     return context ? (value, pixels, face) => { context.font = `${pixels}px ${faces[face]}`; return context.measureText(value).width; } : undefined;
   }, [fonts]);
   const sample = { brand, headline, cta, photo, logo, detail, website, size, accent: customAccent ? accent : undefined, fonts: fonts || undefined, measure };
-  const previews = useMemo(() => [...DESIGN_FORMATS.map(format => ({ ...format, svg: renderDesignFormat(sample, format.value) })), ...WEEKLY_DESIGN_CHOICES.map(format => ({ ...format, svg: renderWeeklyDesign({ brand, headline, cta, imageUrl: photo, logoUrl: logo, format: size, accentColor: customAccent ? accent : "#ef653d", primaryColor: "#172846", designFonts: fonts || undefined }, format.value) }))], [brand, headline, cta, photo, logo, detail, website, size, accent, customAccent, fonts, measure]);
+  const filtered = useMemo(() => FORMATS.filter(item => (collection === "all" || item.collection === collection) && (family === "all" || item.family === family) && `${item.label} ${item.family} ${item.description}`.toLowerCase().includes(search.trim().toLowerCase())), [collection, family, search]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)), currentPage = Math.min(page, pageCount - 1);
+  // Render only one page of full-resolution SVGs. Fonts and original assets are
+  // embedded for export; generating 93 copies at once would waste browser memory.
+  const previews = useMemo(() => filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map(format => ({ ...format, svg: isWeeklyDesign(format.value)
+    ? renderWeeklyDesign({ brand, headline, cta, imageUrl: photo, logoUrl: logo, format: size, accentColor: customAccent ? accent : "#ef653d", primaryColor: "#172846", designFonts: fonts || undefined }, format.value)
+    : renderDesignFormat(sample, format.value) })), [filtered, currentPage, brand, headline, cta, photo, logo, detail, website, size, accent, customAccent, fonts, measure]);
   const headlineTooLong = DESIGN_FORMATS.some(format => designHeadline(headline, format.value, measure).overflow);
   const loading = loadingPhoto || loadingLogo || !fonts;
   const canDownload = Boolean(photo && logo && brand.trim() && headline.trim() && cta.trim() && !headlineTooLong && !loading && !downloading);
@@ -102,8 +112,8 @@ export default function DesignFormats() {
   const open = previews.find(item => item.value === selected);
   return <div className={styles.page}>
     <header className={styles.header}>
-      <div><span className={styles.badge}>ADMIN PREVIEW · BRANDED COMPOSITIONS</span><h1>Design Formats</h1><p>Your logo. Your product. A complete visual identity.</p></div>
-      <p className={styles.note}>Compare complete ad designs before choosing customer defaults. Open any design to inspect the lettering and logo.</p>
+      <div><span className={styles.badge}>90 WEEKLY LAYOUTS · ADMIN PREVIEW</span><h1>Design Formats</h1><p>Your logo. Your product. Ninety distinct compositions.</p></div>
+      <p className={styles.note}>New weekly packs rotate through each business’s saved layout history. Only the week requested is prepared. Open any design to inspect the lettering and logo.</p>
     </header>
     <section className={styles.controls} aria-label="Preview settings">
       <div className={styles.assetStrip}>
@@ -132,9 +142,16 @@ export default function DesignFormats() {
       {headlineTooLong && <p role="alert" className={styles.warning}>Shorten the headline so it fits in three large, readable lines. Downloads will be available once it fits.</p>}
       <p role="status" className={styles.status}>{message}</p>
     </section>
+    <section className={styles.library} aria-label="Browse design formats">
+      <label>Collection<select aria-label="Collection" value={collection} onChange={event => { setCollection(event.target.value); setFamily("all"); setPage(0); setSelected(null); }}><option value="weekly">Weekly layouts (90)</option><option value="studies">Studio studies (3)</option><option value="all">All formats (93)</option></select></label>
+      <label>Design family<select aria-label="Design family" value={family} onChange={event => { setFamily(event.target.value); setPage(0); setSelected(null); }}><option value="all">All families</option>{(collection === "studies" ? ["Studio studies"] : collection === "all" ? [...WEEKLY_DESIGN_FAMILIES, "Studio studies"] : WEEKLY_DESIGN_FAMILIES).map(value => <option key={value}>{value}</option>)}</select></label>
+      <label>Find a layout<input aria-label="Find a layout" type="search" value={search} placeholder="Name, shape or style" onChange={event => { setSearch(event.target.value); setPage(0); setSelected(null); }} /></label>
+      <p className={styles.libraryCount} aria-live="polite">{filtered.length ? `${currentPage * PAGE_SIZE + 1}–${Math.min((currentPage + 1) * PAGE_SIZE, filtered.length)} of ${filtered.length} designs` : "No matching designs. Try another name or family."}</p>
+      <nav className={styles.pagination} aria-label="Design pages"><button type="button" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); setSelected(null); }}>Previous designs</button><span>Page {currentPage + 1} of {pageCount}</span><button type="button" disabled={currentPage + 1 >= pageCount} onClick={() => { setPage(currentPage + 1); setSelected(null); }}>Next designs</button></nav>
+    </section>
     <div className={styles.grid}>
-      {previews.map((format, i) => <article key={format.value} className={styles.card}>
-        <div className={styles.cardHeader}><span className={styles.number}>0{i + 1}</span><div><h2>{format.label}</h2><p>{format.description}</p></div></div>
+      {previews.map(format => <article key={format.value} className={styles.card}>
+        <div className={styles.cardHeader}><span className={styles.number}>{format.number}</span><div><h2>{format.label}</h2><p>{format.family} · {format.description}</p></div></div>
         <button type="button" className={styles.preview} aria-label={`Preview ${format.label}`} onClick={() => setSelected(format.value)} disabled={!photo || loading}>
           {photo && fonts ? <img src={svgUrl(format.svg)} alt={`${format.label} sample for ${brand}`} width={1080} height={DESIGN_SIZES[size].height} /> : <span className={styles.placeholder}>{fontError ? "Retry lettering above to see the finished design." : loading ? "Preparing branded designs…" : "Choose a photo to preview these formats."}</span>}
           <span className={styles.zoom}>View full size ↗</span>

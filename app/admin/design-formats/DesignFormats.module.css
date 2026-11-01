@@ -39,6 +39,12 @@
 @media(max-width:1200px){.row{grid-template-columns:repeat(2,minmax(0,1fr))}.header{align-items:flex-start}.header .note{max-width:230px}}
 @media(max-width:650px){.header{display:block}.header .note{max-width:none;margin-top:16px}.grid{grid-template-columns:minmax(0,1fr);gap:20px}.row{grid-template-columns:minmax(0,1fr)}.controls{padding:18px}.photoControls{align-items:flex-start}.photoControls>label:first-child{max-width:100%}.cardHeader{padding:18px}.zoom{opacity:1}.dialog{padding:12px}.dialogHeader{top:-12px}.dialogHeader h2{font-size:18px}}
 .assetStrip{display:flex;gap:22px;align-items:center;padding-bottom:24px;margin-bottom:24px;border-bottom:1px solid #e5ece7}
+.library{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:16px;background:#fff;border:1px solid #d6e3dc;border-radius:16px;padding:22px;margin-bottom:24px}
+.library label{display:grid;gap:6px;font-size:13px;font-weight:650;min-width:0}.library input,.library select{width:100%;min-width:0}
+.libraryCount{grid-column:1/-1;margin:0;font-size:14px;color:#56716a}.pagination{grid-column:1/-1;display:flex;align-items:center;gap:12px;flex-wrap:wrap}.pagination span{font-size:13px}.pagination button{font-size:13px!important}
+.grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.cardHeader{padding:16px;gap:10px}.cardHeader h2{font-size:20px}.actions{padding:16px}
+@media(max-width:1100px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.library{grid-template-columns:minmax(0,1fr);padding:18px}.grid{grid-template-columns:minmax(0,1fr)}}
 .assetLogo{width:200px;height:88px;background:#fff;display:grid;place-items:center;border:1px solid #e5ece7;border-radius:8px;flex-shrink:0;overflow:hidden}
 .assetLogo img{width:100%;height:100%;object-fit:contain}
 .assetLogo span{color:#74867d;font-size:14px}
