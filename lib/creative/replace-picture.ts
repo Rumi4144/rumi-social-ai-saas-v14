@@ -24,8 +24,8 @@ export async function editablePicture(db: Database, ctx: Context, id: string) {
   if (!["draft", "approved"].includes(item.status)) throw new PictureError("Scheduled and posted ads keep their saved picture. Cancel scheduling before changing a draft.");
   const active = await db.publishJob.findFirst({ where: { organizationId: ctx.organizationId, contentItemId: id, status: { in: lockedDeliveryStatuses } } });
   if (active) throw new PictureError("This ad has a scheduled or completed delivery. Its picture cannot be changed here.");
-  const request = await db.job.findFirst({ where: { organizationId: ctx.organizationId, type: "CONTENT_CHANGE_REQUEST", status: "pending", payload: { path: ["contentItemId"], equals: id } } });
-  if (request && !ctx.isSuperAdmin) throw new PictureError("Admin is already working on your requested changes. Try again when they are finished.");
+  // Photo selection remains available while Admin reviews a change request.
+  // Replacing artwork does not resolve the request or approve the post.
   const reference = savedItemMedia(item.mediaUrl);
   if (!reference || reference.kind !== "image") throw new PictureError("Wait for the finished design before replacing its picture.");
   const creative = await db.mediaAsset.findFirst({ where: { id: reference.id, organizationId: ctx.organizationId, campaignId: item.campaignId, contentItemId: id, kind: "social_creative", status: "ready", url: { not: null } } });

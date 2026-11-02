@@ -30,7 +30,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
   const title = item.changeRequest ? "Changes requested" : item.needsAttention || reelFeedback?.error ? "Needs attention" : published ? "Posted" : item.status === "scheduled" ? "Scheduled" : approved ? "Approved" : item.isReady ? "Ready to review" : reelFeedback?.running ? "Preparing reel" : canFinish ? "Not finished" : "Being prepared";
   const plannedDate = item.plannedDate || item.date;
   const canEditDate = canManage && item.canChangeDate && !locked;
-  const canReplacePicture = canManage && !locked && ["draft", "approved"].includes(item.status) && item.kind === "image" && item.mediaKind === "image" && (item.isReady || (isAdmin && !!item.changeRequest && !!item.assetId)) && (!item.changeRequest || isAdmin);
+  const canReplacePicture = canManage && !locked && ["draft", "approved"].includes(item.status) && item.kind === "image" && item.mediaKind === "image" && (item.isReady || (!!item.changeRequest && !!item.assetId));
   const formattedDate = new Date(`${plannedDate.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 
   async function saveDate() {
@@ -86,7 +86,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
       </div>
       {canReplacePicture && <div className={styles.editMedia}>
         <button disabled={pending || busy} onClick={() => setPictureOpen(true)}><ImagePlus size={14} aria-hidden="true" />Replace picture</button>
-        <button disabled={pending || busy} onClick={() => setDesignOpen(true)}><LayoutTemplate size={14} aria-hidden="true" />Change design</button>
+        {(!item.changeRequest || isAdmin) && <button disabled={pending || busy} onClick={() => setDesignOpen(true)}><LayoutTemplate size={14} aria-hidden="true" />Change design</button>}
       </div>}
       {canFinish && !finishOpen && <button className={styles.finish} disabled={pending || busy} onClick={() => setFinishOpen(true)}>{reelFeedback?.running ? "Preparing reel…" : item.kind === "ai_video" ? "Finish AI video · up to 120 credits" : "Finish reel · 4 credits"}</button>}
       {canFinish && finishOpen && <section className={styles.reelFeedback} aria-label="Finish reel confirmation">

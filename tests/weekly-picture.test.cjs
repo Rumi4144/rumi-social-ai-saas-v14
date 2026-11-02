@@ -58,8 +58,8 @@ test('uploads and older saved layouts can be used without generation or publishi
   assert.equal(f.writes[0][1].metadata.sourceAssetId, null);
   assert.equal(f.writes[0][1].metadata.productName, undefined, 'Do not invent product provenance for an upload');
 });
-test('foreign data, stale views, reels, pending changes, active deliveries and races never replace artwork', async () => {
-  for (const options of [{ missing: true }, { foreignSource: true }, { noCreative: true }, { pendingChange: true }, { item: { type: 'reel_post' } }, { item: { status: 'scheduled' } }, { item: { status: 'published' } }, { delivery: true }, { raceDelivery: true }, ...['mediaUrl', 'caption', 'headline', 'status'].map(race => ({ race }))]) {
+test('foreign data, stale views, reels, active deliveries and races never replace artwork', async () => {
+  for (const options of [{ missing: true }, { foreignSource: true }, { noCreative: true }, { item: { type: 'reel_post' } }, { item: { status: 'scheduled' } }, { item: { status: 'published' } }, { delivery: true }, { raceDelivery: true }, ...['mediaUrl', 'caption', 'headline', 'status'].map(race => ({ race }))]) {
     const f = fixture(options); await assert.rejects(f.replace(), undefined, JSON.stringify(options)); assert.equal(f.writes.length, 0);
   }
   const stale = fixture(); await assert.rejects(stale.replace({ expectedMediaUrl: '/api/media/stale' }), /changed/); assert.equal(stale.renders.length, 0);
@@ -116,4 +116,12 @@ test('Admin can replace a photo while its customer change request is pending', a
   const result = await f.replacePicture({ ...ctx, isSuperAdmin: true }, 'post', { assetId: 'photo', expectedMediaUrl: '/api/media/original' });
   assert.ok(result);
   assert.ok(f.writes.some(row => row[0] === 'item'));
+});
+
+test('customer can select a photo while a request remains pending, without approving or resolving it', async () => {
+  const f = fixture({ pendingChange: true, item: {status: 'draft'} });
+  assert.equal((await f.pictureChoices(ctx, 'post')).length, 2);
+  await f.replace();
+  assert.equal(f.item.status, 'draft');
+  assert.equal(f.writes.some(w => w[0] === 'job'), false);
 });
