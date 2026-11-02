@@ -1,10 +1,11 @@
 import Link from "next/link";
 
-export default function AdminTabs({ active }: { active: "overview" | "activity" | "design-formats" | "archive" | "requests" | "annual-plan" }) {
+export default function AdminTabs({ active }: { active: "overview" | "activity" | "design-formats" | "archive" | "requests" | "annual-plan" | "social-apps" }) {
   return <nav aria-label="Admin sections" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "0 0 24px" }}>
     {[
       ["overview", "/admin", "Control Center"],
       ["activity", "/admin/activity", "User Activity"],
+      ["social-apps", "/admin/social-apps", "Social Apps"],
       ["design-formats", "/admin/design-formats", "Design Formats"],
       ["annual-plan", "/admin/annual-plan", "Annual Plan"],
       ["requests", "/admin/requests", "Customer Requests"],

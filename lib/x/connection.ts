@@ -5,6 +5,9 @@ import { decryptSecret, encryptSecret } from "@/lib/security/crypto";
 export const X_COOKIE = "rumi_x_oauth";
 export const X_COOKIE_PATH = "/api/social/x";
 export const X_OAUTH_TYPE = "X_OAUTH";
+// Reserved configuration record, never a customer account or authorization grant.
+export const X_PLATFORM_ORG = "__rumi_platform__";
+export const X_PLATFORM_APP_ID = "x_platform_app";
 export const X_SCOPES = "tweet.read tweet.write users.read media.write offline.access";
 export function xCanPublish(scope: string) { return ["tweet.read", "tweet.write", "users.read", "media.write"].every(s => scope.split(" ").includes(s)); }
 export type XCredentials = { clientId: string; clientSecret: string };
@@ -21,24 +24,28 @@ export function sameXOrigin(req: Request) { return req.headers.get("origin") ===
 export function requireXWriter(role: string) {
   if (!["owner", "admin", "member", "superadmin"].includes(role)) throw new Error("FORBIDDEN");
 }
-export function canConfigureX(ctx: { role: string; isSuperAdmin?: boolean }) {
-  return Boolean(ctx.isSuperAdmin || ["owner", "admin", "superadmin"].includes(ctx.role));
-}
 export function xId(kind: string, value: string) { return `x_${kind}_${createHash("sha256").update(value).digest("hex")}`; }
 export function xConfigVersion(credentials: XCredentials) { return xId("config", JSON.stringify(credentials)); }
 export function xPkce() {
   const verifier = randomBytes(32).toString("base64url");
   return { verifier, challenge: createHash("sha256").update(verifier).digest("base64url") };
 }
-export async function xCredentials(organizationId: string): Promise<XCredentials | null> {
-  const record = await prisma.socialConnection.findFirst({ where: { id: xId("app", organizationId), organizationId, provider: "x_app", status: "configured" } });
-  if (record?.encryptedToken) {
-    const value = JSON.parse(decryptSecret(record.encryptedToken));
-    if (typeof value.clientId !== "string" || typeof value.clientSecret !== "string" || !value.clientId || !value.clientSecret) throw new Error("X_CONFIG_INVALID");
-    return value;
-  }
+export function decodeXCredentials(encryptedToken: string): XCredentials {
+  const value = JSON.parse(decryptSecret(encryptedToken));
+  if (typeof value.clientId !== "string" || typeof value.clientSecret !== "string" || !value.clientId || !value.clientSecret) throw new Error("X_CONFIG_INVALID");
+  return { clientId: value.clientId, clientSecret: value.clientSecret };
+}
+export async function xPlatformCredentials(): Promise<XCredentials | null> {
+  const record = await prisma.socialConnection.findFirst({ where: { id: X_PLATFORM_APP_ID, organizationId: X_PLATFORM_ORG, provider: "x_platform_app", status: "configured" } });
+  if (record?.encryptedToken) return decodeXCredentials(record.encryptedToken);
   const clientId = process.env.X_CLIENT_ID, clientSecret = process.env.X_CLIENT_SECRET;
   return clientId && clientSecret ? { clientId, clientSecret } : null;
+}
+export async function xCredentials(organizationId: string): Promise<XCredentials | null> {
+  // Preserve the app used by existing customers so their grants can still refresh.
+  const record = await prisma.socialConnection.findFirst({ where: { id: xId("app", organizationId), organizationId, provider: "x_app", status: "configured" } });
+  if (record?.encryptedToken) return decodeXCredentials(record.encryptedToken);
+  return xPlatformCredentials();
 }
 export function xBasic(credentials: XCredentials) {
   const encode = (value: string) => new URLSearchParams({ v: value }).toString().slice(2);
