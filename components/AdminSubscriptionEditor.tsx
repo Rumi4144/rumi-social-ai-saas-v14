@@ -84,18 +84,20 @@ export default function AdminSubscriptionEditor({
       </label>
 
       <label>
-        <strong>Account Status</strong>
+        <strong>Weekly creation access</strong>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
           style={{ display: "block", width: "100%", marginTop: 6 }}
         >
-          <option value="trialing">Trialing</option>
-          <option value="active">Active</option>
-          <option value="past_due">Past Due</option>
-          <option value="canceled">Canceled</option>
+          <option value="trialing">Trial — one seven-day pack</option>
+          <option value="active">Ongoing — use available credits each week</option>
+          <option value="past_due">Paused — payment needs attention</option>
+          <option value="canceled">Stopped</option>
         </select>
       </label>
+
+      <small>You decide access for this customer. Ongoing access permits new weeks within the selected plan’s post limit and available credits. Saving does not charge the customer.</small>
 
       <label>
         <strong>AI Credits</strong>
