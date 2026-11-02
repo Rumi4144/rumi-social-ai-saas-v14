@@ -3,7 +3,7 @@ import type { WeeklyMix } from "../billing/packages";
 export type WeeklyKind = "image" | "motion_reel" | "ai_video";
 export type WeeklySlot = {
   key: string; day: number; date: string; kind: WeeklyKind; topic: string;
-  layout: string; reelPhotoSource?: "website" | "ai"; sourceImageUrl?: string; sourceUrl?: string; productName?: string;
+  layout: string; photoSource?: "ai"; reelPhotoSource?: "website" | "ai"; sourceImageUrl?: string; sourceUrl?: string; productName?: string;
 };
 export type WeeklyManifest = {
   version: 1; brandId: string; campaignId: string; generationJobId: string;

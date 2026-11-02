@@ -16,11 +16,17 @@ test('three saved AI scene plans differ in framing and never claim exact product
   assert.throws(()=>weeklyScenePhotos({...input,caption:'Shop https://shop.test/products/godin-guitar'}),/specific product/);
 });
 
-function workerFixture(extra = false) {
+function workerFixture(extra = false, illustrativeImage = false) {
   const packId='pack', slot={key:'slot',kind:'motion_reel',day:1,date:'2026-11-02',topic:'Music in everyday life',layout:'weekly-banner',reelPhotoSource:'ai'};
   const state={jobs:new Map(),assets:new Map(),posts:new Map(),calls:[],reviews:[],logoReads:[],decision:'passed',copies:0,interrupted:false};
   const business={...brand}; const campaign={id:'campaign',brandId:'brand',goal:'awareness',brand:business};
   const main={id:'generate',organizationId:'org',type:'CREATE_EVERYTHING',status:'queued',createdAt:new Date(),payload:{campaignId:'campaign',weeklyPackId:packId,weeklySlots:[slot],weeklySources:[],brief:'Prepare the week',days:7,goal:'awareness',photoSource:'ai',contentPlan:[{planKey:'slot',type:'reel_post',day:1,date:'2026-11-02',topics:[],platforms:[]}]}};
+  if (illustrativeImage) {
+    slot.kind='image';delete slot.reelPhotoSource;slot.photoSource='ai';
+    main.payload.photoSource='website';main.payload.imageUrls=['https://brand.test/guitar.jpg'];
+    main.payload.websitePhotoEvidence=[{imageUrl:'https://brand.test/guitar.jpg',sourceUrl:'https://brand.test/products/guitar',title:'Guitar'}];
+    main.payload.contentPlan[0].type='post';
+  }
   state.jobs.set(main.id,main);state.jobs.set(packId,{id:packId,organizationId:'org',type:'WEEKLY_PACK',status:'queued',payload:{campaignId:'campaign',slots:[slot]}});
   if (extra) {
     delete main.payload.weeklyPackId;
@@ -31,7 +37,7 @@ function workerFixture(extra = false) {
   const db={
     job:{findFirst:async({where})=>[...state.jobs.values()].find(row=>matches(row,where))||null,
       findMany:async({where})=>[...state.jobs.values()].filter(row=>matches(row,where)),
-      create:async({data})=>{assert.ok(data.id);assert.ok(!state.jobs.has(data.id));const row={status:'queued',...data};state.jobs.set(row.id,row);return row;},
+      create:async({data})=>{if(illustrativeImage&&!data.id)data.id='image-job';assert.ok(data.id);assert.ok(!state.jobs.has(data.id));const row={status:'queued',...data};state.jobs.set(row.id,row);return row;},
       update:async({where,data})=>{const row=state.jobs.get(where.id);Object.assign(row,data);return row;},
       updateMany:async({where,data})=>{const rows=[...state.jobs.values()].filter(row=>matches(row,where));rows.forEach(row=>Object.assign(row,data));return{count:rows.length};}},
     campaign:{findUnique:async q=>{assert.equal(q.where.brand.organizationId,'org');return campaign;},update:async()=>campaign},
@@ -49,7 +55,7 @@ function workerFixture(extra = false) {
     'next/server':{NextResponse:{json:(body,options={})=>({body,status:options.status||200})}},'@/lib/prisma':{prisma:db},
     '@/lib/ai/image-provider':{ImageRejectedError,generateImage:async p=>{state.calls.push(p);return{base64:Buffer.from(p.requestId).toString('base64'),provider:'openai',model:'medium'};}},
     '@/lib/ai/photo-review':{PhotoReviewPendingError,reviewPhoto:async p=>{state.reviews.push(p);if(state.interrupted){state.interrupted=false;throw new PhotoReviewPendingError();}return{status:state.decision,issues:state.decision==='passed'?[]:['Needs review'],replacementDirection:'Try a different setting',comparedAssetIds:[]};}},
-    '@/lib/ai/campaign':{generateCampaign:async()=>{state.copies++;return{title:'Music every day',posts:[{planKey:'slot',day:1,type:'reel_post',headline:input.headline,caption:input.caption,visualDirection:input.direction}],stories:[]};}},
+    '@/lib/ai/campaign':{generateCampaign:async()=>{state.copies++;return{title:'Music every day',posts:[{planKey:'slot',day:1,type:illustrativeImage?'post':'reel_post',headline:input.headline,caption:input.caption,visualDirection:input.direction}],stories:[]};}},
     '@/lib/ai/visual-history':{recentBrandConcepts:async()=>[]},
     '@/lib/ai/visual-plan':{buildVisualConcept:()=>({subjectCategory:'experience'}),recentVisualConcept:()=>({})},
     '@/lib/onboarding/website':{readWebsiteLogo:async url=>{state.logoReads.push(url);return'data:image/png;base64,LOGO';}},
@@ -169,4 +175,12 @@ test('website-logo backfill is tenant scoped, optional and never overwrites a co
     assert.equal(reads.length,mode==='existing'?0:1);assert.equal(writes.length,['found','concurrent'].includes(mode)?1:0);
     if(writes.length)assert.deepEqual(JSON.parse(JSON.stringify(writes[0].where)),{id:'brand',organizationId:'org',logoUrl:null,websiteUrl:'https://shop.test'});
   }
+});
+
+test('illustrative weekly image bypasses website photo fallback even when a product catalog exists',async()=>{
+ const old=process.env.WORKER_SECRET;process.env.WORKER_SECRET='fixture-secret';
+ try {const f=workerFixture(false,true);assert.equal((await f.run('generate')).status,200);
+ const jobs=[...f.state.jobs.values()].filter(j=>j.type==='GENERATE_IMAGE');assert.equal(jobs.length,1);
+ assert.equal(jobs[0].payload.photoSource,'ai');assert.equal(jobs[0].payload.sourceImageUrl,undefined);assert.equal(jobs[0].payload.sourceEvidence,undefined);
+ } finally {if(old===undefined)delete process.env.WORKER_SECRET;else process.env.WORKER_SECRET=old;}
 });

@@ -80,25 +80,16 @@ export function planWeek(input: { organizationId: string; brandId: string; brand
   const products = prior.map(weeklyProductKey).filter(Boolean);
   const groups = photoGroups(input.photos).map(rows => ({ key: weeklyProductKey(rows[0]), rows }));
   const assignments = new Map<number, WeeklyPhoto[]>();
-  // Allocate products for a whole day before choosing individual photographs.
-  // Reels go first because they need a three-photo gallery; image posts can use
-  // the remaining products, even if those products have just one photograph.
-  for (let day = 1; day <= 7; day++) {
-    const today = new Map<string, number>();
-    const indices = kinds.map((kind, index) => ({ kind, index })).filter(({ index }) => Math.floor(index * 7 / count) + 1 === day)
-      .sort((a, b) => Number(a.kind === "image") - Number(b.kind === "image") || a.index - b.index);
-    for (const { kind, index } of indices) {
-      const seed = `${input.organizationId}:${input.brandId}:${input.weekStart}:${index}`;
-      const candidates = groups.filter(group => kind === "image" || group.rows.length >= 3);
-      const selected = candidates.sort((a, b) => (today.get(a.key) || 0) - (today.get(b.key) || 0)
-        || products.lastIndexOf(a.key) - products.lastIndexOf(b.key)
-        || rank(seed, a.key).localeCompare(rank(seed, b.key)))[0];
-      if (selected) {
-        assignments.set(index, selected.rows);
-        today.set(selected.key, (today.get(selected.key) || 0) + 1);
-        products.push(selected.key);
-      }
-    }
+  // A product can appear only once in a pack, regardless of photo count.
+  // Reserve real galleries for AI product videos first, then motion reels.
+  const used = new Set<string>();
+  const indices = kinds.map((kind, index) => ({ kind, index }))
+    .sort((a, b) => ({ai_video:0,motion_reel:1,image:2}[a.kind]) - ({ai_video:0,motion_reel:1,image:2}[b.kind]) || a.index - b.index);
+  for (const {kind,index} of indices) {
+    const seed = `${input.organizationId}:${input.brandId}:${input.weekStart}:${index}`;
+    const selected = groups.filter(group => !used.has(group.key) && (kind === "image" || group.rows.length >= 3))
+      .sort((a,b) => products.lastIndexOf(a.key) - products.lastIndexOf(b.key) || rank(seed,a.key).localeCompare(rank(seed,b.key)))[0];
+    if (selected) { assignments.set(index,selected.rows); used.add(selected.key); products.push(selected.key); }
   }
   const slots: WeeklySlot[] = [];
   for (let index = 0; index < count; index++) {
@@ -111,7 +102,7 @@ export function planWeek(input: { organizationId: string; brandId: string; brand
     if (source) photos.push(photoKey(source.imageUrl));
     const theme = `${PILLARS[(weekNumber - 1) % 4]} ${THEMES[Math.floor((weekNumber - 1) / 4)]}`;
     const topic = `${source?.productName || input.brandName}: ${theme}; ${ANGLES[(index + cycle - 1) % 7]}${count > 7 ? `, perspective ${Math.floor(index / 7) + 1}` : ""}`;
-    slots.push({ key: `week-${cycle}-${weekNumber}-slot-${index + 1}`, day, date: addDays(input.weekStart, day - 1), kind, topic, layout, ...(kind === "motion_reel" ? { reelPhotoSource: source ? "website" as const : "ai" as const } : {}), ...(source ? { sourceImageUrl: source.imageUrl, sourceUrl: source.sourceUrl, productName: source.productName } : {}) });
+    slots.push({ key: `week-${cycle}-${weekNumber}-slot-${index + 1}`, day, date: addDays(input.weekStart, day - 1), kind, topic, layout, ...(!source && kind === "image" ? { photoSource: "ai" as const } : {}), ...(kind === "motion_reel" ? { reelPhotoSource: source ? "website" as const : "ai" as const } : {}), ...(source ? { sourceImageUrl: source.imageUrl, sourceUrl: source.sourceUrl, productName: source.productName } : {}) });
   }
   return { slots, weekNumber, cycle };
 }

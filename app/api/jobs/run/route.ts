@@ -508,8 +508,9 @@ export async function POST(req: Request) {
       const slotTopics = p.contentPlan?.find(slot => slot.planKey === x.planKey)?.topics;
       const assignedPhoto = weeklySlot?.sourceImageUrl ? photoChoices.find(photo => photo.imageUrl === weeklySlot.sourceImageUrl && photo.sourceUrl === weeklySlot.sourceUrl) : undefined;
       const aiReel = weeklySlot?.kind === "motion_reel" && weeklySlot.reelPhotoSource === "ai";
-      const matchedPhoto = !aiReel && p.photoSource === "website" ? assignedPhoto || matchingWebsitePhoto({ headline: x.headline, caption: x.caption, topics: slotTopics }, photoChoices, websitePhotos) : null;
-      if (!aiReel && p.photoSource === "website" && !matchedPhoto && x.type !== "holiday_post") photoWarnings.push(`${x.headline}: choose a matching website photo; no unrelated image was assigned.`);
+      const aiVisual = aiReel || weeklySlot?.photoSource === "ai";
+      const matchedPhoto = !aiVisual && p.photoSource === "website" ? assignedPhoto || matchingWebsitePhoto({ headline: x.headline, caption: x.caption, topics: slotTopics }, photoChoices, websitePhotos) : null;
+      if (!aiVisual && p.photoSource === "website" && !matchedPhoto && x.type !== "holiday_post") photoWarnings.push(`${x.headline}: choose a matching website photo; no unrelated image was assigned.`);
       const occasion = p.contentPlan?.find(slot=>slot.planKey===x.planKey && slot.extra)?.occasion;
       const concept = occasion ? occasionVisualConcept(occasion) : buildVisualConcept({ businessContext, variationIndex: creativeLayoutIndex, recentConcepts: plannedConcepts });
       const priorConcepts = plannedConcepts.slice(-6);
@@ -560,7 +561,7 @@ export async function POST(req: Request) {
 
         if(setupPhotos.length && x.type !== "holiday_post") await attachSetupPhoto(tx,job.organizationId,campaign.id,item.id,setupPhotos[setupPhotoIndex++ % setupPhotos.length]);
         if (
-          p.photoSource !== "none" && (p.photoSource !== "website" || matchedPhoto) && !(x.type === "holiday_post" && p.photoSource === "website") && (
+          p.photoSource !== "none" && (aiVisual || p.photoSource !== "website" || matchedPhoto) && !(x.type === "holiday_post" && p.photoSource === "website") && (
         x.visualDirection?.trim() ||
         x.headline?.trim() ||
         x.caption?.trim() ||
@@ -582,9 +583,9 @@ export async function POST(req: Request) {
                 originalDirection: x.visualDirection,
                 occasion: occasion || undefined,
                 sourceImageUrl:
-                  p.photoSource === "website" ? matchedPhoto?.imageUrl : undefined,
+                  !aiVisual && p.photoSource === "website" ? matchedPhoto?.imageUrl : undefined,
                 sourceEvidence: matchedPhoto || undefined,
-                photoSource: p.photoSource || "ai",
+                photoSource: aiVisual ? "ai" : p.photoSource || "ai",
                 textPosition:
                   creativeLayouts[creativeLayoutIndex % creativeLayouts.length],
                 prompt: `${x.visualDirection?.trim() ||

@@ -9,6 +9,7 @@ function load(file, mocks = {}, cache = new Map()) {
     { module, exports: module.exports, Buffer, process, URL, Date, console, require: name => name in mocks ? mocks[name] : name.startsWith('@/') || name.startsWith('.') ? load((name.startsWith('@/') ? name.slice(2) : path.relative(root, path.resolve(path.dirname(file), name))) + '.ts', mocks, cache) : require(name) });
   return module.exports;
 }
+process.env.OPENAI_API_KEY = 'mock-only-no-network';
 const plan = load('lib/weekly/plan.ts');
 const serialize = value => JSON.parse(JSON.stringify(value));
 test('52 planned weeks supply 364 distinct angles without nearby design or photo repetition', () => {
@@ -22,7 +23,7 @@ test('52 planned weeks supply 364 distinct angles without nearby design or photo
     assert.equal(new Set(next.slots.map(slot => slot.layout)).size, 7, "Every week uses seven different complete compositions");
     assert.ok(next.slots.every(slot => slot.layout.startsWith("weekly-")));
     assert.equal(new Set(next.slots.map(slot => slot.date)).size, 7);
-    for (const slot of next.slots) { assert.ok(!layouts.slice(-5).includes(slot.layout)); assert.notEqual(sources.at(-1), slot.sourceImageUrl); layouts.push(slot.layout); sources.push(slot.sourceImageUrl); angles.add(slot.topic); }
+    for (const slot of next.slots) { assert.ok(!layouts.slice(-5).includes(slot.layout)); if(slot.sourceImageUrl) assert.notEqual(sources.at(-1), slot.sourceImageUrl); layouts.push(slot.layout); sources.push(slot.sourceImageUrl); angles.add(slot.topic); }
     history.push({ brandId: 'brand', weekStart: input.weekStart, slots: next.slots });
   }
   assert.equal(angles.size, 364); assert.equal(new Set(layouts).size, 90);
@@ -40,7 +41,7 @@ test('weekly rotation selects products before photos, even with very uneven gall
   const input = weeklyInput([...productPhotos('guitar', 20), ...productPhotos('ukulele', 1), ...productPhotos('mandolin', 1)]);
   const slots = plan.planWeek(input).slots;
   assert.equal(new Set(slots.slice(0, 3).map(s => s.productName)).size, 3, 'Use all three products before repeating one');
-  for (let i = 1; i < slots.length; i++) assert.notEqual(slots[i].productName, slots[i - 1].productName);
+  assert.equal(slots.filter(s=>s.productName).length,3); assert.equal(slots.filter(s=>s.photoSource==='ai').length,4);
   const counts = ['guitar', 'ukulele', 'mandolin'].map(name => slots.filter(s => s.productName === name).length);
   assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, 'A large photo gallery must not dominate the week');
 });
@@ -53,12 +54,12 @@ test('14- and 21-post packs use distinct products each day and reserve galleries
     for (let day = 1; day <= 7; day++) {
       const today = slots.filter(s => s.day === day);
       assert.equal(today.length, count / 7);
-      assert.equal(new Set(today.map(plan.weeklyProductKey)).size, today.length, `Day ${day} must not feature one product twice`);
+      const actual=today.filter(s=>s.productName); assert.equal(new Set(actual.map(plan.weeklyProductKey)).size, actual.length);
       assert.ok(today.every(s => s.date === plan.addDays(input.weekStart, day - 1)));
     }
     assert.equal(slots.filter(s => s.kind === 'motion_reel').length, mix.motionReels);
     assert.equal(slots.filter(s => s.kind === 'ai_video').length, mix.aiVideos);
-    assert.ok(slots.filter(s => s.kind !== 'image').every(s => s.productName === 'guitar'), 'Only the guitar has enough real views for a reel');
+    assert.equal(slots.filter(s=>s.productName==='guitar').length,1); assert.ok(slots.filter(s=>s.kind==='motion_reel'&&!s.productName).every(s=>s.reelPhotoSource==='ai'));
     assert.equal(JSON.stringify(input), snapshot, 'Planning must not rewrite saved history or catalog order');
     assert.deepEqual(serialize(slots), serialize(plan.planWeek(input).slots));
   }
@@ -83,7 +84,7 @@ test('small catalogs keep the promised quantities without inventing products', (
   const input = weeklyInput(productPhotos('guitar', 3), { images: 10, motionReels: 3, aiVideos: 1 });
   const slots = plan.planWeek(input).slots;
   assert.equal(slots.length, 14);
-  assert.ok(slots.every(s => s.productName === 'guitar' && input.photos.some(p => p.imageUrl === s.sourceImageUrl)));
+  assert.equal(slots.filter(s=>s.productName==='guitar').length,1); assert.ok(slots.filter(s=>s.kind==='image'&&!s.productName).every(s=>s.photoSource==='ai'));
   assert.equal(new Set(slots.map(s => s.date)).size, 7);
 });
 function fixture({ credits = 100, planName = 'starter', status = 'trialing', gallery = false } = {}) {
@@ -244,10 +245,9 @@ test('without an image provider reels still need three original views; product t
   try {
   const f = fixture(); const view = await f.service.weeklyView(f.context); assert.equal(view.prepare.mix.images, 7); assert.equal(view.prepare.mix.motionReels, 0);
   await assert.rejects(f.service.prepareWeekly(f.context, f.request({ mix: { images: 6, motionReels: 1, aiVideos: 0 } })), /not configured/); assert.equal(f.state.ledger.length, 0);
-  const g = fixture({ gallery: true }); await g.service.prepareWeekly(g.context, g.request());
-  const generation = g.state.jobs.find(job => job.type === 'CREATE_EVERYTHING'); assert.equal(g.state.subscription.credits, 85);
-  assert.ok(generation.payload.contentPlan.every(slot => slot.topics[0] === 'Martinez MF-17'));
-  assert.equal(g.state.jobs.find(job => job.type === 'WEEKLY_PACK').payload.completionCredits, 4);
+  const g = fixture({ gallery: true });
+  await assert.rejects(g.service.prepareWeekly(g.context,g.request()), /AI photos must be configured/);
+  assert.equal(g.state.ledger.length,0);
   } finally { if (previousAI === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previousAI; if (previous === undefined) delete process.env.BLOB_READ_WRITE_TOKEN; else process.env.BLOB_READ_WRITE_TOKEN = previous; }
 });
 test('weekly views retain partial failures and distinguish source image previews from finished reels', async () => {
@@ -269,12 +269,12 @@ test('unconfigured AI video is replaced with an image and cannot be explicitly c
   await assert.rejects(f.service.prepareWeekly(f.context, f.request({ expectedCredits: 29, mix: { images: 13, motionReels: 0, aiVideos: 1 } })), /not configured/);
   assert.equal(f.state.ledger.length, 0);
 });
-test('a small catalog explains unavoidable same-day repeats before preparation', async () => {
+test('a small catalog explains AI variety without repeating products', async () => {
   const f = fixture({ gallery: true, planName: 'business', status: 'active', credits: 1500 });
   const view = await f.service.weeklyView(f.context);
-  assert.ok(view.prepare.warnings.some(text => /Some products will repeat that day/.test(text)));
+  assert.ok(view.prepare.warnings.some(text => /Each product appears at most once/.test(text)));
   const intro = fixture({ gallery: true, status: 'active' });
-  assert.ok(!(await intro.service.weeklyView(intro.context)).prepare.warnings.some(text => /repeat that day/.test(text)));
+  assert.ok((await intro.service.weeklyView(intro.context)).prepare.warnings.some(text => /Each product appears at most once/.test(text)));
   assert.equal(f.state.ledger.length, 0);
 });
 test('a newer retry outcome controls each account independently of an older success', () => {
@@ -355,4 +355,11 @@ test('expired Admin access blocks new packs but preserves balance and saved hist
   assert.ok((await f.service.weeklyView(f.context)).pack);
   await assert.rejects(f.service.prepareWeekly(f.context, f.request({ weekStart: plan.addDays(plan.monday(), 7), requestId: '00000000-0000-4000-8000-000000000099' })), /access/);
   assert.equal(f.state.subscription?.credits, balance);
+});
+
+test('two products fill only two slots; AI completes the week without named product reuse',()=>{
+ const slots=plan.planWeek(weeklyInput([...productPhotos('Martinez',12),...productPhotos('Godin',9)])).slots;
+ assert.equal(slots.length,7);assert.equal(slots.filter(s=>s.productName).length,2);
+ assert.equal(new Set(slots.filter(s=>s.productName).map(plan.weeklyProductKey)).size,2);
+ assert.equal(slots.filter(s=>s.photoSource==='ai'&&!s.sourceImageUrl&&!s.sourceUrl&&!s.productName).length,5);
 });
