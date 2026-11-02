@@ -251,6 +251,8 @@ test('X customer settings hides developer setup and preserves separate account c
   const configured = render(await page({ searchParams: Promise.resolve({ status: 'saved' }) }));
   assert.match(configured, /action="\/api\/social\/x\/connect"/);
   assert.ok(!configured.includes('private-client-secret')); assert.ok(!configured.includes('client-id-example'));
+  const unconnected = render(await page({ searchParams: Promise.resolve({ status: 'connected' }) }));
+  assert.ok(!unconnected.includes('<h1>X connected</h1>'));
   f.connections.set('foreign-account', { id: 'foreign-account', organizationId: 'other-org', provider: 'x', status: 'linked', accountName: 'PrivateOtherOrg' });
   f.connections.set('local-account', { id: 'local-account', organizationId: 'org', provider: 'x', status: 'linked', accountName: 'RumiGuitars' });
   const connected = render(await page({ searchParams: Promise.resolve({ status: 'linked' }) }));
@@ -259,6 +261,26 @@ test('X customer settings hides developer setup and preserves separate account c
   f.ctx.role = 'viewer';
   const viewer = render(await page({ searchParams: Promise.resolve({}) }));
   assert.ok(!viewer.includes('<form')); assert.match(viewer, /Ask a workspace administrator/);
+  f.connections.get('local-account').status = 'connected';
+  const connectedViewer = render(await page({ searchParams: Promise.resolve({}) }));
+  assert.match(connectedViewer, /<h1>X connected<\/h1>/);
+  assert.ok(!connectedViewer.includes('<form'));
+  assert.ok(!connectedViewer.includes('Ask a workspace administrator'));
+  f.ctx.role = 'owner';
+  const ready = render(await page({ searchParams: Promise.resolve({}) }));
+  assert.match(ready, /<h1>X connected<\/h1>/);
+  assert.match(ready, /@RumiGuitars/);
+  assert.match(ready, /href="\/dashboard"[^>]*>Back to This Week/);
+  assert.match(ready, /action="\/api\/social\/x\/disconnect"/);
+  assert.ok(!ready.includes('action="/api/social/x/connect"'));
+  assert.ok(!ready.includes('name="consent"'));
+  assert.ok(!ready.includes('Reconnect X'));
+  assert.ok(!ready.includes('PrivateOtherOrg'));
+  const reconnect = render(await page({ searchParams: Promise.resolve({ reason: 'permissions' }) }));
+  assert.match(reconnect, /role="alert"/);
+  assert.match(reconnect, /action="\/api\/social\/x\/connect"/);
+  assert.match(reconnect, /Reconnect X/);
+  assert.ok(!reconnect.includes('<h1>X connected</h1>'));
 });
 
 test('Admin reuses Rumi Guitars app settings while Master Mind authorizes its own isolated account', async () => {
@@ -295,7 +317,8 @@ test('Admin reuses Rumi Guitars app settings while Master Mind authorizes its ow
   assert.equal(master.externalId, '67890');
   assert.equal(linked(f).length, 2);
   const markup = require('react-dom/server').renderToStaticMarkup(await f.load('app/settings/x/page.tsx').default({ searchParams: Promise.resolve({}) }));
-  assert.match(markup, /Ready to post.*MasterMind/);
+  assert.match(markup, /<h1>X connected<\/h1>/);
+  assert.match(markup, /@MasterMind/);
   assert.ok(!markup.includes('RumiGuitars'));
   assert.match(location(await f.post('disconnect', { connectionId: master.id })), /status=disconnected/);
   assert.equal(linked(f).length, 1);
