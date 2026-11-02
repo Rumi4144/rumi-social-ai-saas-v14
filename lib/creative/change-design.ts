@@ -8,7 +8,7 @@ import { svgToPublishJpeg, weeklyDesignFonts } from "@/lib/render/raster";
 import { pictureRecipe } from "@/lib/render/picture-recipe";
 import { manifestOf } from "@/lib/weekly/plan";
 
-type Context = { organizationId: string; userId: string };
+type Context = { organizationId: string; userId: string; isSuperAdmin?: boolean };
 type Database = PrismaClient | Prisma.TransactionClient;
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 const PAGE_SIZE = 6;

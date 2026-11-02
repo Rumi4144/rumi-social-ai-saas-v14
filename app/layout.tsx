@@ -1,3 +1,4 @@
+import AdminRequestAlert from "@/components/AdminRequestAlert";
 import "./globals.css";
 import Link from "next/link";
 import { auth } from "@/auth";
@@ -91,7 +92,7 @@ export default async function RootLayout({
               <Link href="/admin">★ Master Admin</Link>
               <Link href="/admin/design-formats">Design Formats</Link>
               <Link href="/admin/annual-plan">Annual Plan</Link>
-              <Link href="/admin/requests">Customer Requests</Link>
+              <AdminRequestAlert />
               <Link href="/admin/archive">Published Archive</Link>
               <Link href="/create">Create Everything</Link>
               <Link href="/campaigns">Campaigns</Link>

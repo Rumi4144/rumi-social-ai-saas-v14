@@ -45,6 +45,8 @@ export default async function AdminPage() {
     },
   });
 
+  const pendingRequests = await prisma.job.count({ where: { type: "CONTENT_CHANGE_REQUEST", status: "pending" } });
+
   const totals = organizations.reduce(
     (acc, org) => {
       acc.users += org.memberships.length;
@@ -119,6 +121,12 @@ export default async function AdminPage() {
         <h2>User Activity</h2>
         <p>See recent sign-ins, last activity and estimated active time.</p>
         <Link className="button" href="/admin/activity">View User Activity</Link>
+      </section>
+
+      <section className="card" style={{ marginTop: 24, borderColor: pendingRequests ? "#cf9b3d" : undefined }}>
+        <h2>Customer requests · {pendingRequests} pending</h2>
+        <p>Photo, design and wording changes from all customers appear together here.</p>
+        <Link className="button" href="/admin/requests">Review all requests →</Link>
       </section>
 
       <AdminCreateOrganization />

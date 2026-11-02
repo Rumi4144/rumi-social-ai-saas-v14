@@ -1,3 +1,4 @@
+import { notifyCustomerRequest } from "@/lib/admin/request-notifications";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { tenantContext } from "@/lib/auth/context";
@@ -41,12 +42,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
       const pending = await tx.job.findFirst({ where: { organizationId: ctx.organizationId, type: "CONTENT_CHANGE_REQUEST", status: "pending", payload: { path: ["contentItemId"], equals: id } } });
       const payload = { contentItemId: id, campaignId: item.campaignId, comment: action.comment };
-      if (pending) await tx.job.update({ where: { id: pending.id }, data: { payload } });
-      else await tx.job.create({ data: { organizationId: ctx.organizationId, type: "CONTENT_CHANGE_REQUEST", status: "pending", payload } });
+      const changeRequest = pending ? await tx.job.update({ where: { id: pending.id }, data: { payload } }) : await tx.job.create({ data: { organizationId: ctx.organizationId, type: "CONTENT_CHANGE_REQUEST", status: "pending", payload } });
       await tx.contentItem.update({ where: { id }, data: { status: "draft" } });
       await tx.auditLog.create({ data: { organizationId: ctx.organizationId, userId: ctx.userId, action: "weekly.changes_requested", resource: "content_item", resourceId: id, metadata: { comment: action.comment } } });
-      return { status: 200, itemStatus: "draft", changesRequested: true };
+      return { status: 200, itemStatus: "draft", changesRequested: true, requestId: changeRequest?.id };
     }, { isolationLevel: "Serializable" });
+    if (result.status === 200 && result.requestId) {
+      try { await notifyCustomerRequest(ctx.organizationId, result.requestId); }
+      catch { console.error("CUSTOMER_REQUEST_ALERT_FAILED", { requestId: result.requestId }); }
+    }
     return NextResponse.json(result, { status: result.status, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return apiError(error, "Could not save your review. Refresh the post and try again."); }
 }

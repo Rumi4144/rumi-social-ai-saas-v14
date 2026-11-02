@@ -12,7 +12,7 @@ import { logoToPngDataUrl, svgToPublishJpeg, weeklyDesignFonts } from "@/lib/ren
 export class PictureError extends Error {
   constructor(message: string, public status = 409) { super(message); }
 }
-type Context = { organizationId: string; userId: string };
+type Context = { organizationId: string; userId: string; isSuperAdmin?: boolean };
 type Database = PrismaClient | Prisma.TransactionClient;
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 const photoKinds = ["product_photo", "ai_image", "reel_scene_image"];
@@ -25,7 +25,7 @@ export async function editablePicture(db: Database, ctx: Context, id: string) {
   const active = await db.publishJob.findFirst({ where: { organizationId: ctx.organizationId, contentItemId: id, status: { in: lockedDeliveryStatuses } } });
   if (active) throw new PictureError("This ad has a scheduled or completed delivery. Its picture cannot be changed here.");
   const request = await db.job.findFirst({ where: { organizationId: ctx.organizationId, type: "CONTENT_CHANGE_REQUEST", status: "pending", payload: { path: ["contentItemId"], equals: id } } });
-  if (request) throw new PictureError("Admin is already working on your requested changes. Try again when they are finished.");
+  if (request && !ctx.isSuperAdmin) throw new PictureError("Admin is already working on your requested changes. Try again when they are finished.");
   const reference = savedItemMedia(item.mediaUrl);
   if (!reference || reference.kind !== "image") throw new PictureError("Wait for the finished design before replacing its picture.");
   const creative = await db.mediaAsset.findFirst({ where: { id: reference.id, organizationId: ctx.organizationId, campaignId: item.campaignId, contentItemId: id, kind: "social_creative", status: "ready", url: { not: null } } });

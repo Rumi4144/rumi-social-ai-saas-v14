@@ -97,3 +97,16 @@ export async function customerChangeRequests(organizationId: string, after?: str
     item: items.find(item => item.id === (job.payload as { contentItemId?: string })?.contentItemId) || null })),
     nextCursor: jobs.length > HISTORY_PAGE_SIZE ? page[page.length - 1].id : null };
 }
+
+/** All-customer inbox. Source posts must still belong to each request's tenant. */
+export async function allCustomerChangeRequests(after?: string, completed = false) {
+  await superAdminContext();
+  const cursor = after ? await prisma.job.findFirst({ where: { id: after, type: "CONTENT_CHANGE_REQUEST" }, select: { id: true, createdAt: true } }) : null;
+  if (after && !cursor) return { requests: [], nextCursor: null };
+  const jobs = await prisma.job.findMany({ where: { type: "CONTENT_CHANGE_REQUEST", status: completed ? "succeeded" : "pending", ...(cursor ? { OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] } : {}) }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: HISTORY_PAGE_SIZE + 1 });
+  const page = jobs.slice(0, HISTORY_PAGE_SIZE);
+  const organizations = await prisma.organization.findMany({ where: { id: { in: [...new Set(page.map(row => row.organizationId))] } }, select: { id: true, name: true } });
+  const ids = page.map(row => (row.payload as { contentItemId?: string })?.contentItemId).filter((id): id is string => typeof id === "string");
+  const items = await prisma.contentItem.findMany({ where: { id: { in: ids }, campaign: { brand: { organizationId: { in: page.map(row => row.organizationId) } } } }, select: { id: true, headline: true, status: true, campaign: { select: { id: true, title: true, brand: { select: { organizationId: true } } } } }, take: HISTORY_PAGE_SIZE });
+  return { requests: page.map(job => ({ ...job, customerName: organizations.find(org => org.id === job.organizationId)?.name || "Customer unavailable", comment: String((job.payload as { comment?: string })?.comment || ""), item: items.find(item => item.id === (job.payload as { contentItemId?: string })?.contentItemId && item.campaign.brand.organizationId === job.organizationId) || null })), nextCursor: jobs.length > HISTORY_PAGE_SIZE ? page[page.length - 1].id : null };
+}

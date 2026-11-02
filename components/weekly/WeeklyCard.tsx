@@ -12,7 +12,7 @@ const platformNames: Record<string, string> = { facebook: "Facebook", instagram:
 
 export type ReelFeedback = { running: boolean; message: string; progress: number; error?: string };
 
-export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy = false, reelFeedback, onPauseReel }: { item: WeeklyItem; canManage: boolean; onChanged: () => void; onFinish?: (item: WeeklyItem) => void; busy?: boolean; reelFeedback?: ReelFeedback; onPauseReel?: () => void }) {
+export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy = false, reelFeedback, onPauseReel, isAdmin = false }: { item: WeeklyItem; canManage: boolean; onChanged: () => void; onFinish?: (item: WeeklyItem) => void; busy?: boolean; reelFeedback?: ReelFeedback; onPauseReel?: () => void; isAdmin?: boolean }) {
   const [pending, setPending] = useState(false), [message, setMessage] = useState("");
   const [changesOpen, setChangesOpen] = useState(false), [comment, setComment] = useState("");
   const [deliveryOpen, setDeliveryOpen] = useState(false);
@@ -30,7 +30,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
   const title = item.changeRequest ? "Changes requested" : item.needsAttention || reelFeedback?.error ? "Needs attention" : published ? "Posted" : item.status === "scheduled" ? "Scheduled" : approved ? "Approved" : item.isReady ? "Ready to review" : reelFeedback?.running ? "Preparing reel" : canFinish ? "Not finished" : "Being prepared";
   const plannedDate = item.plannedDate || item.date;
   const canEditDate = canManage && item.canChangeDate && !locked;
-  const canReplacePicture = canManage && !locked && ["draft", "approved"].includes(item.status) && item.kind === "image" && item.mediaKind === "image" && item.isReady && !item.changeRequest;
+  const canReplacePicture = canManage && !locked && ["draft", "approved"].includes(item.status) && item.kind === "image" && item.mediaKind === "image" && (item.isReady || (isAdmin && !!item.changeRequest && !!item.assetId)) && (!item.changeRequest || isAdmin);
   const formattedDate = new Date(`${plannedDate.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 
   async function saveDate() {
@@ -106,7 +106,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
         {canManage && approved && item.isReady && item.type !== "story_post" && <button disabled={busy} onClick={() => setDeliveryOpen(!deliveryOpen)}>Post or schedule</button>}
       </div>
       <details className={styles.caption}><summary>Read caption</summary><p>{item.caption || "Caption is being prepared."}</p></details>
-      {item.approvalBlockedReason && !approved && <p className={styles.notice}>{item.approvalBlockedReason}</p>}
+      {item.approvalBlockedReason && !approved && <p className={styles.notice}>{isAdmin && item.changeRequest ? <>Make the requested changes, then <a href="/admin/requests">mark this request handled in Admin</a>. The customer will approve the revised post.</> : item.approvalBlockedReason}</p>}
       {item.changeRequest && <p className={styles.notice}><strong>Requested change:</strong> {item.changeRequest.comment}</p>}
       {item.deliveries.length > 0 && <ul className={styles.deliveries}>{item.deliveries.map(delivery => <li key={delivery.id}><strong>{platformNames[delivery.platform] || delivery.platform}{delivery.account ? ` · ${delivery.account}` : ""}</strong>: {delivery.status === "published" ? "Posted" : delivery.status === "scheduled" ? `Scheduled ${new Date(delivery.scheduledFor).toLocaleString()}` : delivery.status === "failed" ? "Posting failed" : delivery.status === "verification_pending" ? "Check the existing post before retrying" : delivery.status === "retry" ? "Waiting to retry" : delivery.status === "processing" ? "Processing" : "Posting"}{delivery.error && delivery.status !== "published" && <span>{delivery.error}</span>}</li>)}</ul>}
       {item.type === "story_post" && approved && <p>Download this Story and post it from your social app.</p>}

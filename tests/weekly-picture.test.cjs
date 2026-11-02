@@ -110,3 +110,10 @@ test('route accepts a saved selection or a limited uploaded photo without granti
   }
   assert.equal(f.calls.length, 2);
 });
+
+test('Admin can replace a photo while its customer change request is pending', async () => {
+  const f = fixture({ pendingChange: true });
+  const result = await f.replacePicture({ ...ctx, isSuperAdmin: true }, 'post', { assetId: 'photo', expectedMediaUrl: '/api/media/original' });
+  assert.ok(result);
+  assert.ok(f.writes.some(row => row[0] === 'item'));
+});
