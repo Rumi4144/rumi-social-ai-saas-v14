@@ -1,3 +1,4 @@
+import { tokenExpiry, refreshExpiry } from "@/lib/tiktok/token-refresh";
 import {NextResponse} from "next/server";
 import {cookies} from "next/headers";
 import {prisma} from "@/lib/prisma";
@@ -20,7 +21,7 @@ export async function GET(req:Request){
   const profileResponse=await fetch("https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name",{headers:{Authorization:`Bearer ${token.access_token}`},cache:"no-store",signal:AbortSignal.timeout(12000)});
   const profile=await profileResponse.json(),user=profile?.data?.user;
   if(!profileResponse.ok||user?.open_id!==token.open_id)throw new Error("TikTok could not verify the test account.");
-  const encryptedToken=encryptSecret(JSON.stringify({environment:"sandbox",clientKey:config.clientKey,openId:token.open_id,accessToken:token.access_token,refreshToken:token.refresh_token,scope:token.scope,expiresAt:Date.now()+Number(token.expires_in||86400)*1000}));
+  const encryptedToken=encryptSecret(JSON.stringify({environment:"sandbox",clientKey:config.clientKey,openId:token.open_id,accessToken:token.access_token,refreshToken:token.refresh_token,scope:token.scope,expiresAt:tokenExpiry(token.expires_in),refreshExpiresAt:refreshExpiry(token.refresh_expires_in)}));
   const existing=await prisma.socialConnection.findFirst({where:{organizationId:ctx.organizationId,provider:sandboxProvider}});
   const data={accountName:String(user.display_name||"TikTok test account"),externalId:String(token.open_id),status:"connected",encryptedToken};
   if(existing)await prisma.socialConnection.update({where:{id:existing.id},data});

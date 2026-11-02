@@ -38,7 +38,7 @@ test('sign-in-only TikTok connections cannot post; refresh is bound to the same 
  const oldKey=process.env.TIKTOK_CLIENT_KEY,oldSecret=process.env.TIKTOK_CLIENT_SECRET;
  process.env.TIKTOK_CLIENT_KEY='test-key';process.env.TIKTOK_CLIENT_SECRET='test-secret';
  try{
- const api=load('lib/tiktok/client.ts',{'@/lib/security/crypto':{decryptSecret:()=>JSON.stringify(grant),encryptSecret:()=> 'new-encrypted'},'@/lib/prisma':{prisma:{socialConnection:{updateMany:async q=>{saved=q;return {count:1};}}}},__fetch:async(url,init)=>{requests++;assert.equal(init.body.get('grant_type'),'refresh_token');return new Response(JSON.stringify({open_id:'creator',access_token:'new',refresh_token:'rotated',expires_in:86400,scope:'user.info.basic,video.publish'}));}});
+ const api=load('lib/tiktok/client.ts',{'@/lib/security/crypto':{decryptSecret:()=>JSON.stringify(grant),encryptSecret:()=> 'new-encrypted'},'@/lib/prisma':{prisma:{$transaction:async fn=>fn({$queryRaw:async()=>[],socialConnection:{findFirst:async()=>connection,updateMany:async q=>{saved=q;return {count:1};}}})}},__fetch:async(url,init)=>{requests++;assert.equal(init.body.get('grant_type'),'refresh_token');return new Response(JSON.stringify({open_id:'creator',access_token:'new',refresh_token:'rotated',expires_in:86400,scope:'user.info.basic,video.publish'}));}});
  await assert.rejects(api.tikTokAccessToken(connection),/sign-in only/);assert.equal(requests,0);
  grant.scope='user.info.basic,video.publish';assert.equal(await api.tikTokAccessToken(connection),'new');assert.equal(saved.where.organizationId,'own');assert.equal(saved.where.encryptedToken,'encrypted');assert.equal(saved.data.encryptedToken,'new-encrypted');
  grant.openId='someone-else';await assert.rejects(api.tikTokAccessToken(connection),/account changed/);assert.equal(requests,1);
@@ -143,4 +143,17 @@ test('legacy callback relays signed state to the original host; exchange still r
  cookie=state;const success=await api.GET(new Request(relay.url));assert.match(success.url,/tiktok=connected/);assert.equal(exchanges,2);assert.equal(saved,true);
  const invalid=await api.GET(new Request(`${redirectUri}?code=code&state=forged`));assert.match(invalid.url,/tiktok=error/);assert.equal(exchanges,2);
  }finally{for(const [key,value] of Object.entries(previous)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
+});
+
+
+test('concurrent renewal requests use the latest rotated token once and respect two-hour validity',async()=>{
+ let stored={...connection,encryptedToken:JSON.stringify({openId:'creator',scope:'user.info.basic,video.publish',accessToken:'old',refreshToken:'refresh-1',expiresAt:0})},tail=Promise.resolve(),calls=0;
+ const db={$transaction:fn=>{const result=tail.then(()=>fn({$queryRaw:async()=>[],socialConnection:{findFirst:async q=>{assert.equal(q.where.organizationId,'own');return {...stored};},updateMany:async q=>{assert.equal(q.where.encryptedToken,stored.encryptedToken);stored.encryptedToken=q.data.encryptedToken;return {count:1};}}}));tail=result.catch(()=>{});return result;}};
+ const api=load('lib/tiktok/token-refresh.ts',{'@/lib/prisma':{prisma:db},'@/lib/security/crypto':{encryptSecret:value=>value},__fetch:async(url,init)=>{calls++;assert.equal(init.body.get('refresh_token'),`refresh-${calls}`);return new Response(JSON.stringify({open_id:'creator',access_token:`access-${calls}`,refresh_token:`refresh-${calls+1}`,expires_in:7200,refresh_expires_in:15552000,scope:'video.publish'}));}});
+ const renew=()=>api.renewTikTokToken(connection,'tiktok',{clientKey:'key',clientSecret:'secret'},current=>JSON.parse(current.encryptedToken));
+ const before=Date.now();assert.deepEqual(await Promise.all([renew(),renew(),renew()]),['access-1','access-1','access-1']);assert.equal(calls,1);
+ let grant=JSON.parse(stored.encryptedToken);assert.equal(grant.refreshToken,'refresh-2');assert.ok(grant.expiresAt>=before+7200000&&grant.expiresAt<=Date.now()+7200000);assert.ok(grant.refreshExpiresAt>=before+15552000000);
+ stored.encryptedToken=JSON.stringify({...grant,expiresAt:0});assert.equal(await renew(),'access-2');assert.equal(calls,2);assert.equal(JSON.parse(stored.encryptedToken).refreshToken,'refresh-3');
+ stored.encryptedToken=JSON.stringify({...grant,expiresAt:0,refreshExpiresAt:Date.now()-1});await assert.rejects(renew(),/expired.*Reconnect/);assert.equal(calls,2);
+ assert.equal(api.tokenExpiry(undefined,7200,1000),7201000);
 });

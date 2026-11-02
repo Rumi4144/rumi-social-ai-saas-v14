@@ -1,6 +1,7 @@
+import { renewTikTokToken } from "./token-refresh";
 import {tenantContext} from "@/lib/auth/context";
 import {prisma} from "@/lib/prisma";
-import {decryptSecret,encryptSecret} from "@/lib/security/crypto";
+import {decryptSecret} from "@/lib/security/crypto";
 import {tikTokCreator} from "./client";
 
 export const sandboxProvider="tiktok_sandbox";
@@ -29,13 +30,11 @@ export async function sandboxAccessToken(connection:{id:string;organizationId:st
  if(!String(grant.scope||"").split(/[ ,]+/).includes("video.publish"))throw new Error("The test account did not grant video posting. Check the sandbox scopes, then reconnect.");
  if(grant.accessToken&&Number(grant.expiresAt)>Date.now()+60000)return String(grant.accessToken);
  if(!grant.refreshToken)throw new Error("Reconnect the TikTok test account.");
- const response=await fetch("https://open.tiktokapis.com/v2/oauth/token/",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_key:config.clientKey,client_secret:config.clientSecret,grant_type:"refresh_token",refresh_token:grant.refreshToken}),cache:"no-store",signal:AbortSignal.timeout(12000)});
- const data=await response.json();
- if(!response.ok||!data.access_token||data.open_id!==connection.externalId||!String(data.scope||grant.scope).split(/[ ,]+/).includes("video.publish"))throw new Error("TikTok could not renew this test account. Reconnect it.");
- const updated={...grant,accessToken:data.access_token,refreshToken:data.refresh_token||grant.refreshToken,scope:data.scope||grant.scope,expiresAt:Date.now()+Number(data.expires_in||86400)*1000};
- const saved=await prisma.socialConnection.updateMany({where:{id:connection.id,organizationId:connection.organizationId,provider:sandboxProvider,status:"connected",encryptedToken:connection.encryptedToken},data:{encryptedToken:encryptSecret(JSON.stringify(updated))}});
- if(saved.count!==1)throw new Error("The test connection changed. Reopen this page.");
- return String(data.access_token);
+ return renewTikTokToken(connection,sandboxProvider,config,current=>{
+  const fresh=JSON.parse(decryptSecret(current.encryptedToken||""));
+  if(fresh.environment!=="sandbox"||fresh.clientKey!==config.clientKey||fresh.openId!==current.externalId||!String(fresh.scope||"").split(/[ ,]+/).includes("video.publish"))throw new Error("Reconnect the TikTok test account.");
+  return fresh;
+ });
 }
 export async function sandboxCreator(token:string){
  const creator=await tikTokCreator(token);

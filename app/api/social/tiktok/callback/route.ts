@@ -1,3 +1,4 @@
+import { refreshExpiry } from "@/lib/tiktok/token-refresh";
 import { tikTokOAuthConfig } from "@/lib/tiktok/oauth-config";
 import { cookies } from "next/headers";
 import { tenantContext } from "@/lib/auth/context";
@@ -145,6 +146,7 @@ export async function GET(req: Request) {
         ? Date.now() + Number(tokenResult.expires_in) * 1000
         : null,
       refreshExpiresIn: tokenResult.refresh_expires_in || null,
+      refreshExpiresAt: refreshExpiry(tokenResult.refresh_expires_in),
       scope: tokenResult.scope || "user.info.basic",
       tokenType: tokenResult.token_type || "Bearer",
       openId,
