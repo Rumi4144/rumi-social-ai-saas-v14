@@ -15,3 +15,5 @@ test('email alerts use the configured recipient and original customer, and dedup
   comment='Use a brighter photo';fail=true;await assert.rejects(service.notifyCustomerRequest('own','request'),/DELIVERY_FAILED/);assert.equal(calls.length,2);
  }finally{if(oldKey===undefined)delete process.env.RESEND_API_KEY;else process.env.RESEND_API_KEY=oldKey;if(oldFrom===undefined)delete process.env.RESEND_FROM_EMAIL;else process.env.RESEND_FROM_EMAIL=oldFrom;}
 });
+
+test('initial platform recipient is the address explicitly selected by the owner',async()=>{const service=load('lib/admin/request-notifications.ts',{'@/lib/prisma':{prisma:{job:{findUnique:async()=>null}}}});const settings=await service.requestAlertSettings();assert.equal(settings.email,'support@zoesignals.com');assert.equal(settings.enabled,true);});

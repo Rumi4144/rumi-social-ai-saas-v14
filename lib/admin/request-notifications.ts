@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+// Initial recipient chosen by the platform owner; saved Admin preferences override it.
+const initialAlertEmail = "support@zoesignals.com";
 export const requestAlertSettingsId = "platform-customer-request-alerts";
 export const requestAlertSender = () => (process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM || process.env.MAIL_FROM || "").trim();
 export async function requestAlertSettings() {
   const row = await prisma.job.findUnique({ where: { id: requestAlertSettingsId } });
   const settings = row?.payload as { email?: string; enabled?: boolean } | null;
-  return { email: settings?.email || "", enabled: settings?.enabled === true, configured: Boolean(process.env.RESEND_API_KEY && requestAlertSender()) };
+  return { email: settings?.email || initialAlertEmail, enabled: settings ? settings.enabled === true : true, configured: Boolean(process.env.RESEND_API_KEY && requestAlertSender()) };
 }
 export async function notifyCustomerRequest(organizationId: string, requestId: string) {
   const settings = await requestAlertSettings();
