@@ -8,7 +8,7 @@ import { addDays, annualPosition, annualStart, dateValue, manifestOf, monday, ph
 import type { PrepareWeeklyRequest, WeeklyDelivery, WeeklyItem, WeeklyItemMapping, WeeklyManifest, WeeklyMutationResponse, WeeklyResponse } from "./types";
 
 type Context = { organizationId: string; role: string; userId: string };
-type Options = { brandId?: string; weekStart?: string };
+type Options = { brandId?: string; weekStart?: string; openSavedWeek?: boolean };
 export class WeeklyError extends Error { constructor(message: string, public status = 400) { super(message); } }
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 function selectedWeek(value?: string) { const week = value || monday(); dateValue(week); if (monday(week) !== week) throw new WeeklyError("Choose the Monday that starts this week."); return week; }
@@ -31,9 +31,10 @@ async function loadBase(ctx: Context, options: Options) {
   ]);
   const brand = options.brandId ? brands.find(b => b.id === options.brandId) : brands[0];
   if (options.brandId && !brand) throw new WeeklyError("Business not found in this workspace.", 404);
-  const weekStart = selectedWeek(options.weekStart), weekEnd = addDays(weekStart, 6);
   const manifests = records.map(row => manifestOf(row.payload)).filter((row): row is WeeklyManifest => !!row);
   const brandHistory = brand ? manifests.filter(row => row.brandId === brand.id) : [];
+  const savedWeeks = [...new Set(brandHistory.map(row => row.weekStart))].sort().reverse();
+  const weekStart = selectedWeek(options.weekStart || (options.openSavedWeek ? savedWeeks.find(week => week <= monday()) || savedWeeks.at(-1) : undefined)), weekEnd = addDays(weekStart, 6);
   const startsOn = annualStart(brandHistory);
   const photos = brand ? await brandSources(ctx.organizationId, brand) : [];
   const hasGallery = photoGroups(photos).some(group => group.length >= 3);
@@ -49,7 +50,7 @@ export function latestDeliveries<T extends { socialConnectionId: string; created
   return [...latest.values()];
 }
 export async function weeklyView(ctx: Context, options: Options = {}): Promise<WeeklyResponse> {
-  const base = await loadBase(ctx, options), { brand, brands, spec, manifests, records, weekStart, weekEnd, startsOn, mix } = base;
+  const base = await loadBase(ctx, { ...options, openSavedWeek: true }), { brand, brands, spec, manifests, records, weekStart, weekEnd, startsOn, mix } = base;
   const usage = weeklyUsage(manifests, weekStart), quote = weeklyMixQuote(mix);
   const allowance = checkWeeklyAllowance(spec, { ...usage, requestedPosts: quote.posts });
   const record = brand ? records.find(row => row.id === weeklyPackId(ctx.organizationId, brand.id, weekStart)) : undefined;
@@ -66,7 +67,7 @@ export async function weeklyView(ctx: Context, options: Options = {}): Promise<W
   if (productCount > 0 && productCount < Math.ceil(quote.posts / 7)) warnings.push(`This pack includes more posts per day than the ${productCount} saved ${productCount === 1 ? "product" : "products"} available. Some products will repeat that day. Admin can add more products for variety.`);
   let reason = !brand ? "Ask Admin to set up this business’s brand first." : ctx.role === "viewer" ? "Your access is read-only." : record ? "This week has already been prepared. Continue reviewing its saved posts." : !allowance.allowed ? allowance.reason : (base.subscription?.credits || 0) < quote.preparationCredits ? "There are not enough credits to prepare this week." : null;
   const position = annualPosition(weekStart, startsOn);
-  return { organizationId: ctx.organizationId, canManage: ctx.role !== "viewer", brands: brands.map(b => ({ id: b.id, name: b.name })), brand: brand ? { id: brand.id, name: brand.name, website: brand.websiteUrl, logoUrl: brand.logoUrl } : null, weekStart, weekEnd, weekNumber: position.weekNumber, pack: manifest && record ? { ...manifest, id: record.id, status: pending.length ? "preparing" : failed || output.some(item => !item.isReady) ? "needs_attention" : complete ? "complete" : "ready", error: failed ? "Some photos need review or could not be prepared. Admin can review them; your saved posts and credits remain recorded." : null, pendingJobs: pending.length, nextJobId: pending.find(job => job.status === "queued")?.id || null } : null, items: output, prepare: { allowed: !reason, reason, mix, preparationCredits: quote.preparationCredits, completionCredits: quote.completionCredits, totalCredits: quote.packCredits, availableCredits: base.subscription?.credits || 0, warnings, motionAvailable: base.motionAvailable, aiVideoAvailable: base.aiVideoAvailable }, plan: { key: spec.key, label: spec.label, weeklyPosts: spec.weeklyPosts, mix: { ...spec.mix }, oneTime: spec.oneTime, postsThisWeek: usage.postsThisWeek }, annualPlan: { weeks: 52, days: 364, cycle: position.cycle, preparedWeeks: base.brandHistory.length, generatedPosts: base.brandHistory.reduce((sum, row) => sum + row.slots.length, 0), startsOn } };
+  return { organizationId: ctx.organizationId, canManage: ctx.role !== "viewer", brands: brands.map(b => ({ id: b.id, name: b.name })), brand: brand ? { id: brand.id, name: brand.name, website: brand.websiteUrl, logoUrl: brand.logoUrl } : null, weekStart, weekEnd, savedWeeks: [...new Set(base.brandHistory.map(row => row.weekStart))].sort().reverse(), weekNumber: position.weekNumber, pack: manifest && record ? { ...manifest, id: record.id, status: pending.length ? "preparing" : failed || output.some(item => !item.isReady) ? "needs_attention" : complete ? "complete" : "ready", error: failed ? "Some photos need review or could not be prepared. Admin can review them; your saved posts and credits remain recorded." : null, pendingJobs: pending.length, nextJobId: pending.find(job => job.status === "queued")?.id || null } : null, items: output, prepare: { allowed: !reason, reason, mix, preparationCredits: quote.preparationCredits, completionCredits: quote.completionCredits, totalCredits: quote.packCredits, availableCredits: base.subscription?.credits || 0, warnings, motionAvailable: base.motionAvailable, aiVideoAvailable: base.aiVideoAvailable }, plan: { key: spec.key, label: spec.label, weeklyPosts: spec.weeklyPosts, mix: { ...spec.mix }, oneTime: spec.oneTime, postsThisWeek: usage.postsThisWeek }, annualPlan: { weeks: 52, days: 364, cycle: position.cycle, preparedWeeks: base.brandHistory.length, generatedPosts: base.brandHistory.reduce((sum, row) => sum + row.slots.length, 0), startsOn } };
 }
 
 export async function prepareWeekly(ctx: Context, input: PrepareWeeklyRequest): Promise<WeeklyMutationResponse> {

@@ -30,6 +30,7 @@ export type WeeklyResponse = {
   brands: Array<{ id: string; name: string }>;
   brand: { id: string; name: string; website: string | null; logoUrl: string | null } | null;
   weekStart: string; weekEnd: string; weekNumber: number;
+  savedWeeks?: string[];
   pack: (WeeklyManifest & { id: string; status: "preparing" | "needs_attention" | "ready" | "complete"; error: string | null; pendingJobs: number; nextJobId: string | null }) | null;
   items: WeeklyItem[];
   prepare: { allowed: boolean; reason: string | null; mix: WeeklyMix; preparationCredits: number; completionCredits: number; totalCredits: number; availableCredits: number; warnings: string[]; motionAvailable: boolean; aiVideoAvailable: boolean };

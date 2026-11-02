@@ -331,3 +331,18 @@ test('AI photos enable the promised weekly motion reel without a product gallery
     if (oldBlob === undefined) delete process.env.BLOB_READ_WRITE_TOKEN; else process.env.BLOB_READ_WRITE_TOKEN = oldBlob;
   }
 });
+
+test('opening This Week reopens the saved trial pack after a calendar rollover', async () => {
+  const f = fixture();
+  await f.service.prepareWeekly(f.context, f.request());
+  const pack = f.state.jobs.find(job => job.type === 'WEEKLY_PACK');
+  const previous = plan.addDays(plan.monday(), -7);
+  pack.payload.weekStart = previous; pack.payload.weekEnd = plan.addDays(previous, 6);
+  pack.id = plan.weeklyPackId(f.context.organizationId, pack.payload.brandId, previous);
+  const view = await f.service.weeklyView(f.context);
+  assert.equal(view.weekStart, previous);
+  assert.ok(view.pack, 'Existing trial work remains the default workspace');
+  assert.deepEqual(serialize(view.savedWeeks), [previous]);
+  const next = await f.service.weeklyView(f.context, { weekStart: plan.monday() });
+  assert.equal(next.pack, null); assert.equal(next.prepare.allowed, false);
+});
