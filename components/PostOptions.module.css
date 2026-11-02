@@ -38,7 +38,7 @@
   margin: 2px 0 0;
   padding: 0;
 }
-.check span { min-width: 0; }
+.check span { min-width: 0; overflow-wrap: anywhere; }
 .consent { border-top: 1px solid #dce5e1; padding-top: 10px; }
 
 .panel {
@@ -55,3 +55,18 @@
 .panel > p { margin: 8px 0; }
 .account { margin-bottom: 8px; }
 .when { margin: 12px 0; }
+
+/* Posting controls also appear inside narrow weekly gallery cards. */
+.options fieldset { display: grid; gap: 12px; min-width: 0; margin: 0; }
+.stacked { display: grid; gap: 6px; min-width: 0; }
+.options .stacked select,.options .stacked textarea {
+  display: block; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box;
+}
+.options video { min-width: 0; max-width: 100%; }
+.panel { overflow-wrap: anywhere; }
+.panel button,.panel select,.panel input[type="datetime-local"] {
+  min-width: 0; max-width: 100%; box-sizing: border-box; white-space: normal;
+}
+.panel input[type="datetime-local"] { width: 100%; font-size: 13px; padding: 8px; }
+.panel .field { display: grid; gap: 6px; }
+.panel .field select { min-width: 0; width: 100%; }

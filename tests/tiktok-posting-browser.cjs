@@ -2,7 +2,7 @@
 const {chromium}=require('playwright'),esbuild=require('esbuild'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),http=require('node:http'),assert=require('node:assert/strict');
 const repo=path.resolve(__dirname,'..'),out=fs.mkdtempSync(path.join(os.tmpdir(),'tiktok-posting-'));let browser,server;
 (async()=>{
- fs.writeFileSync(path.join(out,'entry.tsx'),`import React from 'react';import {createRoot} from 'react-dom/client';import Schedule from ${JSON.stringify(repo+'/components/SchedulePostButton')};import ${JSON.stringify(repo+'/app/globals.css')};createRoot(document.getElementById('root')!).render(<Schedule contentItemId="post" initialStatus="approved" isVideo videoAssetId="clip" openByDefault allowPostNow/>);`);
+ fs.writeFileSync(path.join(out,'entry.tsx'),`import React from 'react';import {createRoot} from 'react-dom/client';import Schedule from ${JSON.stringify(repo+'/components/SchedulePostButton')};import weekly from ${JSON.stringify(repo+'/components/weekly/weekly.module.css')};import ${JSON.stringify(repo+'/app/globals.css')};createRoot(document.getElementById('root')!).render(<div className={weekly.workspace}><div className={weekly.post} style={{width:235,padding:10,boxSizing:"border-box"}}><Schedule contentItemId="post" initialStatus="approved" isVideo videoAssetId="clip" openByDefault allowPostNow/></div></div>);`);
  await esbuild.build({entryPoints:[path.join(out,'entry.tsx')],bundle:true,outfile:path.join(out,'app.js'),nodePaths:[repo+'/node_modules'],jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'}});
  const writes=[],unexpected=[];let mode='ready',creatorReads=0;
  server=http.createServer(async(req,res)=>{
@@ -24,6 +24,17 @@ const repo=path.resolve(__dirname,'..'),out=fs.mkdtempSync(path.join(os.tmpdir()
  await page.goto(base);await page.getByRole('heading',{name:'Post to TikTok · Master Mind'}).waitFor();const submit=page.getByRole('button',{name:'Approve and post now',exact:true});
  assert.equal(await page.getByLabel('Who can watch').inputValue(),'');assert.equal(await page.getByLabel('Allow comments',{exact:true}).isChecked(),false);assert.equal(await page.getByLabel(/Allow Duet/).isEnabled(),false);assert.equal(await submit.isEnabled(),false);
  await page.getByLabel('Who can watch').selectOption('SELF_ONLY');await page.getByLabel('TikTok caption').fill('My edited TikTok caption.');await page.getByLabel('This content promotes a business, product or service').check();assert.equal(await submit.isEnabled(),false);
+ for (const width of [1280, 390]) {
+  await page.setViewportSize({width,height:900});
+  const settings=page.getByRole('region',{name:'TikTok posting settings'});
+  const bounds=await settings.boundingBox();
+  for(const control of await settings.locator('label,input,textarea,select').all()) {
+   const box=await control.boundingBox();if(box)assert.ok(box.x>=bounds.x-1&&box.x+box.width<=bounds.x+bounds.width+1,'TikTok controls must fit a narrow weekly card');
+  }
+  const checks=await settings.locator('input[type="checkbox"]').all();
+  for (const checkbox of checks) { const box=await checkbox.boundingBox();assert.ok(box.width<=20&&box.height<=20,'Checkboxes stay compact beside their labels'); }
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No page overflow');
+ }
  await page.getByLabel('Your brand · promoting your own business').check();await page.getByLabel(/I authorize uploading this video/).check();await submit.waitFor({state:'visible'});await page.waitForFunction(()=>Array.from(document.querySelectorAll('button')).some(button=>button.textContent==='Approve and post now'&&!button.disabled));
  await page.getByLabel('TikTok caption').fill('Updated again.');assert.equal(await page.getByLabel(/I authorize uploading this video/).isChecked(),false);assert.equal(await submit.isEnabled(),false);
  await page.getByLabel(/I authorize uploading this video/).check();await submit.click();await page.getByText('Submitted. Delivery status updates above.',{exact:true}).waitFor();assert.equal(writes.length,1);assert.equal(writes[0].tiktok.title,'Updated again.');assert.equal(writes[0].tiktok.privacy,'SELF_ONLY');assert.equal(writes[0].tiktok.ownBrand,true);assert.equal(writes[0].tiktok.allowDuet,false);assert.equal(writes[0].tiktok.consent,true);
