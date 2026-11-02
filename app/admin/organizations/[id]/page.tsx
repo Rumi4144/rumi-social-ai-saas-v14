@@ -1,3 +1,4 @@
+import { accessRecordId, readAccess } from "@/lib/billing/admin-access";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -68,6 +69,7 @@ export default async function AdminOrganizationPage({
   });
 
   if (!organization) notFound();
+  const creationAccess = readAccess((await prisma.job.findFirst({ where: { id: accessRecordId(organization.id), organizationId: organization.id, type: "ADMIN_CREATION_ACCESS" } }))?.payload);
 
   const campaigns = organization.brands.flatMap((brand) =>
     brand.campaigns.map((campaign) => ({
@@ -173,6 +175,7 @@ export default async function AdminOrganizationPage({
             initialPlan={organization.subscription?.plan || "starter"}
             initialStatus={organization.subscription?.status || "trialing"}
             initialCredits={organization.subscription?.credits ?? 0}
+            initialAccess={creationAccess}
           />
 
           {organization.subscription ? (

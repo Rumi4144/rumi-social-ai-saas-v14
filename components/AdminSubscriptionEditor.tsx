@@ -4,7 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PACKAGE_KEYS, PACKAGE_CATALOG, canonicalPlan } from "@/lib/billing/packages";
 
+import type { AdminAccess } from "@/lib/billing/admin-access";
+
 type Props = {
+  initialAccess?: AdminAccess | null;
   organizationId: string;
   initialPlan: string;
   initialStatus: string;
@@ -16,12 +19,14 @@ export default function AdminSubscriptionEditor({
   initialPlan,
   initialStatus,
   initialCredits,
+  initialAccess,
 }: Props) {
   const router = useRouter();
 
   const [plan, setPlan] = useState(canonicalPlan(initialPlan));
   const [status, setStatus] = useState(initialStatus);
   const [credits, setCredits] = useState(initialCredits);
+  const [accessDuration, setAccessDuration] = useState("keep");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -44,6 +49,7 @@ export default function AdminSubscriptionEditor({
           },
           body: JSON.stringify({
             plan,
+            accessDuration,
             status,
             credits,
           }),
@@ -62,6 +68,7 @@ export default function AdminSubscriptionEditor({
       }
 
       setMessage("Saved successfully.");
+      setAccessDuration("keep");
       router.refresh();
     } catch {
       setMessage("Could not save changes.");
@@ -86,18 +93,21 @@ export default function AdminSubscriptionEditor({
       <label>
         <strong>Weekly creation access</strong>
         <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          value={accessDuration === "keep" ? "keep" : accessDuration}
+          onChange={(e) => { const value = e.target.value; setAccessDuration(value); if (value === "keep") setStatus(initialStatus); else if (value === "trial") setStatus("trialing"); else if (["week", "month", "ongoing"].includes(value)) setStatus("active"); else if (value !== "keep") setStatus(value); }}
           style={{ display: "block", width: "100%", marginTop: 6 }}
         >
-          <option value="trialing">Trial — one seven-day pack</option>
-          <option value="active">Ongoing — use available credits each week</option>
+          <option value="keep">Keep current access ({initialAccess ? `ends ${new Date(initialAccess.expiresAt).toLocaleDateString()}` : initialStatus === "trialing" ? "one trial pack" : initialStatus})</option>
+          <option value="week">Grant 1 week — starts when saved</option>
+          <option value="month">Grant 1 month — starts when saved</option>
+          <option value="ongoing">Ongoing — use available credits each week</option>
+          <option value="trial">Trial — one seven-day pack</option>
           <option value="past_due">Paused — payment needs attention</option>
           <option value="canceled">Stopped</option>
         </select>
       </label>
 
-      <small>You decide access for this customer. Ongoing access permits new weeks within the selected plan’s post limit and available credits. Saving does not charge the customer.</small>
+      <small>You decide access for this customer. A week lasts 7 days; a month ends on the same date next month. New creation stops when access ends. Credits and saved posts stay available. Saving does not charge the customer.</small>
 
       <label>
         <strong>AI Credits</strong>

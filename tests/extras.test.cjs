@@ -77,3 +77,10 @@ test('route validates script bounds and same-origin mutation; user-supplied job 
  assert.equal((await api.POST(req({action:'create',...input},'https://foreign.test'))).status,403);assert.equal(calls.length,0);
  assert.equal((await api.POST(req({action:'create',...input}))).status,200);assert.equal(calls.length,1);
 });
+
+test('expired Admin access blocks new extras without spending saved credits', async()=>{
+ const f=fixture(),before=f.state().credits;
+ f.state().jobs.push({id:'admin-creation-access:org',organizationId:'org',type:'ADMIN_CREATION_ACCESS',status:'completed',payload:{duration:'week',startsAt:'2020-01-01T00:00:00Z',expiresAt:'2020-01-08T00:00:00Z'}});
+ await assert.rejects(f.service.prepareExtra(ctx,input),/access has ended/);
+ assert.equal(f.state().credits,before);assert.equal(f.state().campaigns.length,0);
+});

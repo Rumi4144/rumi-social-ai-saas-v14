@@ -1,5 +1,6 @@
+import { accessRecordId, readAccess, creationPackageSpec } from "@/lib/billing/admin-access";
 import { prisma } from "@/lib/prisma";
-import { weeklyPackageSpec, validateWeeklyMix, checkWeeklyAllowance, weeklyMixQuote, type WeeklyMix } from "@/lib/billing/packages";
+import { validateWeeklyMix, checkWeeklyAllowance, weeklyMixQuote, type WeeklyMix } from "@/lib/billing/packages";
 import { savedItemMedia, downloadableStatuses, fullyPublished, lockedDeliveryStatuses } from "@/components/weekly/item-policy";
 export { fullyPublished } from "@/components/weekly/item-policy";
 import { photoKey } from "@/lib/reels/product-photos";
@@ -24,10 +25,11 @@ export async function brandSources(organizationId: string, brand: { id: string; 
   return [...new Map(photos.filter(p => /^https:\/\//.test(p.imageUrl) && /^https:\/\//.test(p.sourceUrl)).map(p => [`${p.sourceUrl}:${photoKey(p.imageUrl)}`, p])).values()];
 }
 async function loadBase(ctx: Context, options: Options) {
-  const [brands, subscription, records] = await Promise.all([
+  const [brands, subscription, records, accessRecord] = await Promise.all([
     prisma.brand.findMany({ where: { organizationId: ctx.organizationId }, include: { products: true }, orderBy: { createdAt: "asc" } }),
     prisma.subscription.findUnique({ where: { organizationId: ctx.organizationId } }),
     prisma.job.findMany({ where: { organizationId: ctx.organizationId, type: "WEEKLY_PACK" }, orderBy: { createdAt: "asc" } }),
+    prisma.job.findFirst({ where: { id: accessRecordId(ctx.organizationId), organizationId: ctx.organizationId, type: "ADMIN_CREATION_ACCESS" } }),
   ]);
   const brand = options.brandId ? brands.find(b => b.id === options.brandId) : brands[0];
   if (options.brandId && !brand) throw new WeeklyError("Business not found in this workspace.", 404);
@@ -40,9 +42,10 @@ async function loadBase(ctx: Context, options: Options) {
   const hasGallery = photoGroups(photos).some(group => group.length >= 3);
   const motionAvailable = (hasGallery || Boolean(process.env.OPENAI_API_KEY)) && Boolean(process.env.BLOB_READ_WRITE_TOKEN);
   const aiVideoAvailable = hasGallery && runwayConfigured();
-  const spec = weeklyPackageSpec(subscription?.plan, subscription?.status);
+  const access = readAccess(accessRecord?.payload);
+  const spec = creationPackageSpec(subscription, access);
   const mix: WeeklyMix = { images: spec.mix.images + (motionAvailable ? 0 : spec.mix.motionReels) + (aiVideoAvailable ? 0 : spec.mix.aiVideos), motionReels: motionAvailable ? spec.mix.motionReels : 0, aiVideos: aiVideoAvailable ? spec.mix.aiVideos : 0 };
-  return { brands, brand, subscription, records, manifests, brandHistory, startsOn, photos, hasGallery, motionAvailable, aiVideoAvailable, spec, mix, weekStart, weekEnd };
+  return { access, brands, brand, subscription, records, manifests, brandHistory, startsOn, photos, hasGallery, motionAvailable, aiVideoAvailable, spec, mix, weekStart, weekEnd };
 }
 export function latestDeliveries<T extends { socialConnectionId: string; createdAt: Date; updatedAt?: Date; status: string }>(rows: T[]): T[] {
   const latest = new Map<string, T>();
@@ -65,7 +68,7 @@ export async function weeklyView(ctx: Context, options: Options = {}): Promise<W
   if (!base.aiVideoAvailable && spec.mix.aiVideos > 0) warnings.push("AI moving-scene video is not available yet. Its slot is replaced with an image post and its video cost is excluded.");
   const productCount = photoGroups(base.photos).length;
   if (productCount > 0 && productCount < Math.ceil(quote.posts / 7)) warnings.push(`This pack includes more posts per day than the ${productCount} saved ${productCount === 1 ? "product" : "products"} available. Some products will repeat that day. Admin can add more products for variety.`);
-  let reason = !brand ? "Ask Admin to set up this business’s brand first." : ctx.role === "viewer" ? "Your access is read-only." : record ? "This week has already been prepared. Continue reviewing its saved posts." : !allowance.allowed ? allowance.reason : (base.subscription?.credits || 0) < quote.preparationCredits ? "There are not enough credits to prepare this week." : null;
+  let reason = base.access && dateValue(weekStart).getTime() >= Date.parse(base.access.expiresAt) ? "This week starts after your creation access ends. Ask Admin to extend access." : !brand ? "Ask Admin to set up this business’s brand first." : ctx.role === "viewer" ? "Your access is read-only." : record ? "This week has already been prepared. Continue reviewing its saved posts." : !allowance.allowed ? allowance.reason : (base.subscription?.credits || 0) < quote.preparationCredits ? "There are not enough credits to prepare this week." : null;
   const position = annualPosition(weekStart, startsOn);
   return { organizationId: ctx.organizationId, canManage: ctx.role !== "viewer", brands: brands.map(b => ({ id: b.id, name: b.name })), brand: brand ? { id: brand.id, name: brand.name, website: brand.websiteUrl, logoUrl: brand.logoUrl } : null, weekStart, weekEnd, savedWeeks: [...new Set(base.brandHistory.map(row => row.weekStart))].sort().reverse(), weekNumber: position.weekNumber, pack: manifest && record ? { ...manifest, id: record.id, status: pending.length ? "preparing" : failed || output.some(item => !item.isReady) ? "needs_attention" : complete ? "complete" : "ready", error: failed ? "Some photos need review or could not be prepared. Admin can review them; your saved posts and credits remain recorded." : null, pendingJobs: pending.length, nextJobId: pending.find(job => job.status === "queued")?.id || null } : null, items: output, prepare: { allowed: !reason, reason, mix, preparationCredits: quote.preparationCredits, completionCredits: quote.completionCredits, totalCredits: quote.packCredits, availableCredits: base.subscription?.credits || 0, warnings, motionAvailable: base.motionAvailable, aiVideoAvailable: base.aiVideoAvailable }, plan: { key: spec.key, label: spec.label, weeklyPosts: spec.weeklyPosts, mix: { ...spec.mix }, oneTime: spec.oneTime, postsThisWeek: usage.postsThisWeek }, annualPlan: { weeks: 52, days: 364, cycle: position.cycle, preparedWeeks: base.brandHistory.length, generatedPosts: base.brandHistory.reduce((sum, row) => sum + row.slots.length, 0), startsOn } };
 }
@@ -87,7 +90,9 @@ export async function prepareWeekly(ctx: Context, input: PrepareWeeklyRequest): 
     const duplicate = await tx.job.findFirst({ where: { organizationId: ctx.organizationId, type: "WEEKLY_PACK", payload: { path: ["requestId"], equals: input.requestId } } });
     if (duplicate) throw new WeeklyError("This preparation request was already used for another week. Refresh before preparing a different week.", 409);
     const subscription = await tx.subscription.findUnique({ where: { organizationId: ctx.organizationId } });
-    const spec = weeklyPackageSpec(subscription?.plan, subscription?.status), mix = input.mix || base.mix;
+    const access = readAccess((await tx.job.findFirst({ where: { id: accessRecordId(ctx.organizationId), organizationId: ctx.organizationId, type: "ADMIN_CREATION_ACCESS" } }))?.payload);
+    const spec = creationPackageSpec(subscription, access), mix = input.mix || base.mix;
+    if (access && dateValue(weekStart).getTime() >= Date.parse(access.expiresAt)) throw new WeeklyError("This week starts after your creation access ends. Ask Admin to extend access.", 409);
     const quote = validateWeeklyMix(spec, mix);
     if (mix.aiVideos && !base.hasGallery) throw new WeeklyError("Three distinct saved photos of the same product are needed for this reel combination. Choose image posts or ask Admin to import a product gallery.", 409);
     if (mix.motionReels && !base.motionAvailable || mix.aiVideos && !base.aiVideoAvailable) throw new WeeklyError("This video option is not configured yet. Choose image posts; no preparation credits were charged.", 503);

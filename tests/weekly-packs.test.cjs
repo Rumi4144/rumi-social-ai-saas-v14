@@ -346,3 +346,13 @@ test('opening This Week reopens the saved trial pack after a calendar rollover',
   const next = await f.service.weeklyView(f.context, { weekStart: plan.monday() });
   assert.equal(next.pack, null); assert.equal(next.prepare.allowed, false);
 });
+
+test('expired Admin access blocks new packs but preserves balance and saved history', async () => {
+  const f = fixture({ status: 'active' });
+  await f.service.prepareWeekly(f.context, f.request());
+  const balance = f.state.subscription?.credits;
+  f.state.jobs.push({ id: `admin-creation-access:${f.context.organizationId}`, organizationId: f.context.organizationId, type: 'ADMIN_CREATION_ACCESS', status: 'completed', payload: { duration: 'week', startsAt: '2020-01-01T00:00:00Z', expiresAt: '2020-01-08T00:00:00Z' }, createdAt: new Date(), updatedAt: new Date() });
+  assert.ok((await f.service.weeklyView(f.context)).pack);
+  await assert.rejects(f.service.prepareWeekly(f.context, f.request({ weekStart: plan.addDays(plan.monday(), 7), requestId: '00000000-0000-4000-8000-000000000099' })), /access/);
+  assert.equal(f.state.subscription?.credits, balance);
+});

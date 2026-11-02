@@ -1,6 +1,6 @@
+import { accessRecordId, readAccess, creationPackageSpec } from "@/lib/billing/admin-access";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { weeklyPackageSpec } from "@/lib/billing/packages";
 import { brandSources, savedPackCards, WeeklyError } from "@/lib/weekly/service";
 import { manifestOf, photoGroups } from "@/lib/weekly/plan";
 import { newYorkToday } from "@/lib/campaign/content-plan";
@@ -33,7 +33,8 @@ export async function extrasView(ctx: Context): Promise<ExtrasResponse> {
     prisma.subscription.findUnique({where:{organizationId:ctx.organizationId}}),
     prisma.job.findMany({where:{organizationId:ctx.organizationId,type:"EXTRA_CREATION"},orderBy:{createdAt:"desc"},take:30,select:{id:true}}),
   ]);
-  const spec=weeklyPackageSpec(sub?.plan,sub?.status);
+  const access=readAccess((await prisma.job.findFirst({where:{id:accessRecordId(ctx.organizationId),organizationId:ctx.organizationId,type:"ADMIN_CREATION_ACCESS"}}))?.payload);
+  const spec=creationPackageSpec(sub,access);
   const reason=ctx.role === "viewer" ? "Your access is read-only." : !spec.canGenerate ? spec.blockReason : !brands.length ? "Finish setting up your business first." : null;
   return {organizationId:ctx.organizationId,canManage:ctx.role!=="viewer",availableCredits:sub?.credits || 0,canCreate:!reason,reason,configured:extrasConfigured(),brands:await Promise.all(brands.map(async b=>{const groups=photoGroups(await brandSources(ctx.organizationId,b));return{id:b.id,name:b.name,products:b.products.filter(p=>p.imageUrl && p.sourceUrl).map(p=>({id:p.id,name:p.name,reelAvailable:groups.some(g=>g[0].sourceUrl===p.sourceUrl && g.length>=3)}))};})),extras:await Promise.all(records.map(r=>extraSummary(ctx,r.id)))};
 }
@@ -55,7 +56,9 @@ export async function prepareExtra(ctx: Context,input: ExtraRequest) {
     const existing=await tx.job.findFirst({where:{id,organizationId:ctx.organizationId,type:"EXTRA_CREATION"}});
     if(existing){if((existing.payload as unknown as ExtraManifest).fingerprint!==fingerprint)throw new WeeklyError("This request already belongs to another creation.",409);return{id,reused:true};}
     const sub=await tx.subscription.findUnique({where:{organizationId:ctx.organizationId}});
-    if(!weeklyPackageSpec(sub?.plan,sub?.status).canGenerate)throw new WeeklyError("An active plan or trial is needed to create extras.",402);
+    const access=readAccess((await tx.job.findFirst({where:{id:accessRecordId(ctx.organizationId),organizationId:ctx.organizationId,type:"ADMIN_CREATION_ACCESS"}}))?.payload);
+    const spec=creationPackageSpec(sub,access);
+    if(!spec.canGenerate)throw new WeeklyError(spec.blockReason || "An active plan or trial is needed to create extras.",402);
     // Require the complete advertised cost, including the later reel export.
     if(!sub || sub.credits<option.credits)throw new WeeklyError(`You need ${option.credits} available Rumi credits for this creation.`,402);
     const history=await tx.job.findMany({where:{organizationId:ctx.organizationId,type:{in:["WEEKLY_PACK","EXTRA_CREATION"]}},orderBy:{createdAt:"asc"},select:{payload:true}});

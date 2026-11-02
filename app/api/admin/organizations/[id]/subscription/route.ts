@@ -4,7 +4,10 @@ import { superAdminContext } from "@/lib/admin/context";
 import { z } from "zod";
 import { canonicalPlan } from "@/lib/billing/packages";
 
+import { accessGrant, accessRecordId } from "@/lib/billing/admin-access";
+
 const S = z.object({
+  accessDuration: z.enum(["week", "month", "ongoing", "trial", "keep", "past_due", "canceled"]).optional(),
   plan: z.enum(["starter", "creator", "business", "agency", "pro", "enterprise"]),
   status: z.enum(["trialing", "active", "past_due", "canceled"]),
   credits: z.number().int().min(0).max(1000000),
@@ -42,11 +45,17 @@ export async function PATCH(
     const subscription = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Subscription" WHERE "organizationId" = ${organizationId} FOR UPDATE`;
       const before = await tx.subscription.findUnique({ where: { organizationId } });
-      const data = { ...parsed.data, plan: canonicalPlan(parsed.data.plan) };
+      const { accessDuration, ...values } = parsed.data;
+      const data = { ...values, plan: canonicalPlan(values.plan), ...((accessDuration === "week" || accessDuration === "month" || accessDuration === "ongoing") ? { status: "active" } : accessDuration === "trial" ? { status: "trialing" } : accessDuration === "past_due" || accessDuration === "canceled" ? { status: accessDuration } : {}) };
+      if (accessDuration && accessDuration !== "keep") {
+        const payload = accessDuration === "week" || accessDuration === "month" ? accessGrant(accessDuration) : {};
+        const access = { organizationId, type: "ADMIN_CREATION_ACCESS", status: "completed", payload };
+        await tx.job.upsert({ where: { id: accessRecordId(organizationId) }, create: { id: accessRecordId(organizationId), ...access }, update: access });
+      }
       const updated = await tx.subscription.upsert({ where: { organizationId }, update: data, create: { organizationId, ...data } });
       const delta = updated.credits - (before?.credits || 0);
       if (delta) await tx.creditLedger.create({ data: { organizationId, delta, balanceAfter: updated.credits, reason: "admin_balance_adjustment", referenceId: updated.id } });
-      await tx.auditLog.create({ data: { organizationId, userId: admin.id, action: "subscription_updated", resource: "subscription", resourceId: updated.id, metadata: { before: before ? { plan: before.plan, status: before.status, credits: before.credits } : null, after: data } } });
+      await tx.auditLog.create({ data: { organizationId, userId: admin.id, action: "subscription_updated", resource: "subscription", resourceId: updated.id, metadata: { before: before ? { plan: before.plan, status: before.status, credits: before.credits } : null, after: data, accessDuration: accessDuration || "keep" } } });
       return updated;
     });
 
