@@ -17,13 +17,17 @@ type Database = PrismaClient | Prisma.TransactionClient;
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 const photoKinds = ["product_photo", "ai_image", "reel_scene_image"];
 
-export async function editablePicture(db: Database, ctx: Context, id: string) {
+export async function editablePicture(db: Database, ctx: Context, id: string, allowPendingPhotoSelection = false) {
   const item = await db.contentItem.findFirst({ where: { id, campaign: { brand: { organizationId: ctx.organizationId } } }, include: { campaign: { include: { brand: true } } } });
   if (!item) throw new PictureError("Post not found in this workspace.", 404);
   if (requiresVideo(item.type)) throw new PictureError("Picture replacement is available for image ads. Request a change for a reel.");
   if (!["draft", "approved"].includes(item.status)) throw new PictureError("Scheduled and posted ads keep their saved picture. Cancel scheduling before changing a draft.");
   const active = await db.publishJob.findFirst({ where: { organizationId: ctx.organizationId, contentItemId: id, status: { in: lockedDeliveryStatuses } } });
   if (active) throw new PictureError("This ad has a scheduled or completed delivery. Its picture cannot be changed here.");
+  if (!allowPendingPhotoSelection && !ctx.isSuperAdmin) {
+    const request = await db.job.findFirst({ where: { organizationId: ctx.organizationId, type: "CONTENT_CHANGE_REQUEST", status: "pending", payload: { path: ["contentItemId"], equals: id } } });
+    if (request) throw new PictureError("Admin is already working on your requested changes. Try again when they are finished.");
+  }
   // Photo selection remains available while Admin reviews a change request.
   // Replacing artwork does not resolve the request or approve the post.
   const reference = savedItemMedia(item.mediaUrl);
@@ -53,7 +57,7 @@ async function sourceWhere(ctx: Context, brandId: string): Promise<Prisma.MediaA
 }
 
 export async function pictureChoices(ctx: Context, id: string) {
-  const { item } = await editablePicture(prisma, ctx, id);
+  const { item } = await editablePicture(prisma, ctx, id, true);
   const assets = await prisma.mediaAsset.findMany({ where: await sourceWhere(ctx, item.campaign.brandId), orderBy: { createdAt: "desc" }, take: 120, select: { id: true, url: true, kind: true, metadata: true } });
   const seen = new Set<string>();
   return assets.filter(row => { if (!row.url || seen.has(row.url)) return false; seen.add(row.url); return true; }).slice(0, 60).map(row => {
@@ -82,7 +86,7 @@ export async function normalizePicture(source: Buffer | string) {
 }
 
 export async function replacePicture(ctx: Context, id: string, input: { expectedMediaUrl: string; assetId?: string; upload?: Buffer }) {
-  const snapshot = await editablePicture(prisma, ctx, id), { item, creative } = snapshot;
+  const snapshot = await editablePicture(prisma, ctx, id, true), { item, creative } = snapshot;
   if (item.mediaUrl !== input.expectedMediaUrl) throw new PictureError("This ad changed. Refresh it before choosing another picture.");
   const source = input.assetId ? await prisma.mediaAsset.findFirst({ where: { ...await sourceWhere(ctx, item.campaign.brandId), id: input.assetId } }) : null;
   if (!input.upload && !source?.url) throw new PictureError("Saved picture not found for this business.", 404);
@@ -95,7 +99,7 @@ export async function replacePicture(ctx: Context, id: string, input: { expected
   // Rendering happens before this transaction: failed fetches/exports leave the
   // original artwork and approval intact. Recheck delivery and review races here.
   return prisma.$transaction(async tx => {
-    const current = await editablePicture(tx, ctx, id);
+    const current = await editablePicture(tx, ctx, id, true);
     if (current.item.mediaUrl !== item.mediaUrl || current.item.headline !== item.headline || current.item.caption !== item.caption || current.item.status !== item.status) throw new PictureError("This ad changed while preparing the picture. Refresh before trying again.");
     const selected = await tx.mediaAsset.create({ data: {
       organizationId: ctx.organizationId, campaignId: item.campaignId, contentItemId: id,
