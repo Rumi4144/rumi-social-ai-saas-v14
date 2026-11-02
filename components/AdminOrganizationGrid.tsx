@@ -183,7 +183,7 @@ export default function AdminOrganizationGrid({
 
                 <a
                 className="button gold"
-                href={`${process.env.NEXT_PUBLIC_APP_URL}/admin/enter/${org.id}`}
+                href={`/admin/enter/${org.id}`}
               >
                 Enter Workspace
               </a>

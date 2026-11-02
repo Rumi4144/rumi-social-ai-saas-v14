@@ -34,7 +34,11 @@ export async function GET(
     });
 
     return response;
-  } catch {
-    return NextResponse.redirect(new URL("/login", request.url));
+  } catch (error) {
+    const code = error && typeof error === "object" && "message" in error ? String(error.message) : "";
+    if (code === "UNAUTHENTICATED") return NextResponse.redirect(new URL("/login", request.url));
+    if (code === "FORBIDDEN") return NextResponse.json({ error: "Administrator access is required." }, { status: 403 });
+    console.error("ADMIN_WORKSPACE_ENTRY_FAILED");
+    return NextResponse.json({ error: "The workspace could not be opened. Return to Admin and try again." }, { status: 503 });
   }
 }

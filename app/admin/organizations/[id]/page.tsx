@@ -96,12 +96,12 @@ export default async function AdminOrganizationPage({
           </p>
 
           <div style={{ marginTop: 20 }}>
-            <Link
+            <a
               className="button gold"
               href={`/admin/enter/${organization.id}`}
             >
               Enter {organization.name} Workspace →
-            </Link>
+            </a>
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 18 }}>
               <Link href={`/admin/archive?organizationId=${encodeURIComponent(organization.id)}`}>Published archive</Link>
               <Link href={`/admin/requests?organizationId=${encodeURIComponent(organization.id)}`}>Customer requests</Link>
