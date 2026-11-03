@@ -18,7 +18,7 @@ let browser,server;const writes=[];
  await page.getByLabel('Headline',{exact:true}).fill('Make room for a calmer day');
  await page.getByLabel('Subheadline',{exact:true}).fill('Explore your options.');
  const picker=page.getByRole('group',{name:'Creative treatment'});
- for(const style of ['Modern Gradient','Framed Editorial','Geometric Focus']){
+ for(const style of ['Modern Gradient','Framed Editorial','Geometric Focus','Quiet Luxury']){
   const button=picker.getByRole('button',{name:new RegExp('^'+style)});await button.click();assert.equal(await button.getAttribute('aria-pressed'),'true');
   assert.ok(await page.getByRole('img',{name:/Local Practice creative/}).locator('svg').count());
  }
@@ -29,7 +29,7 @@ let browser,server;const writes=[];
  assert.equal(await campaign.getByRole('button',{name:/^Geometric Focus/}).getAttribute('aria-pressed'),'true','Select the saved design initially');
  const normalize=svg=>svg.replace(/id="[^"]+"/g,'id="scoped"').replace(/url\(#[^)]+\)/g,'url(#scoped)');
  let previous='';
- for(const style of ['Modern Gradient','Framed Editorial','Geometric Focus']){
+ for(const style of ['Modern Gradient','Framed Editorial','Geometric Focus','Quiet Luxury']){
   const choice=campaign.getByRole('button',{name:new RegExp('^'+style)});await choice.click();assert.equal(await choice.getAttribute('aria-pressed'),'true');
   assert.equal(await choice.locator('svg image[href="/photo.svg"]').count(),1,'Real source image must appear once in the preview');
   const artwork=await large.locator('.creative-svg-preview > svg').evaluate(node=>node.outerHTML);

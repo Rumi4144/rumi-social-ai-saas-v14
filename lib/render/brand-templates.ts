@@ -1,10 +1,11 @@
 import type { SocialSvgInput } from './svg';
-import {lightBrandPalette} from './light-palette';
+import {lightBrandPalette, mixColor} from './light-palette';
 
 export const BRAND_TEMPLATES = [
   { value: 'modern-gradient', label: 'Modern Gradient', description: 'Luminous brand colors, a spacious headline and a hero photograph.' },
   { value: 'framed-editorial', label: 'Framed Editorial', description: 'A crisp magazine layout with a framed photo and a clear call to action.' },
   { value: 'geometric-focus', label: 'Geometric Focus', description: 'A large photograph, playful color accents and a clear headline.' },
+  { value: 'quiet-luxury', label: 'Quiet Luxury', description: 'An understated editorial layout with warm neutrals, refined serif type and generous space.' },
 ] as const;
 export type BrandTemplate = typeof BRAND_TEMPLATES[number]['value'];
 export function isBrandTemplate(value: string): value is BrandTemplate { return BRAND_TEMPLATES.some(t => t.value === value); }
@@ -81,7 +82,39 @@ export function renderBrandTemplate(input: SocialSvgInput, style: BrandTemplate)
   const photo = (x: number, y: number, w: number, height: number, radius = 20) => `<rect x="${x}" y="${y}" width="${w}" height="${height}" rx="${radius}" fill="#ffffff"/>${input.imageUrl ? `<image href="${esc(input.imageUrl)}" x="${x + 10}" y="${y + 10}" width="${w - 20}" height="${height - 20}" preserveAspectRatio="xMidYMid meet"/>` : ''}`;
   let artwork = '', copy = '';
   const defs = `<defs><linearGradient id="brand-gradient" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${paper}"/><stop offset="1" stop-color="${base}"/></linearGradient><radialGradient id="brand-glow"><stop stop-color="${accent}" stop-opacity=".14"/><stop offset="1" stop-color="${accent}" stop-opacity="0"/></radialGradient></defs>`;
-  if (style === 'geometric-focus') {
+  if (style === 'quiet-luxury') {
+    const luxuryPaper = mixColor(secondary, '#f5f1e8', .82);
+    const luxuryInk = mixColor(primary, '#292720', .78);
+    const luxuryAccent = mixColor(accent, '#aa8f62', .72);
+    const safeTop = story ? 168 : 58, safeBottom = story ? 176 : 66;
+    const brandFit = fit(input.brand.toUpperCase(), input.logoUrl ? width - 150 : width, 2, 22, 18, true);
+    const brandX = input.logoUrl ? margin + 146 : margin;
+    const title = fit(input.headline, width, 3, story ? 82 : 76, 40);
+    const detail = fit(input.subheadline || '', width, 3, 26, 19);
+    const titleY = safeTop + 142;
+    const detailY = titleY + title.height + 14;
+    const photoY = detailY + detail.height + 30;
+    const ctaY = h - safeBottom;
+    const photoHeight = Math.max(180, ctaY - photoY - 48);
+    const cta = fit(input.cta || 'Learn more', width - 112, 1, 25, 18, true);
+    const logo = input.logoUrl
+      ? `<image href="${esc(input.logoUrl)}" x="${margin}" y="${safeTop}" width="122" height="56" preserveAspectRatio="xMinYMid meet"/>`
+      : '';
+    const editorialBlock = (value: ReturnType<typeof fit>, x: number, y: number, color: string) =>
+      value.lines.map((line, i) => `<text x="${x}" y="${y + value.size + i * value.size * 1.12}" fill="${color}" font-family="Georgia, 'Times New Roman', serif" font-size="${value.size}" font-weight="400" letter-spacing="-1.2">${esc(line)}</text>`).join('');
+    artwork = `<rect width="1080" height="${h}" fill="${luxuryPaper}"/>
+      ${logo}${block(brandFit, brandX, safeTop + (brandFit.lines.length > 1 ? 18 : 37), luxuryInk, true)}
+      <path d="M${margin} ${safeTop + 82}H${margin + width}" stroke="${luxuryInk}" stroke-opacity=".22"/>
+      <path d="M${margin} ${titleY - 30}h58" stroke="${luxuryAccent}" stroke-width="3"/>
+      ${editorialBlock(title, margin, titleY, luxuryInk)}
+      ${detail.height ? block(detail, margin, detailY, luxuryInk) : ''}
+      <rect x="${margin}" y="${photoY}" width="${width}" height="${photoHeight}" fill="${mixColor(luxuryPaper, '#ffffff', .45)}" stroke="${luxuryAccent}" stroke-opacity=".3"/>
+      ${input.imageUrl ? `<image href="${esc(input.imageUrl)}" x="${margin + 16}" y="${photoY + 16}" width="${width - 32}" height="${photoHeight - 32}" preserveAspectRatio="xMidYMid meet"/>` : ''}
+      <path d="M${margin} ${ctaY - 36}H${margin + width}" stroke="${luxuryInk}" stroke-opacity=".22"/>
+      ${text(cta.lines[0], margin, ctaY, cta.size, luxuryInk, { bold: true, width: width - 112 })}
+      <path d="M${margin + width - 34} ${ctaY - 9}h26m-9-9 9 9-9 9" fill="none" stroke="${luxuryAccent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="${h}" viewBox="0 0 1080 ${h}">${artwork}</svg>`;
+  } else if (style === 'geometric-focus') {
     const title = fit(input.headline, width, square ? 2 : 3, square ? 62 : 76, 42, true);
     const detail = fit(input.subheadline || '', width - 48, square ? 2 : 3, 29, 24);
     const titleY = buttonY - 34 - title.height - (detail.height ? detail.height + 20 : 0);
