@@ -11,7 +11,7 @@ const out = fs.mkdtempSync(path.join(os.tmpdir(), 'social-account-selection-'));
 let browser, server;
 
 (async () => {
-  fs.writeFileSync(path.join(out, 'entry.tsx'), `import React from 'react';import {createRoot} from 'react-dom/client';import Schedule from ${JSON.stringify(repo+'/components/SchedulePostButton')};import ${JSON.stringify(repo+'/app/globals.css')};createRoot(document.getElementById('root')!).render(<><label>Reel caption<textarea defaultValue="My saved reel caption"/></label><Schedule contentItemId="post" initialStatus="approved" isVideo={location.pathname!=='/photo'} openByDefault allowPostNow/></>);`);
+  fs.writeFileSync(path.join(out, 'entry.tsx'), `import React from 'react';import {createRoot} from 'react-dom/client';import Schedule from ${JSON.stringify(repo+'/components/SchedulePostButton')};import ${JSON.stringify(repo+'/app/globals.css')};createRoot(document.getElementById('root')!).render(<><label>Reel caption<textarea defaultValue="My saved reel caption"/></label><Schedule contentItemId="post" initialStatus="approved" isVideo={location.pathname!=='/photo'} openByDefault allowPostNow excludedConnectionIds={location.pathname==='/excluded'?['facebook','instagram']:undefined}/></>);`);
   await esbuild.build({entryPoints:[path.join(out, 'entry.tsx')], bundle:true, outfile:path.join(out, 'app.js'), nodePaths:[repo+'/node_modules'], jsx:'automatic', define:{'process.env.NODE_ENV':'"production"'}});
   const facebook = {id:'facebook', provider:'facebook', accountName:'Test Page'};
   const instagram = {id:'instagram', provider:'instagram', accountName:'rumiguitars1'};
@@ -139,6 +139,15 @@ let browser, server;
     assert.equal(writes.length,before+1);assert.deepEqual(writes.at(-1).socialConnectionIds,['x']);
     assert.deepEqual(writes.at(-1).x,{text:'A reviewed guitar caption for X.',sourceText:'My saved reel caption',approved:true});
   }
+  accounts=[facebook,instagram];deliveries=[];
+  await page.goto(base+'/excluded');
+  await page.getByText('This post is already scheduled or posted to all available accounts. See the status above.').waitFor();
+  assert.equal(await page.getByText('No connected social accounts found.',{exact:true}).count(),0);
+  assert.equal(await page.getByRole('link',{name:'Connect Instagram',exact:true}).count(),0);
+  assert.equal(await page.getByRole('checkbox').count(),0);
+  accounts=[instagram];await page.goto(base+'/excluded');
+  await page.getByText('This post is already scheduled or posted to all available accounts. See the status above.').waitFor();
+  assert.equal(await page.getByRole('link',{name:'Connect Instagram',exact:true}).count(),0);
   const evidence = process.env.SOCIAL_ACCOUNT_QA_DIR;
   if (evidence) {fs.mkdirSync(evidence, {recursive:true}); await page.screenshot({path:path.join(evidence, 'account-selection.png'), fullPage:true});}
   assert.deepEqual(unexpected, []); assert.deepEqual(errors, []);

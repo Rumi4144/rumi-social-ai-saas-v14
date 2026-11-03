@@ -59,6 +59,7 @@ export default function SchedulePostButton({
   const [queuedNow, setQueuedNow] = useState(false);
   const schedulePanelRef = useRef<HTMLDivElement>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [savedConnections, setSavedConnections] = useState<Connection[]>([]);
   const [connectionsLoaded, setConnectionsLoaded] = useState(false);
   const [connectionRefresh, setConnectionRefresh] = useState(0);
   const firstConnectionLoad = useRef(true);
@@ -134,12 +135,14 @@ export default function SchedulePostButton({
           );
         }
 
-        const list: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => !excludedConnectionIds?.includes(connection.id) && (isVideo ? ["facebook", "instagram", "youtube", "tiktok", "x"] : ["facebook", "instagram", "google_business", "x"]).includes(connection.provider.toLowerCase()));
+        const available: Connection[] = (Array.isArray(data.connections) ? data.connections : []).filter((connection: Connection) => (isVideo ? ["facebook", "instagram", "youtube", "tiktok", "x"] : ["facebook", "instagram", "google_business", "x"]).includes(connection.provider.toLowerCase()));
+        const list = available.filter(connection => !excludedConnectionIds?.includes(connection.id));
 
         if (controller.signal.aborted) return;
         const ready = list.filter(connection => connection.provider !== "x" || connection.status === "connected");
         const selectOnlyAccount = firstConnectionLoad.current && ready.length === 1;
         firstConnectionLoad.current = false;
+        setSavedConnections(available);
         setConnections(list);
         setConnectionsLoaded(true);
         setSelected(current => selectOnlyAccount ? [ready[0].id] : current.filter(id => ready.some(connection => connection.id === id)));
@@ -268,7 +271,7 @@ export default function SchedulePostButton({
             {loading && <p>Loading connected accounts...</p>}
 
             {!loading && connectionsLoaded && connections.length === 0 && (
-              <p>No connected social accounts found.</p>
+              <p>{savedConnections.length ? "This post is already scheduled or posted to all available accounts. See the status above." : "No connected social accounts found."}</p>
             )}
 
             {connections.map((connection) => (
@@ -287,7 +290,7 @@ export default function SchedulePostButton({
                 {connection.provider === "x" && connection.status !== "connected" && <> · <a href="/settings/x" target="_blank" rel="noopener noreferrer">Enable X posting</a></>}</span>
               </label>
             ))}
-            {connectionsLoaded && !loading && !completed && !connections.some(connection => connection.provider.toLowerCase() === "instagram") && (
+            {connectionsLoaded && !loading && !completed && !savedConnections.some(connection => connection.provider.toLowerCase() === "instagram") && (
               <div style={{ marginBottom: 12 }}>
                 <strong>Instagram</strong> · Not connected{" "}
                 <a href="/api/social/instagram/connect" target="_blank" rel="noopener noreferrer">Connect Instagram</a>
