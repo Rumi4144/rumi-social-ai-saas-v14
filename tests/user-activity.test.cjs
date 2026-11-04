@@ -148,13 +148,16 @@ test('activity history is Master Admin only, includes inactive sessions and omit
 });
 
 test('sign-in records a new stable session; existing cookies remain unknown; tracking outages never block auth', async () => {
-  let config, fail = false; const events = [];
+  let config, fail = false; const events = [], previousVercel = process.env.VERCEL;
+  process.env.VERCEL = '1';
   loader({
     'next-auth': settings => { config = settings; return {}; },
     'next-auth/providers/credentials': settings => settings,
     '@/lib/prisma': { prisma: {} },
     '@/lib/activity/store': { recordActivity: async (...args) => { if (fail) throw Error('offline'); events.push(args); } },
   })('auth.ts');
+  if (previousVercel === undefined) delete process.env.VERCEL; else process.env.VERCEL = previousVercel;
+  assert.equal(config.trustHost, true, 'Vercel deployments trust the platform-provided request host');
   const token = await config.callbacks.jwt({ token: {}, user: { id: 'u' } });
   assert.equal(events[0][1].kind, 'start');
   assert.equal(token.sub, 'u'); assert.ok(token.activitySignedInAt);

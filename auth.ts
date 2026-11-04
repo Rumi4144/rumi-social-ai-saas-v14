@@ -3,7 +3,7 @@ import { recordActivity } from "@/lib/activity/store";
 const normalizeEmail=(value:string)=>value.trim().toLowerCase();
 export const {handlers,auth,signIn,signOut}=NextAuth({
  secret:process.env.AUTH_SECRET,
- trustHost:process.env.AUTH_TRUST_HOST === "true",
+ trustHost:process.env.AUTH_TRUST_HOST === "true" || process.env.VERCEL === "1",
  session:{strategy:"jwt"},
  pages:{signIn:"/login"},
  providers:[Credentials({credentials:{email:{label:"Email",type:"email"},password:{label:"Password",type:"password"}},authorize:async(raw)=>{const p=z.object({email:z.string().trim().email(),password:z.string().min(8)}).safeParse({
