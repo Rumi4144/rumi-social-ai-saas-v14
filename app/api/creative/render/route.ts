@@ -87,7 +87,7 @@ export async function POST(req: Request) {
       headingFont: brand.headingFont || undefined,
       bodyFont: brand.bodyFont || undefined,
       designStyle,
-      ...(isWeeklyDesign(designStyle) ? { designFonts: await weeklyDesignFonts() } : {}),
+      ...(isWeeklyDesign(designStyle) || designStyle === "quiet-luxury" ? { designFonts: await weeklyDesignFonts() } : {}),
     };
     const svg = renderSocialSvg(renderInput);
 

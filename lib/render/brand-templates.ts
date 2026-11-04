@@ -101,7 +101,10 @@ export function renderBrandTemplate(input: SocialSvgInput, style: BrandTemplate)
       ? `<image href="${esc(input.logoUrl)}" x="${margin}" y="${safeTop}" width="122" height="56" preserveAspectRatio="xMinYMid meet"/>`
       : '';
     const editorialBlock = (value: ReturnType<typeof fit>, x: number, y: number, color: string) =>
-      value.lines.map((line, i) => `<text x="${x}" y="${y + value.size + i * value.size * 1.12}" fill="${color}" font-family="Georgia, 'Times New Roman', serif" font-size="${value.size}" font-weight="400" letter-spacing="-1.2">${esc(line)}</text>`).join('');
+      value.lines.map((line, i) => `<text x="${x}" y="${y + value.size + i * value.size * 1.12}" fill="${color}" font-family="'Cormorant Garamond', Georgia, serif" font-size="${value.size}" font-weight="400" letter-spacing="-1.2">${esc(line)}</text>`).join('');
+    const editorialFont = input.designFonts?.editorial && /^data:font\/(?:woff2?|ttf);base64,[A-Za-z0-9+/=]+$/.test(input.designFonts.editorial)
+      ? `<style>@font-face{font-family:'Cormorant Garamond';font-weight:400;src:url('${input.designFonts.editorial}')}</style>`
+      : '';
     artwork = `<rect width="1080" height="${h}" fill="${luxuryPaper}"/>
       ${logo}${block(brandFit, brandX, safeTop + (brandFit.lines.length > 1 ? 18 : 37), luxuryInk, true)}
       <path d="M${margin} ${safeTop + 82}H${margin + width}" stroke="${luxuryInk}" stroke-opacity=".22"/>
@@ -109,11 +112,11 @@ export function renderBrandTemplate(input: SocialSvgInput, style: BrandTemplate)
       ${editorialBlock(title, margin, titleY, luxuryInk)}
       ${detail.height ? block(detail, margin, detailY, luxuryInk) : ''}
       <rect x="${margin}" y="${photoY}" width="${width}" height="${photoHeight}" fill="${mixColor(luxuryPaper, '#ffffff', .45)}" stroke="${luxuryAccent}" stroke-opacity=".3"/>
-      ${input.imageUrl ? `<image href="${esc(input.imageUrl)}" x="${margin + 16}" y="${photoY + 16}" width="${width - 32}" height="${photoHeight - 32}" preserveAspectRatio="xMidYMid meet"/>` : ''}
+      ${input.imageUrl ? `<image href="${esc(input.imageUrl)}" x="${margin}" y="${photoY}" width="${width}" height="${photoHeight}" preserveAspectRatio="xMidYMid ${input.detailCrops ? 'slice' : 'meet'}"/>` : ''}
       <path d="M${margin} ${ctaY - 36}H${margin + width}" stroke="${luxuryInk}" stroke-opacity=".22"/>
       ${text(cta.lines[0], margin, ctaY, cta.size, luxuryInk, { bold: true, width: width - 112 })}
       <path d="M${margin + width - 34} ${ctaY - 9}h26m-9-9 9 9-9 9" fill="none" stroke="${luxuryAccent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="${h}" viewBox="0 0 1080 ${h}">${artwork}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="${h}" viewBox="0 0 1080 ${h}">${editorialFont}${artwork}</svg>`;
   } else if (style === 'geometric-focus') {
     const title = fit(input.headline, width, square ? 2 : 3, square ? 62 : 76, 42, true);
     const detail = fit(input.subheadline || '', width - 48, square ? 2 : 3, 29, 24);

@@ -13,7 +13,7 @@ import { renderSocialSvg, type SocialSvgInput } from "@/lib/render/svg";
 import { automaticShowcaseStyle } from "@/lib/render/showcase";
 import { occasionVisualConcept, savedPostOccasion } from "@/lib/ai/occasion";
 import { buildVisualDirection } from "@/lib/ai/visual-director";
-import { buildVisualConcept, isSubjectCategory, recentVisualConcept, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "@/lib/ai/visual-plan";
+import { buildVisualConcept, businessVisualMode, isSubjectCategory, recentVisualConcept, type VisualBusinessContext, type VisualConcept, type RecentVisualConcept } from "@/lib/ai/visual-plan";
 import { imageToJpegDataUrl, logoToPngDataUrl, svgToPublishJpeg, weeklyDesignFonts } from "@/lib/render/raster";
 import type { WeeklySlot, WeeklyItemMapping } from "@/lib/weekly/types";
 import { photoGroups, weeklyProductKey, type WeeklyPhoto } from "@/lib/weekly/plan";
@@ -326,6 +326,7 @@ export async function POST(req: Request) {
           brand: brand.name,
           format,
           imageUrl: renderImageUrl,
+          detailCrops: businessVisualMode({ industry: brand.industry, description: brand.description }) === "product",
           textPosition: p.textPosition || "left",
           logoUrl,
           primaryColor: brand.primaryColor || undefined,
@@ -334,7 +335,7 @@ export async function POST(req: Request) {
           headingFont: brand.headingFont || undefined,
           bodyFont: brand.bodyFont || undefined,
           designStyle,
-          ...(designStyle.startsWith("weekly-") ? { designFonts: await weeklyDesignFonts() } : {}),
+          ...(designStyle.startsWith("weekly-") || designStyle === "quiet-luxury" ? { designFonts: await weeklyDesignFonts() } : {}),
         };
         const svg = renderSocialSvg(renderInput);
 
