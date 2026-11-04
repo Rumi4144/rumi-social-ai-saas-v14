@@ -575,7 +575,7 @@ export async function POST(req: Request) {
               payload: {
                 campaignId: campaign.id,
                 contentItemId: item.id,
-                ...(weeklySlot ? { designStyle: weeklySlot.layout, weeklyPackId: p.weeklyPackId, weeklySlotKey: weeklySlot.key } : {}),
+                ...(weeklySlot ? { designStyle: p.extraCreationId && weeklySlot.kind === "image" ? "quiet-luxury" : weeklySlot.layout, weeklyPackId: p.weeklyPackId, weeklySlotKey: weeklySlot.key } : {}),
                 businessContext,
                 visualConcept: concept,
                 variationIndex: creativeLayoutIndex,

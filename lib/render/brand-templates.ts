@@ -89,7 +89,7 @@ export function renderBrandTemplate(input: SocialSvgInput, style: BrandTemplate)
     const safeTop = story ? 168 : 58, safeBottom = story ? 176 : 66;
     const brandFit = fit(input.brand.toUpperCase(), input.logoUrl ? width - 150 : width, 2, 22, 18, true);
     const brandX = input.logoUrl ? margin + 146 : margin;
-    const title = fit(input.headline, width, 3, story ? 82 : 76, 40);
+    const title = fit(input.headline, width, 3, story ? 108 : square ? 88 : 96, 40);
     const detail = fit(input.subheadline || '', width, 3, 26, 19);
     const titleY = safeTop + 142;
     const detailY = titleY + title.height + 14;
