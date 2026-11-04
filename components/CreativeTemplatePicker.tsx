@@ -34,7 +34,7 @@ export default function CreativeTemplatePicker({ label, value, onChange, options
     ...preview, ...option.previewOverrides, designStyle: option.previewStyle ?? option.value,
   }) })), [options, preview]);
   const selected = options.find(option => option.value === value);
-  const featured = new Set(["modern-gradient", "framed-editorial", "geometric-focus", value]);
+  const featured = new Set(["modern-gradient", "framed-editorial", "geometric-focus", "quiet-luxury", value]);
   const shownCards = showAll ? cards : cards.filter(option => featured.has(option.value));
   const hiddenCount = cards.filter(option => !featured.has(option.value)).length;
   return <fieldset className="creative-template-picker" disabled={disabled}>

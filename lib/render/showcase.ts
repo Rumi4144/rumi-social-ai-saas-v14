@@ -13,7 +13,7 @@ export type ShowcaseStyle = typeof SHOWCASE_STYLES[number]["value"];
 export function isShowcaseStyle(value?: string): value is ShowcaseStyle { return SHOWCASE_STYLES.some(style => style.value === value); }
 export function automaticShowcaseStyle(seed:string,preferred?:string|null):ShowcaseStyle|'classic'{
   if(preferred==='classic'||isShowcaseStyle(preferred||undefined))return preferred as ShowcaseStyle|'classic';
-  const automatic:ShowcaseStyle[]=['modern-gradient','framed-editorial','geometric-focus','gallery-story'];
+  const automatic:ShowcaseStyle[]=['modern-gradient','framed-editorial','geometric-focus','gallery-story','quiet-luxury'];
   const index=[...seed].reduce((n,c)=>n+c.charCodeAt(0),0)%automatic.length;
   return automatic[index];
 }
