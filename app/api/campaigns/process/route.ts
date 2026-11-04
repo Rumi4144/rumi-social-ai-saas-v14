@@ -29,12 +29,18 @@ export async function POST(req: Request) {
 
     const workerUrl = `${new URL(req.url).origin}/api/jobs/run`;
 
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      "x-worker-secret": process.env.WORKER_SECRET,
+    };
+    const cookie = req.headers.get("cookie");
+    const authorization = req.headers.get("authorization");
+    if (cookie) headers.cookie = cookie;
+    if (authorization) headers.authorization = authorization;
+
     const response = await fetch(workerUrl, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-worker-secret": process.env.WORKER_SECRET,
-      },
+      headers,
       body: JSON.stringify({
         jobId,
         organizationId: ctx.organizationId,
