@@ -18,7 +18,7 @@ export default function ExtraWorkspace(){
   const changed=()=>{void refresh().catch(e=>setError(e.message));};
   const brand=data?.brands.find(b=>b.id===brandId)||data?.brands[0],option=extraOptions[kind];
   const words=script.trim()?script.trim().split(/\s+/).length:0;
-  const valid=(kind==="presenter"?script.trim().length>=3&&script.length<=PRESENTER_SCRIPT_LIMIT&&words<=PRESENTER_WORD_LIMIT:brief.trim().length>=3);
+  const valid=(kind==="presenter"?script.trim().length>=3&&script.length<=PRESENTER_SCRIPT_LIMIT&&words<=PRESENTER_WORD_LIMIT:kind==="ad"||brief.trim().length>=3);
   const product=brand?.products.find(p=>p.id===productId);
   const unavailable=!!data&&!data.configured[kind];
   const needsPhotos=kind==="reel"&&!!product&&!product.reelAvailable;
@@ -36,7 +36,10 @@ export default function ExtraWorkspace(){
     try{
       let id=saved?.id;
       if(!id){
-        const input={brandId:brand!.id,kind,brief:(kind==="presenter"?script:brief).trim(),...(kind==="presenter"?{presenter}:productId?{productId}:{})};
+        const adBrief=kind==="ad"
+          ? [product?`Feature ${product.name}.`:"Create a brand-led business scene.",brief.trim()].filter(Boolean).join(" ").slice(0,1000)
+          : brief.trim();
+        const input={brandId:brand!.id,kind,brief:kind==="presenter"?script.trim():adBrief,...(kind==="presenter"?{presenter}:productId?{productId}:{})};
         const key=`rumi-extra:${data.organizationId}:${JSON.stringify(input)}`;
         const requestId=localStorage.getItem(key)||crypto.randomUUID();localStorage.setItem(key,requestId);
         const result=await request("/api/extras",{action:"create",...input,requestId,expectedCredits:option.credits});id=result.id;
@@ -79,8 +82,10 @@ export default function ExtraWorkspace(){
         <div className={styles.choices} role="group" aria-label="What would you like to create?">{(Object.keys(extraOptions) as ExtraKind[]).map(key=><button key={key} aria-pressed={kind===key} disabled={busy} onClick={()=>setKind(key)}><strong>{extraOptions[key].label}</strong><span>{extraOptions[key].description}</span><b>{extraOptions[key].credits} credits</b></button>)}</div>
         {kind!=="presenter"&&!!brand?.products.length&&<label>Feature<select aria-label="Feature" value={productId} disabled={busy} onChange={e=>setProductId(e.target.value)}><option value="">My business · AI scene photos</option>{brand.products.map(p=><option key={p.id} value={p.id}>{p.name}{kind==="reel"&&!p.reelAvailable?" · needs more photos":""}</option>)}</select></label>}
         {kind==="presenter"&&<div className={styles.presenters} role="group" aria-label="Choose a presenter">{(Object.keys(presenterChoices) as PresenterChoice[]).map(key=><button key={key} aria-pressed={presenter===key} disabled={busy} onClick={()=>setPresenter(key)}><img src={presenterChoices[key].image} alt=""/><span>{presenterChoices[key].name}</span></button>)}</div>}
-        <label htmlFor="extra-brief">{kind==="presenter"?"What should the presenter say?":"What would you like to promote?"}</label>
-        <textarea id="extra-brief" disabled={busy} value={kind==="presenter"?script:brief} onChange={e=>kind==="presenter"?setScript(e.target.value):setBrief(e.target.value)} maxLength={kind==="presenter"?PRESENTER_SCRIPT_LIMIT:1000} rows={3} placeholder={kind==="presenter"?`Welcome to ${brand?.name || "our business"}. Discover what makes us special and find something you love.`:"For example: introduce a favourite product or service, with warm daylight and a welcoming tone."}/>
+        {kind!=="presenter"&&<label htmlFor="extra-brief">{kind==="ad"?"Optional direction":"What would you like to promote?"}</label>}
+        {kind==="presenter"&&<label htmlFor="extra-brief">What should the presenter say?</label>}
+        <textarea id="extra-brief" disabled={busy} value={kind==="presenter"?script:brief} onChange={e=>kind==="presenter"?setScript(e.target.value):setBrief(e.target.value)} maxLength={kind==="presenter"?PRESENTER_SCRIPT_LIMIT:1000} rows={3} placeholder={kind==="presenter"?`Welcome to ${brand?.name || "our business"}. Discover what makes us special and find something you love.`:kind==="ad"?"Optional: add a product, occasion or mood. AI will create the headline, caption and art direction from your brand.":"For example: introduce a favourite product or service, with warm daylight and a welcoming tone."}/>
+        {kind==="ad"&&<small>AI creates the ad copy and a new scene guided by this business’s voice, visual style and audience. Product photos are optional; any product depiction is illustrative, not an exact product photo. Review the saved draft before posting.</small>}
         {kind==="presenter"&&<small>{script.length}/{PRESENTER_SCRIPT_LIMIT} characters · {words}/{PRESENTER_WORD_LIMIT} words · Your exact script is spoken.</small>}
         {kind==="reel"&&<small>3 credits to prepare + 4 to finish = 7 total. Keep this tab visible while the reel finishes.</small>}
         <div className={styles.submit}><button className={styles.createButton} disabled={!canCreate} onClick={()=>void run()}>Create {kind==="ad"?"ad":kind==="reel"?"reel":"presenter"} · {option.credits} credits</button><span>Saved as a draft for your approval.</span></div>

@@ -9,12 +9,17 @@ export type StudioBrand = {
   bodyFont: string;
   logoUrl?: string;
   designStyle?: string;
+  products?: Array<{ id: string; name: string; description: string; imageUrl?: string }>;
 };
 
 export async function studioBrand(organizationId: string, organizationName: string): Promise<StudioBrand> {
   const brand = await prisma.brand.findFirst({
     where: { organizationId }, orderBy: { createdAt: "desc" },
-    select: { name: true, primaryColor: true, secondaryColor: true, accentColor: true, headingFont: true, bodyFont: true, logoUrl: true, designStyle: true },
+    select: {
+      name: true, primaryColor: true, secondaryColor: true, accentColor: true,
+      headingFont: true, bodyFont: true, logoUrl: true, designStyle: true,
+      products: { select: { id: true, name: true, description: true, imageUrl: true }, orderBy: { createdAt: "desc" } },
+    },
   });
   return {
     name: brand?.name || organizationName,
@@ -25,5 +30,10 @@ export async function studioBrand(organizationId: string, organizationName: stri
     bodyFont: brand?.bodyFont || "Arial",
     logoUrl: brand?.logoUrl || undefined,
     designStyle: brand?.designStyle || undefined,
+    products: brand?.products?.map(product => ({
+      ...product,
+      description: product.description || "",
+      imageUrl: product.imageUrl || undefined,
+    })) || [],
   };
 }

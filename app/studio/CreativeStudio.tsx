@@ -15,16 +15,43 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
   const [detailCrops, setDetailCrops] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]), [photoError, setPhotoError] = useState("");
   const [treatment, setTreatment] = useState("brand");
+  const products = brand.products || [];
+  const [productId, setProductId] = useState(products[0]?.id || "");
+  const [generatingCopy, setGeneratingCopy] = useState(false);
+  const [copyError, setCopyError] = useState("");
+  const selectedProduct = products.find(product => product.id === productId);
+  const previewImage = photos[0] || selectedProduct?.imageUrl;
+  async function generateCopy() {
+    if (!productId || generatingCopy) return;
+    setGeneratingCopy(true);
+    setCopyError("");
+    try {
+      const response = await fetch("/api/creative/generate-copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not write ad copy.");
+      setHeadline(result.headline);
+      setSubheadline(result.subheadline);
+      setCta(result.cta);
+    } catch (error) {
+      setCopyError(error instanceof Error ? error.message : "Could not write ad copy.");
+    } finally {
+      setGeneratingCopy(false);
+    }
+  }
   const previewInput = useMemo(() => ({
     ...brand, brand: brand.name, headline: headline.trim() || "Your headline",
     subheadline: subheadline.trim() || "Your message goes here.", cta: cta.trim(), format,
     headingFont: treatment === "editorial" ? "Georgia" : treatment === "brand" ? brand.headingFont : "Arial",
     primaryColor: treatment === "minimal" ? brand.secondaryColor : brand.primaryColor,
     secondaryColor: treatment === "minimal" ? brand.primaryColor : brand.secondaryColor,
-    imageUrl: photos[0], imageUrls: photos.slice(1), detailCrops,
+    imageUrl: previewImage, imageUrls: photos.slice(1), detailCrops,
     designStyle: isShowcaseStyle(treatment) || isWeeklyDesign(treatment) ? treatment : treatment === "brand" ? (isShowcaseStyle(brand.designStyle) ? brand.designStyle : "modern-gradient") : undefined,
     textPosition: treatment === "bold" ? "top" as const : "left" as const,
-  }), [brand, headline, subheadline, cta, format, treatment, photos, detailCrops]);
+  }), [brand, headline, subheadline, cta, format, treatment, photos, previewImage, detailCrops]);
   const svg = useMemo(() => renderSocialSvg(previewInput), [previewInput]);
   const pickerInput = useMemo(() => ({ ...previewInput, primaryColor: brand.primaryColor, secondaryColor: brand.secondaryColor,
     headingFont: "Arial", textPosition: "left" as const, designStyle: undefined,
@@ -41,9 +68,25 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
   return <>
     <div className="eyebrow">CREATIVE STUDIO</div>
     <h1>Turn campaign ideas into finished creative.</h1>
-    <p>Creating for <strong>{brand.name}</strong>. Enter your message, or <a href="/campaigns">open a campaign post</a> to use its creative tools.</p>
+    <p>Creating for <strong>{brand.name}</strong>. Build a layout here, or let AI art-direct a complete ad for your business.</p>
+    <section className="card" style={{ margin: "20px 0" }}>
+      <h2>Make a complete AI-directed ad</h2>
+      <p>Get original ad copy and a brand-led visual scene shaped by your business voice and style. No product photo or manual headline needed. Review the saved draft before posting.</p>
+      <a className="button" href="/extras">Create a complete ad · 3 credits</a>
+    </section>
     <div className="studio">
       <section className="controls">
+        {products.length > 0 ? <>
+          <label htmlFor="studio-product">Product</label>
+          <select id="studio-product" value={productId} onChange={event => { setProductId(event.target.value); setPhotos([]); setPhotoError(""); setCopyError(""); }}>
+            {products.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}
+          </select>
+          <button type="button" onClick={generateCopy} disabled={generatingCopy || !productId}>
+            {generatingCopy ? "Writing your ad..." : "Write copy for this product"}
+          </button>
+          <p>Fills the headline and supporting message from your product details and brand voice. Edit the wording or preview it below.</p>
+          {copyError && <p role="alert">{copyError}</p>}
+        </> : <p>Add products with photos to your workspace before creating an automatic ad.</p>}
         <label htmlFor="studio-headline">Headline</label>
         <input id="studio-headline" value={headline} maxLength={140} placeholder={`Write a headline for ${brand.name}`} onChange={e => setHeadline(e.target.value)} />
         <label htmlFor="studio-subheadline">Subheadline</label>
@@ -59,7 +102,7 @@ export default function CreativeStudio({ brand }: { brand: StudioBrand }) {
         <label>Product or service photos · up to 3<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={async e => { const files = [...(e.target.files || [])].slice(0, 3); setPhotoError(""); if (files.some(file => !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5_000_000)) { setPhotoError("Choose JPEG, PNG or WebP photos under 5 MB each."); return; } try { const urls = await Promise.all(files.map(file => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(Error("Could not read photo.")); reader.readAsDataURL(file); }))); setPhotos(urls); } catch { setPhotoError("Could not read those photos. Please try again."); } }} /></label>
         <label><input type="checkbox" checked={detailCrops} onChange={e => setDetailCrops(e.target.checked)} /> Include detail close-ups from a single photo</label>
         {photos.length > 0 && <button type="button" onClick={() => setPhotos([])}>Remove photos</button>}{photoError && <p role="alert">{photoError}</p>}
-        <p>Your preview updates as you edit. Photos stay in this browser until you download the creative.</p>
+        <p>Your preview updates as you edit. The selected product photo is used automatically; uploaded photos stay in this browser until you download.</p>
         {headline.trim() ? <a className="button" href={previewUrl} download={`${brand.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-creative.svg`}>Download creative · SVG</a> : <p>Enter a headline to download your creative.</p>}
       </section>
       <section role="img" aria-label={`${brand.name} creative: ${headline.trim() || "Your headline"}`} style={{ width: "100%", maxWidth: format === "story" ? 460 : 600, alignSelf: "start", borderRadius: 20, overflow: "hidden" }}>

@@ -11,7 +11,7 @@ function fixture(){
  const create=(key,data)=>{assert.ok(!state[key].some(r=>r.id===data.id&&data.id));const r={id:key+state[key].length,organizationId:'org',status:'queued',result:null,error:null,createdAt:new Date(),updatedAt:new Date(),...data};state[key].push(r);return r;};
  const table=key=>({findFirst:async q=>rows(key,q)[0]||null,findUnique:async q=>rows(key,q)[0]||null,findUniqueOrThrow:async q=>{const r=rows(key,q)[0];assert.ok(r);return r;},findMany:async q=>rows(key,q),create:async q=>create(key,q.data),update:async q=>{const r=rows(key,q)[0];assert.ok(r);Object.assign(r,q.data,{updatedAt:new Date()});return r;},updateMany:async q=>{const rs=rows(key,q);rs.forEach(r=>Object.assign(r,q.data,{updatedAt:new Date()}));return{count:rs.length};},upsert:async q=>rows(key,q)[0]||create(key,q.create)});
  const db={$queryRaw:async()=>[],job:table('jobs'),campaign:table('campaigns'),contentItem:table('items'),mediaAsset:table('assets'),creditLedger:table('ledger'),
-  brand:{findFirst:async q=>q.where.organizationId==='org'&&q.where.id==='brand'?{id:'brand',name:'Rumi Guitars',products:state.products,websiteUrl:'https://brand.test'}:null},socialConnection:{findMany:async()=>[]},
+  brand:{findFirst:async q=>q.where.organizationId==='org'&&q.where.id==='brand'?{id:'brand',name:'Rumi Guitars',voice:'warm and editorial',positioning:'thoughtful craft',visualRules:'earthy, calm, spacious',primaryColor:'#302820',secondaryColor:'#eee7dc',products:state.products,websiteUrl:'https://brand.test'}:null},socialConnection:{findMany:async()=>[]},
   subscription:{findUnique:async()=>({credits:state.credits,status:state.subStatus,plan:'starter'}),findUniqueOrThrow:async()=>({credits:state.credits}),updateMany:async q=>{if(q.where.organizationId!=='org'||state.credits<q.where.credits.gte||!q.where.status.in.includes(state.subStatus))return{count:0};state.credits-=q.data.credits.decrement;return{count:1};},update:async q=>{state.credits+=q.data.credits.increment;return{credits:state.credits};}},
  };
  db.$transaction=fn=>{const result=tail.then(async()=>{const old=structuredClone(state);try{return await fn(db);}catch(e){state=old;throw e;}});tail=result.catch(()=>{});return result;};
@@ -26,7 +26,7 @@ test.after(()=>{for(const[k,v]of Object.entries(old))if(v===undefined)delete pro
 test('extra ad is one branded draft, one debit and independent of the weekly allowance',async()=>{
  const f=fixture(),r=await f.service.prepareExtra(ctx,input),s=f.state();assert.equal(s.credits,97);assert.equal(s.ledger.length,1);assert.equal(s.ledger[0].reason,'extra_ad');
  assert.equal(s.jobs.filter(j=>j.type==='WEEKLY_PACK').length,0);const parent=s.jobs.find(j=>j.id===r.id),job=s.jobs.find(j=>j.type==='CREATE_EVERYTHING');
- assert.equal(parent.payload.slots.length,1);assert.equal(parent.payload.packCredits,3);assert.equal(job.payload.contentPlan.length,1);assert.equal(job.payload.days,1);assert.equal(job.payload.extraCreationId,r.id);assert.ok(job.payload.weeklySlots[0].layout.startsWith('weekly-'));assert.equal(job.payload.brandContext.approvalRequired,true);
+ assert.equal(parent.payload.slots.length,1);assert.equal(parent.payload.packCredits,3);assert.equal(job.payload.contentPlan.length,1);assert.equal(job.payload.days,1);assert.equal(job.payload.extraCreationId,r.id);assert.equal(job.payload.weeklySlots[0].layout,'classic');assert.equal(job.payload.weeklySlots[0].photoSource,'ai');assert.equal(job.payload.photoSource,'ai');assert.match(job.payload.brief,/derive the visual concept.*voice/s);assert.match(job.payload.brief,/Do not render text or logos into the image/);assert.equal(job.payload.brandContext.voice,'warm and editorial');assert.equal(job.payload.brandContext.approvalRequired,true);
 });
 test('double clicks and concurrent tabs cannot debit the same extra twice',async()=>{
  const f=fixture();const[a,b]=await Promise.all([f.service.prepareExtra(ctx,input),f.service.prepareExtra(ctx,input)]);assert.equal(a.id,b.id);assert.equal(f.state().credits,97);assert.equal(f.state().ledger.length,1);
@@ -46,9 +46,15 @@ test('a reel requires the full seven credits, reserves preparation once, and que
 });
 test('product identities are scoped to the selected brand and reels require distinct original photos',async()=>{
  const f=fixture();await assert.rejects(f.service.prepareExtra(ctx,{...input,productId:'foreign'}),/saved product/);
- f.state().products=[{id:'product',name:'Actual guitar',imageUrl:'https://brand.test/one.jpg',sourceUrl:'https://brand.test/product'}];f.state().photos=[{productName:'Actual guitar',imageUrl:'https://brand.test/one.jpg',sourceUrl:'https://brand.test/product'}];
+ f.state().products=[{id:'product',name:'Actual guitar',description:'Hand-finished acoustic guitar',imageUrl:'https://brand.test/one.jpg',sourceUrl:'https://brand.test/product'}];f.state().photos=[{productName:'Actual guitar',imageUrl:'https://brand.test/one.jpg',sourceUrl:'https://brand.test/product'}];
  await assert.rejects(f.service.prepareExtra(ctx,{...input,productId:'product',kind:'reel',expectedCredits:7}),/three saved photos/);assert.equal(f.state().credits,100);
- const r=await f.service.prepareExtra(ctx,{...input,productId:'product'});const p=f.state().jobs.find(j=>j.id===r.id).payload;assert.equal(p.slots[0].productName,'Actual guitar');assert.equal(p.slots[0].sourceImageUrl,'https://brand.test/one.jpg');
+ const r=await f.service.prepareExtra(ctx,{...input,productId:'product'});const p=f.state().jobs.find(j=>j.type==='CREATE_EVERYTHING').payload;assert.equal(p.weeklySlots[0].productName,'Actual guitar');assert.equal(p.weeklySlots[0].sourceImageUrl,undefined);assert.equal(p.photoSource,'ai');assert.equal(p.weeklySources.length,0);assert.match(p.brief,/Hand-finished acoustic guitar/);
+});
+test('an ad can feature a product with no photo and uses only its supplied facts for an original brand-led scene',async()=>{
+ const f=fixture();f.state().products=[{id:'no-photo',name:'Studio Lessons',description:'One-to-one beginner guitar lessons',imageUrl:null,sourceUrl:null}];
+ const r=await f.service.prepareExtra(ctx,{...input,productId:'no-photo'}),p=f.state().jobs.find(j=>j.type==='CREATE_EVERYTHING').payload;
+ assert.equal(p.photoSource,'ai');assert.equal(p.weeklySlots[0].photoSource,'ai');assert.equal(p.weeklySlots[0].productName,'Studio Lessons');
+ assert.match(p.brief,/One-to-one beginner guitar lessons/);assert.match(p.brief,/do not pretend to reproduce its exact physical appearance/i);
 });
 const presenterInput={...input,kind:'presenter',presenter:'alex',brief:'Welcome to our guitar collection. Find a little inspiration today.',expectedCredits:30};
 test('presenter resumes saved voice/video tasks and selects a private MP4 draft without approving or posting',async()=>{

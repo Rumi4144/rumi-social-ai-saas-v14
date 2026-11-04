@@ -2,7 +2,7 @@ import { WEEKLY_CREDIT_COST } from "../billing/packages";
 
 const preparation = WEEKLY_CREDIT_COST.packCopy + WEEKLY_CREDIT_COST.postPreparation;
 export const extraOptions = {
-  ad: { label: "Image ad", description: "A branded design and caption.", credits: preparation },
+  ad: { label: "Image ad", description: "AI-written copy and an original, brand-led scene.", credits: preparation },
   reel: { label: "Extra reel", description: "Three scenes, music and short captions · 15 seconds.", credits: preparation + WEEKLY_CREDIT_COST.motionReelCompletion },
   presenter: { label: "Talking presenter", description: "An AI presenter speaking your short script.", credits: 30 },
 } as const;
