@@ -62,10 +62,23 @@
 .designToolbar label { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 .designGrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
 .designGrid .pictureChoice img { height:auto; aspect-ratio:4/5; object-fit:contain; }
+.aiDesignPanel { padding:14px; border:1px solid #d1e0d8; border-radius:12px; background:#f6f7f3; }
+.aiDesignPanel > label { display:block; margin-bottom:8px; font-size:14px; font-weight:650; }
+.aiDesignControls { display:flex; flex-wrap:wrap; gap:8px; }
+.aiDesignControls input { flex:1 1 260px; min-width:0; padding:10px 12px; border:1px solid #c5d2cb; border-radius:8px; background:#fff; color:#15251e; font:inherit; }
+.aiDesignControls button { padding:9px 13px; border:1px solid #176c5e; border-radius:8px; background:#176c5e; color:white; font:inherit; font-size:13px; font-weight:600; }
+.aiDesignPanel small { display:block; margin-top:8px; color:#526b61; font-size:12px; }
+.aiDesignGrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:14px; }
+.workspace .aiDesignChoice { min-width:0; padding:8px; border:1px solid #d1e0d8; border-radius:9px; background:white; text-align:left; }
+.workspace .aiDesignChoice[aria-pressed=true] { outline:3px solid #176c5e; outline-offset:1px; }
+.aiDesignChoice img { display:block; width:100%; aspect-ratio:4/5; object-fit:contain; background:#f3f5f3; }
+.aiDesignChoice strong,.aiDesignChoice span { display:block; margin-top:7px; }
+.aiDesignChoice strong { font-size:13px; }
+.aiDesignChoice span { color:#526b61; font-size:12px; line-height:1.45; }
 .workspace .designPages button { padding:8px 10px; font-size:12px; }
 .designSelected { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; }
 .designSelected img { display:block; width:100%; max-height:65svh; object-fit:contain; }
-@media(max-width:500px) { .designGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:500px) { .designGrid,.aiDesignGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:500px) { .pictureDialog { padding:14px; } .pictureGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .placeholder { text-align:center; padding:18px; color:#526b61; display:grid; gap:10px; font-size:13px; }
 .placeholder strong { font-size:17px; }

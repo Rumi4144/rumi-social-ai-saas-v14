@@ -8,10 +8,11 @@ import { isWeeklyDesign, WEEKLY_DESIGN_FAMILIES } from "@/lib/render/weekly-layo
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-const layout = z.string().refine(isWeeklyDesign);
+const isAvailableDesign = (value: string) => isWeeklyDesign(value) || value === "quiet-luxury";
+const layout = z.string().refine(isAvailableDesign);
 const version = z.string().min(1).max(2000);
 const selection = z.object({ expectedMediaUrl: version, layout }).strict();
-const query = z.object({ expectedMediaUrl: version, page: z.coerce.number().int().min(0).max(14).optional(), family: z.string().refine(value => WEEKLY_DESIGN_FAMILIES.includes(value)).optional(), layout: layout.optional() }).strict();
+const query = z.object({ expectedMediaUrl: version, page: z.coerce.number().int().min(0).max(15).optional(), family: z.string().refine(value => [...WEEKLY_DESIGN_FAMILIES, "Editorial"].includes(value)).optional(), layout: layout.optional() }).strict();
 const response = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { "Cache-Control": "private, no-store" } });
 const failure = (error: unknown) => error instanceof PictureError ? response({ error: error.message }, error.status) : apiError(error, "Could not prepare this design. Your original ad is unchanged. Try again.");
 
