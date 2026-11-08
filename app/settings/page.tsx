@@ -99,6 +99,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             ) : x === "Facebook Page" ? (
               <>
                 {facebookConnections.map(connection => <FacebookConnection key={connection.id} connectionId={connection.id} accountName={connection.accountName} canManage={canManageFacebook(ctx.role)}/>)}
+                {facebookConnections.length > 0 && canManageFacebook(ctx.role) && <p><a className="button" href="/api/social/facebook/connect">Add Facebook Page</a></p>}
                 {!facebookConnections.length && <><p>Not connected</p>{canManageFacebook(ctx.role) ? <a className="button" href="/api/social/facebook/connect">Connect Facebook</a> : <p>Ask a workspace owner or team member to connect Facebook.</p>}</>}
               </>
             ) : x === "YouTube" ? (

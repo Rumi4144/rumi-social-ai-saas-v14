@@ -139,6 +139,16 @@ let browser, server;
     assert.equal(writes.length,before+1);assert.deepEqual(writes.at(-1).socialConnectionIds,['x']);
     assert.deepEqual(writes.at(-1).x,{text:'A reviewed guitar caption for X.',sourceText:'My saved reel caption',approved:true});
   }
+  accounts=[facebook,{id:'facebook-second',provider:'facebook',accountName:'Second Page'}];deliveries=[];
+  await page.goto(base+'/photo');
+  const firstPage=page.getByRole('checkbox',{name:'facebook · Test Page',exact:true});
+  const secondPage=page.getByRole('checkbox',{name:'facebook · Second Page',exact:true});
+  await firstPage.waitFor();assert.equal(await firstPage.isChecked(),false);assert.equal(await secondPage.isChecked(),false);
+  await firstPage.check();await secondPage.check();
+  const beforeMulti=writes.length;
+  await page.getByRole('button',{name:'Approve and post now',exact:true}).click();
+  await page.getByRole('button',{name:'✓ Submitted',exact:true}).waitFor();
+  assert.equal(writes.length,beforeMulti+1);assert.deepEqual(writes.at(-1).socialConnectionIds,['facebook','facebook-second']);
   accounts=[facebook,instagram];deliveries=[];
   await page.goto(base+'/excluded');
   await page.getByText('This post is already scheduled or posted to all available accounts. See the status above.').waitFor();

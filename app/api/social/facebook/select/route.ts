@@ -15,18 +15,19 @@ export async function POST(req: Request) {
     reason = "session";
     const form = await req.formData();
     const jobId = String(form.get("jobId") || "");
-    const pageId = String(form.get("pageId") || "");
+    const pageIds = [...new Set(form.getAll("pageId").map(value => String(value)))];
+    if (!pageIds.length || pageIds.length > 100) throw new Error("PAGE_NOT_AVAILABLE");
     await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ctx.organizationId}))`;
       const job = await tx.job.findFirst({ where: { id: jobId, organizationId: ctx.organizationId, type: FACEBOOK_SELECTION_TYPE, status: "pending" } });
       const payload = job?.payload as FacebookAttempt | null;
       if (!job || !validFacebookAttempt(payload, ctx.userId) || !payload?.encryptedPages) throw new Error("SESSION_EXPIRED");
       const pages = JSON.parse(decryptSecret(payload.encryptedPages)) as FacebookPage[];
-      const page = pages.find(p => p.id === pageId && p.accessToken);
-      if (!page) throw new Error("PAGE_NOT_AVAILABLE");
+      const selectedPages = pageIds.map(id => pages.find(p => p.id === id && p.accessToken));
+      if (selectedPages.some(page => !page)) throw new Error("PAGE_NOT_AVAILABLE");
       const consumed = await tx.job.updateMany({ where: { id: job.id, organizationId: ctx.organizationId, type: FACEBOOK_SELECTION_TYPE, status: "pending" }, data: { status: "completed", progress: 100, payload: {} } });
       if (consumed.count !== 1) throw new Error("SESSION_CANCELLED");
-      await saveFacebookPage(tx, ctx.organizationId, payload, page);
+      for (const page of selectedPages) await saveFacebookPage(tx, ctx.organizationId, payload, page!);
     });
     return NextResponse.redirect(new URL("/settings?facebook=connected", appUrl), 303);
   } catch {

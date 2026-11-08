@@ -55,7 +55,7 @@ function fixture() {
   const start = async connectionId => { const response = await routes.connect.GET(new Request(`${origin}/api/social/facebook/connect${connectionId ? '?connectionId=' + connectionId : ''}`)); return { response, url: new URL(response.headers.get('location')) }; };
   const callback = (state, params = { code: 'provider-code' }) => routes.callback.GET(new Request(`${origin}/api/social/facebook/callback?${new URLSearchParams({ state, ...params })}`));
   const disconnect = (connectionId, requestOrigin = origin) => routes.disconnect.POST(new Request(`${origin}/api/social/facebook/disconnect`, { method: 'POST', headers: { origin: requestOrigin }, body: new URLSearchParams({ connectionId }) }));
-  const select = (jobId, pageId, requestOrigin = origin) => routes.select.POST(new Request(`${origin}/api/social/facebook/select`, { method: 'POST', headers: { origin: requestOrigin }, body: new URLSearchParams({jobId, pageId}) }));
+  const select = (jobId, pageId, requestOrigin = origin) => routes.select.POST(new Request(`${origin}/api/social/facebook/select`, { method: 'POST', headers: { origin: requestOrigin }, body: new URLSearchParams([['jobId',jobId],...(Array.isArray(pageId)?pageId:[pageId]).map(id=>['pageId',id])]) }));
   const status = id => routes.status.GET(new Request(`${origin}/api/social/facebook/status?connectionId=${id}`));
   async function connect() { const { url } = await start(); assert.match((await callback(url.searchParams.get('state'))).headers.get('location'), /facebook=connected/); return connections[0]; }
   return { ctx, env, connections, jobs, publishes, calls, prisma, mocks, routes, load, security, start, callback, connect, disconnect, status, select,
@@ -257,4 +257,20 @@ test('missing setup, expired response, unknown target and no available Pages lea
 test('new connect attempts have unique signed state even when started together', async () => {
   const f = fixture(); const [one,two] = await Promise.all([f.start(), f.start()]);
   assert.notEqual(one.url.searchParams.get('state'), two.url.searchParams.get('state')); assert.equal(f.jobs.length, 2);
+});
+
+test('multiple selected Pages connect together, deduplicate, and preserve existing Page identities',async()=>{
+ const f=fixture(),first=await f.connect();
+ f.pages([{id:'12345',name:'Rumi Guitars',access_token:'renewed'},{id:'2',name:'Second Page',access_token:'second'},{id:'3',name:'Third Page',access_token:'third'}]);
+ const {url}=await f.start();const r=await f.callback(url.searchParams.get('state'));const id=new URL(location(r)).searchParams.get('job');
+ assert.match(location(await f.select(id,['12345','2','3','2'])),/facebook=connected/);
+ assert.equal(f.connections.length,3);assert.equal(f.connections[0].id,first.id);assert.equal(first.externalId,'12345');
+ assert.deepEqual(f.connections.map(c=>c.externalId),['12345','2','3']);
+ await f.disconnect(f.connections[1].id);assert.equal(first.status,'connected');assert.equal(f.connections[2].status,'connected');
+});
+test('a batch containing an unavailable Page never partially connects or consumes its selection',async()=>{
+ const f=fixture();f.pages([{id:'1',name:'One',access_token:'one'},{id:'2',name:'Two',access_token:'two'}]);
+ const {url}=await f.start();const r=await f.callback(url.searchParams.get('state'));const id=new URL(location(r)).searchParams.get('job');
+ assert.match(location(await f.select(id,['1','foreign'])),/facebook=error/);assert.equal(f.connections.length,0);assert.equal(f.jobs.find(j=>j.id===id).status,'pending');
+ assert.match(location(await f.select(id,['1','2'])),/facebook=connected/);assert.equal(f.connections.length,2);
 });

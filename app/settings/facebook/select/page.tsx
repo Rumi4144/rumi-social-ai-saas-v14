@@ -48,12 +48,14 @@ export default async function FacebookPageSelector({
   return (
     <>
       <div className="eyebrow">FACEBOOK</div>
-      <h1>Choose your Facebook Page.</h1>
+      <h1>Choose your Facebook Pages.</h1>
 
       <p>
-        Select the Facebook Page that belongs to this business workspace.
+        Select the Pages to connect to this business. Existing connections stay available. You can choose where each post goes.
       </p>
 
+      <form action="/api/social/facebook/select" method="POST">
+      <input type="hidden" name="jobId" value={job.id} />
       <div className="settingsgrid">
         {pages.map((page) => (
           <div key={page.id} className="card">
@@ -108,20 +110,15 @@ export default async function FacebookPageSelector({
               </div>
             </div>
 
-            <form
-              action="/api/social/facebook/select"
-              method="POST"
-            >
-              <input type="hidden" name="jobId" value={job.id} />
-              <input type="hidden" name="pageId" value={page.id} />
-
-              <button type="submit">
-                Connect this Page
-              </button>
-            </form>
+            <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <input type="checkbox" name="pageId" value={page.id} />
+              Connect {page.name}
+            </label>
           </div>
         ))}
       </div>
+      <button type="submit" style={{ marginTop: 20 }}>Connect selected Pages</button>
+      </form>
     </>
   );
 }
