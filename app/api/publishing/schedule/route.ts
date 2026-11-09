@@ -78,6 +78,8 @@ export async function POST(req: Request) {
     if (youtubeSelected && (!p.data.youtube || !campaignVideoId(item.mediaUrl))) return NextResponse.json({ error: "Select a campaign video and confirm YouTube settings." }, { status: 400 });
     const googleSelected = await prisma.socialConnection.findFirst({ where: { id: { in: p.data.socialConnectionIds }, organizationId: ctx.organizationId, provider: "google_business", status: "connected" } });
     if (googleSelected) { try { googleBusinessPost(item.caption || item.headline || "", item.mediaUrl); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "This post is not supported by Google Business Profile." }, { status: 400 }); } }
+    const tiktokTargets = await prisma.socialConnection.findMany({where:{id:{in:p.data.socialConnectionIds},organizationId:ctx.organizationId,provider:"tiktok",status:"connected"}});
+    if (tiktokTargets.length > 1) return NextResponse.json({error:"Choose one TikTok account per submission so its posting settings can be reviewed."},{status:400});
     const tiktokSelected=await prisma.socialConnection.findFirst({where:{id:{in:p.data.socialConnectionIds},organizationId:ctx.organizationId,provider:"tiktok",status:"connected"}});
     let tiktokSettings;
     if(tiktokSelected?.provider==="tiktok"){

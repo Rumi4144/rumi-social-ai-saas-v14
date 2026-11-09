@@ -23,7 +23,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     select: { id: true, accountName: true },
   });
 
-  const youtubeConnection = await prisma.socialConnection.findFirst({
+  const youtubeConnections = await prisma.socialConnection.findMany({
     where: {
       organizationId: ctx.organizationId,
       provider: "youtube",
@@ -31,7 +31,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     },
   });
 
-  const tiktokConnection = await prisma.socialConnection.findFirst({
+  const tiktokConnections = await prisma.socialConnection.findMany({
     where: {
       organizationId: ctx.organizationId,
       provider: "tiktok",
@@ -48,7 +48,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     select: { id: true, accountName: true },
   });
 
-  const googleConnection = await prisma.socialConnection.findFirst({ where: { organizationId: ctx.organizationId, provider: "google_business", status: "connected" } });
+  const googleConnections = await prisma.socialConnection.findMany({ where: { organizationId: ctx.organizationId, provider: "google_business", status: "connected" } });
   const xConnections = await prisma.socialConnection.findMany({ where: { organizationId: ctx.organizationId, provider: "x", status: { in: ["linked", "connected"] } }, select: { accountName: true, status: true } });
 
   return (
@@ -94,6 +94,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             {x === "Instagram Business" ? (
               <>
                 {instagramConnections.map(connection => <InstagramConnection key={connection.id} connectionId={connection.id} accountName={connection.accountName} canManage={canManageInstagram(ctx.role)}/>)}
+                {instagramConnections.length > 0 && canManageInstagram(ctx.role) && <p><a className="button" href="/api/social/instagram/connect">Add Instagram account</a></p>}
                 {!instagramConnections.length && <><p>Not connected</p>{canManageInstagram(ctx.role) ? <a className="button" href="/api/social/instagram/connect">Connect Instagram</a> : <p>Ask a workspace owner or team member to connect Instagram.</p>}</>}
               </>
             ) : x === "Facebook Page" ? (
@@ -104,21 +105,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </>
             ) : x === "YouTube" ? (
               <>
-                <p>
-                  {youtubeConnection
-                    ? `Connected as ${youtubeConnection.accountName || "YouTube"}`
-                    : "Not connected"}
-                </p>
-                {youtubeConnection ? (
-                  <YouTubeDisconnect connectionId={youtubeConnection.id} />
-                ) : (
-                  <a href="/api/social/youtube/connect">
-                    <button type="button">Connect</button>
-                  </a>
-                )}
+                {!youtubeConnections.length && <p>Not connected</p>}
+                {youtubeConnections.map(connection => <div key={connection.id} style={{ marginBottom: 24 }}><p>Channel: {connection.accountName || "YouTube"}</p><YouTubeDisconnect connectionId={connection.id} /></div>)}
+                {ctx.role !== "viewer" && <a className="button" href="/settings/youtube">{youtubeConnections.length ? "Add YouTube channel" : "Connect YouTube"}</a>}
               </>
             ) : x === "Google Business Profile" ? (
-              <><p>{googleConnection ? `Connected as ${googleConnection.accountName || "Business location"}` : "Not connected"}</p><a className="button" href="/settings/google-business">{googleConnection ? "Change business location" : "Connect"}</a>{googleConnection && <form action="/api/social/google-business/disconnect" method="POST"><button type="submit">Disconnect Google Business Profile</button></form>}</>
+              <>
+                {!googleConnections.length && <p>Not connected</p>}
+                {googleConnections.map(connection => <div key={connection.id} style={{ marginBottom: 24 }}><p>Location: {connection.accountName || "Business location"}</p>{ctx.role !== "viewer" && <form action="/api/social/google-business/disconnect" method="POST"><input type="hidden" name="connectionId" value={connection.id}/><button type="submit">Disconnect this location</button></form>}</div>)}
+                {ctx.role !== "viewer" && <a className="button" href="/settings/google-business">{googleConnections.length ? "Add business location" : "Connect"}</a>}
+              </>
             ) : x === "X (Twitter)" ? (
               <>
                 <p>{xConnections.length ? `Linked: ${xConnections.map(account => `@${account.accountName}`).join(", ")}` : "Not connected"}</p>
@@ -127,27 +123,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </>
             ) : x === "TikTok" ? (
               <>
-                <p>
-                  {tiktokConnection
-                    ? `Account linked as ${tiktokConnection.accountName || "TikTok"}`
-                    : "Not connected"}
-                </p>
-
-                {tiktokConnection&&<TikTokConnectionStatus connectionId={tiktokConnection.id}/>}
-                {tiktokConnection ? (
-                  <form
-                    action="/api/social/tiktok/disconnect"
-                    method="POST"
-                  >
-                    <button type="submit">
-                      Disconnect
-                    </button>
-                  </form>
-                ) : (
-                  <a href="/api/social/tiktok/connect">
-                    <button type="button">Connect</button>
-                  </a>
-                )}
+                {!tiktokConnections.length && <p>Not connected</p>}
+                {tiktokConnections.map(connection => <div key={connection.id} style={{ marginBottom: 24 }}><p>Account: {connection.accountName || "TikTok"}</p><TikTokConnectionStatus connectionId={connection.id}/>{ctx.role !== "viewer" && <form action="/api/social/tiktok/disconnect" method="POST"><input type="hidden" name="connectionId" value={connection.id}/><button type="submit">Disconnect this account</button></form>}</div>)}
+                {ctx.role !== "viewer" && <a className="button" href="/api/social/tiktok/connect">{tiktokConnections.length ? "Add TikTok account" : "Connect TikTok"}</a>}
               </>
             ) : (
               <>

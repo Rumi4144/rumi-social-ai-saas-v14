@@ -1,3 +1,4 @@
+import { saveProviderAccount } from "@/lib/social/save-account";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/security/crypto";
@@ -123,35 +124,7 @@ export async function GET(req: Request) {
 
     const encryptedToken = encryptSecret(tokenBundle);
 
-    const existing = await prisma.socialConnection.findFirst({
-      where: {
-        organizationId: state.organizationId,
-        provider: "youtube",
-      },
-    });
-
-    if (existing) {
-      await prisma.socialConnection.update({
-        where: { id: existing.id },
-        data: {
-          accountName: channel.snippet?.title || "YouTube",
-          externalId: String(channel.id),
-          status: "connected",
-          encryptedToken,
-        },
-      });
-    } else {
-      await prisma.socialConnection.create({
-        data: {
-          organizationId: state.organizationId,
-          provider: "youtube",
-          accountName: channel.snippet?.title || "YouTube",
-          externalId: String(channel.id),
-          status: "connected",
-          encryptedToken,
-        },
-      });
-    }
+    await saveProviderAccount(state.organizationId, "youtube", String(channel.id), channel.snippet?.title || "YouTube", encryptedToken);
 
     return NextResponse.redirect(
       `${appUrl}/settings?youtube=connected`

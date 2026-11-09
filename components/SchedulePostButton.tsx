@@ -168,11 +168,9 @@ export default function SchedulePostButton({
   const xCaption = useXCaptionReview(contentItemId, open && xSelected && !completed);
 
   function toggleConnection(id: string) {
-    setSelected((current) =>
-      current.includes(id)
-        ? current.filter((value) => value !== id)
-        : [...current, id],
-    );
+    const isTikTok = connections.some(connection => connection.id === id && connection.provider === "tiktok");
+    if (isTikTok) setTikTokOptions(null);
+    setSelected(current => current.includes(id) ? current.filter(value => value !== id) : [...(isTikTok ? current.filter(value => !connections.some(connection => connection.id === value && connection.provider === "tiktok")) : current), id]);
   }
 
   async function schedule() {
@@ -303,7 +301,8 @@ export default function SchedulePostButton({
 
           {xSelected && !completed && <XCaptionReview state={xCaption} disabled={busy} />}
 
-          {tikTokSelected&&<TikTokPostOptions connectionId={tikTokSelected.id} contentItemId={contentItemId} assetId={videoAssetId} disabled={busy||completed} onChange={setTikTokOptions}/>}
+          {connections.filter(connection => connection.provider === "tiktok").length > 1 && <p>Choose one TikTok account per submission to review its posting settings.</p>}
+          {tikTokSelected&&<TikTokPostOptions key={tikTokSelected.id} connectionId={tikTokSelected.id} contentItemId={contentItemId} assetId={videoAssetId} disabled={busy||completed} onChange={setTikTokOptions}/>}
           {youtubeSelected && <YouTubePostOptions disabled={busy || completed} privacy={privacy} onPrivacyChange={setPrivacy} madeForKids={madeForKids} onMadeForKidsChange={setMadeForKids} synthetic={synthetic} onSyntheticChange={setSynthetic} certified={youtubeCertified} onCertifiedChange={setYoutubeCertified} />}
           {tikTokSelected&&!tikTokOptions&&!completed&&<p role="status">Complete TikTok’s visibility, disclosure and upload permission settings to enable posting.</p>}
           {allowPostNow && <label className={`${styles.field} ${styles.when}`}>When<select value={postNow ? "now" : "later"} disabled={busy || completed} onChange={event => setPostNow(event.target.value === "now")}><option value="now">Post now</option><option value="later">Schedule for later</option></select></label>}

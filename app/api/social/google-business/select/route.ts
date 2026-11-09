@@ -18,10 +18,10 @@ export async function POST(req: Request) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ctx.organizationId}))`;
       const claim = await tx.job.updateMany({ where: { id: job.id, organizationId: ctx.organizationId, status: "pending" }, data: { status: "completed", payload: {}, result: { location: location.name } } });
       if (!claim.count) throw new Error("Connection session already used.");
-      const existing = await tx.socialConnection.findFirst({ where: { organizationId: ctx.organizationId, provider: GOOGLE_BUSINESS_PROVIDER } });
+      const existing = await tx.socialConnection.findFirst({ where: { organizationId: ctx.organizationId, provider: GOOGLE_BUSINESS_PROVIDER, externalId: location.name } });
       const data = { accountName: location.title, externalId: location.name, status: "connected", encryptedToken: payload.encryptedGrant };
       if (existing) await tx.socialConnection.update({ where: { id: existing.id }, data });
-      else await tx.socialConnection.create({ data: { ...data, organizationId: ctx.organizationId, provider: GOOGLE_BUSINESS_PROVIDER } });
+      else await tx.socialConnection.create({ data: { ...data, organizationId: ctx.organizationId, provider: GOOGLE_BUSINESS_PROVIDER, externalId: location.name } });
     });
     return NextResponse.redirect(new URL("/settings?googleBusiness=connected", req.url), 303);
   } catch { return NextResponse.redirect(new URL("/settings/google-business?reason=selection", req.url), 303); }

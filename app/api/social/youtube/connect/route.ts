@@ -9,6 +9,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await tenantContext();
+    if (ctx.role === "viewer" || req.headers.get("origin") !== new URL(req.url).origin) return NextResponse.json({ error: "You cannot connect a channel." }, { status: 403 });
     if ((await req.formData()).get("consent") !== "yes") return NextResponse.json({ error: "Accept the Privacy Policy and Terms before connecting YouTube." }, { status: 400 });
 
     const clientId = process.env.YOUTUBE_CLIENT_ID;

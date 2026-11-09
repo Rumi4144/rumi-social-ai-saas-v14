@@ -1,3 +1,4 @@
+import { saveProviderAccount } from "@/lib/social/save-account";
 import { refreshExpiry } from "@/lib/tiktok/token-refresh";
 import { tikTokOAuthConfig } from "@/lib/tiktok/oauth-config";
 import { cookies } from "next/headers";
@@ -154,38 +155,7 @@ export async function GET(req: Request) {
 
     const encryptedToken = encryptSecret(tokenBundle);
 
-    const existing = await prisma.socialConnection.findFirst({
-      where: {
-        organizationId: state.organizationId,
-        provider: "tiktok",
-      },
-    });
-
-    const accountName =
-      tikTokUser.display_name || "TikTok";
-
-    if (existing) {
-      await prisma.socialConnection.update({
-        where: { id: existing.id },
-        data: {
-          accountName,
-          externalId: openId,
-          status: "connected",
-          encryptedToken,
-        },
-      });
-    } else {
-      await prisma.socialConnection.create({
-        data: {
-          organizationId: state.organizationId,
-          provider: "tiktok",
-          accountName,
-          externalId: openId,
-          status: "connected",
-          encryptedToken,
-        },
-      });
-    }
+    await saveProviderAccount(state.organizationId, "tiktok", openId, tikTokUser.display_name || "TikTok", encryptedToken);
 
     const response=NextResponse.redirect(`${appUrl}/settings?tiktok=connected`);
     response.cookies.set("tiktok_oauth","",{path:"/api/social/tiktok",maxAge:0});

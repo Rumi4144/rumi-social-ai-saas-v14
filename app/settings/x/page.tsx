@@ -48,11 +48,11 @@ export default async function XSettings({ searchParams }: { searchParams: Promis
         </form>}
       </div>
     </div>)}
-    {configured && writer && needsAuthorization && <form action="/api/social/x/connect" method="POST" style={{ marginTop: 24 }}>
+    {configured && writer && <details open={needsAuthorization}><summary>{accounts.length ? "Add another X account" : "Connect X"}</summary><form action="/api/social/x/connect" method="POST" style={{ marginTop: 24 }}>
       <p>Sign in to the X account for this business. Rumi will publish only the posts you approve for X.</p>
       <label><input type="checkbox" name="consent" value="yes" required /> I authorize Rumi to connect my X account and publish posts I approve under the <a href="/privacy" target="_blank">Privacy Policy</a> and <a href="/terms" target="_blank">Terms of Service</a>.</label>
-      <p><button type="submit">{hasLinkedAccount ? "Enable X posting" : accounts.length ? "Reconnect X" : "Connect X"}</button></p>
-    </form>}
+      <p><button type="submit">{hasLinkedAccount ? "Enable X posting" : accounts.length ? "Connect another X account" : "Connect X"}</button></p>
+    </form></details>}
     {!writer && needsAuthorization && <p>Ask a workspace administrator to connect X.</p>}
     {!configured && <p>X setup needs attention from Rumi’s administrator.</p>}
     {ctx.isSuperAdmin && <p><a href="/admin/social-apps">Manage X app settings in Admin</a></p>}
