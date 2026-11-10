@@ -12,6 +12,7 @@ export const metadata = {
   title: "Rumi Social AI",
   description: "AI campaign operating system",
   verification: { google: "9H39NQhHI8Flq4hi_VYt3bLr_bHOnEld2WFL8VEEfOE" },
+  other: { "facebook-domain-verification": "olz8uyktwhldnddoo78kk3szaz5g3d" },
   icons: { icon: "/rumi-social-icon.png", shortcut: "/rumi-social-icon.png", apple: "/rumi-social-icon.png" },
 };
 export default async function RootLayout({
