@@ -216,6 +216,7 @@ export default function TestLab({ workspaceName, presenterMode = false, campaign
       <section className={styles.panel} aria-label="Create a test sample">
         {active && <p role="status">An earlier sample is still running or needs an account check. You can change settings for your next sample. New paid generation stays blocked until that sample is resolved.</p>}
         <h2>{presenterMode ? "1. Choose a campaign post" : "1. Choose your test"}</h2>
+        {!presenterMode && <p><a href="/studio#runway-image-to-video">Runway Image to Video</a> · Upload a photo and describe its motion.</p>}
         {(presenterMode || model === "infinitetalk" || model === "kling") && <>
           <label htmlFor="ad-campaign">Campaign</label><select id="ad-campaign" value={campaignId} disabled={busy} onChange={e => { setCampaignId(e.target.value); setPostId(""); setScript(""); setAudio(null); invalidate(); }}><option value="">Choose campaign</option>{campaigns.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select>
           <label htmlFor="ad-post">Campaign post</label><select id="ad-post" value={postId} disabled={busy || !campaign} onChange={e => { setPostId(e.target.value); const post = campaign?.items.find(item => item.id === e.target.value); setScript(presenterSpeechText(post?.caption || post?.headline || "")); setAudio(null); invalidate(); }}><option value="">Choose post</option>{campaign?.items.map(item => <option value={item.id} key={item.id}>{item.headline || "Untitled post"}</option>)}</select>
