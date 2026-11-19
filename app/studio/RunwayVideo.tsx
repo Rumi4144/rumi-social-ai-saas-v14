@@ -63,7 +63,7 @@ export default function RunwayVideo() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not confirm generation. Retry checks the same request."); }
     finally { setBusy(false); }
   };
-  return <section className="card" style={{ marginTop: 28 }}>
+  return <section id="runway-image-to-video" className="card" style={{ marginTop: 28 }}>
     <div className="eyebrow">AI VIDEO</div><h2>Bring your image to life.</h2>
     <p><a href="https://runwayml.com" target="_blank" rel="noreferrer">Powered by Runway</a> · Choose an opening image and describe the motion.</p>
     {!configured && <p role="status">Runway setup is pending. An administrator needs to connect the Runway developer account and private video storage.</p>}
