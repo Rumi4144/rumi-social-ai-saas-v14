@@ -152,3 +152,95 @@ main button:not(.button):not(.mobile-menu-toggle){font:inherit;min-height:38px;b
 .user-activity small{display:block;margin-top:6px;color:#536c69;line-height:1.4}
 .activity-status{display:inline-block;white-space:nowrap;padding:5px 10px;border-radius:16px;color:#173b32;font-size:13px;font-weight:700}
 .activity-pagination{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+
+/* Creative workspace palette */
+:root {
+  --rumi-bg: #f7f5fb;
+  --rumi-surface: #fff;
+  --rumi-ink: #241c3c;
+  --rumi-muted: #62596f;
+  --rumi-line: #e3daef;
+  --rumi-teal: #5935a1;
+  --rumi-soft: #f0e9fb;
+  --rumi-radius: 18px;
+  --rumi-violet: #6e43ba;
+  --rumi-plum: #251537;
+  --rumi-gold: #f5c985;
+}
+
+body.authenticated {
+  background: radial-gradient(ellipse at top right, #eee4fa 0, transparent 36rem), var(--rumi-bg);
+}
+
+body > aside.application-sidebar {
+  background: linear-gradient(160deg, #35224e, var(--rumi-plum) 64%);
+  border-color: #4d385f;
+  color: #fff7ff;
+}
+
+.application-sidebar .logo strong { color: var(--rumi-gold); }
+.application-sidebar .logo small,
+.application-sidebar .sidefoot { color: #d4c5e5; }
+.application-sidebar .sidefoot { border-color: #654f78; }
+.application-sidebar nav a { color: #eee3fa; }
+.application-sidebar nav a:hover,
+.application-sidebar nav a[aria-current="page"] {
+  background: #594174;
+  color: #fff;
+}
+
+.card, .form, .controls, .onboardcard, .asset, .clientcard, .queue {
+  box-shadow: 0 5px 24px #3924560d;
+}
+
+.hero {
+  background: linear-gradient(118deg, #f6ecfb, #fff5e9 92%);
+  border-color: #e4d3ed;
+}
+
+.hero p { color: #655171; }
+.eyebrow, .metric { color: var(--rumi-teal); }
+.button, .button.gold, .createbig {
+  background: var(--rumi-teal);
+  border-color: transparent;
+  box-shadow: 0 4px 12px #39237324;
+}
+
+.button:hover, .button.gold:hover, .createbig:hover {
+  background: #482684;
+  color: #fff;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible { outline-color: #9b73de; }
+
+.chips, .tag, .deliverables span { color: #533283; }
+main th { background: #f3eef8; }
+.usagehero, .launchbox { background: linear-gradient(130deg, #362050, #52387b); }
+.usagehero p, .usagehero span { color: #e5d9f2; }
+.ring { border-color: #c7a9f1; }
+
+.loginwrap, .landing {
+  background: radial-gradient(ellipse at 88% 10%, #eadcfb 0, transparent 43%),
+    radial-gradient(ellipse at 12% 60%, #fff0dd 0, transparent 42%), var(--rumi-bg);
+}
+
+.loginbox {
+  border-color: #e5d9f2;
+  box-shadow: 0 22px 64px #43296b20;
+}
+
+.landing nav { background: #fff9; }
+.landing .promise { box-shadow: 0 12px 36px #43296b0d; }
+
+@media (max-width: 900px) {
+  .mobile-menu-toggle { background: #34204a; color: #fff7ff; }
+  .mobile-menu-toggle span { color: var(--rumi-gold); }
+}
+
+/* Public screens use the full width of the root layout. */
+body.public-page main.landing, body.public-page main.loginwrap {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
