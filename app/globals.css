@@ -239,7 +239,7 @@ main th { background: #f3eef8; }
 }
 
 /* Public screens use the full width of the root layout. */
-body.public-page main.landing, body.public-page main.loginwrap {
+body.public-page .landing, body.public-page main.loginwrap {
   width: 100%;
   max-width: none;
   margin: 0;
