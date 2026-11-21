@@ -272,14 +272,16 @@ test('X customer settings hides developer setup and preserves separate account c
   assert.match(ready, /@RumiGuitars/);
   assert.match(ready, /href="\/dashboard"[^>]*>Back to This Week/);
   assert.match(ready, /action="\/api\/social\/x\/disconnect"/);
-  assert.ok(!ready.includes('action="/api/social/x/connect"'));
-  assert.ok(!ready.includes('name="consent"'));
+  const addAccount = ready.match(/<details><summary>Add another X account<\/summary>(.*?)<\/details>/s);
+  assert.ok(addAccount, 'The additional-account form is collapsed for a connected workspace');
+  assert.match(addAccount[1], /action="\/api\/social\/x\/connect"/);
+  assert.match(addAccount[1], /name="consent"/);
   assert.ok(!ready.includes('Reconnect X'));
   assert.ok(!ready.includes('PrivateOtherOrg'));
   const reconnect = render(await page({ searchParams: Promise.resolve({ reason: 'permissions' }) }));
   assert.match(reconnect, /role="alert"/);
   assert.match(reconnect, /action="\/api\/social\/x\/connect"/);
-  assert.match(reconnect, /Reconnect X/);
+  assert.match(reconnect, /<details open=""><summary>Reconnect X<\/summary>/);
   assert.ok(!reconnect.includes('<h1>X connected</h1>'));
 });
 
