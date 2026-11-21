@@ -36,3 +36,20 @@ test('unknown or missing signup industry is rejected before creating an account'
  const api=load('app/api/auth/register/route.ts',{'next/server':{NextResponse:{json}},'@/lib/prisma':{prisma:{$transaction:()=>{throw Error('must not create')}}},bcryptjs:{hash:async()=> 'hashed'}});
  assert.equal((await api.POST(req({industry:'Unknown'}))).status,400);assert.equal((await api.POST(req({industry:undefined}))).status,400);
 });
+
+test('protected signup rejects a missing or invalid challenge before creating a workspace',async()=>{
+ let transactions=0;
+ const api=load('app/api/auth/register/route.ts',{
+  'next/server':{NextResponse:{json}},
+  '@/lib/prisma':{prisma:{$transaction:async()=>{transactions++;return {slug:'verified'};}}},
+  '@/lib/turnstile':{signupProtection:()=>({mode:'protected',siteKey:'public-test',secret:'private-test'}),
+   verifySignupChallenge:async(_secret,token)=>token==='approved'},
+  bcryptjs:{hash:async()=> 'hashed'},
+ });
+ assert.equal((await api.POST(req())).status,400);
+ assert.equal((await api.POST(req({challenge:'bad'}))).status,400);
+ assert.equal(transactions,0);
+ assert.equal((await api.POST(req({challenge:'approved'}))).status,201);
+ assert.equal(transactions,1);
+ assert.equal((await api.GET()).body.secret,undefined);
+});
