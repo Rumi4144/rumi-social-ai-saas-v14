@@ -94,7 +94,9 @@ export default function UploadReel({ brandId, brandName, onSaved }: Props) {
   }
 
   return <details>
-    <summary>Upload existing video</summary>
+    <summary style={{ cursor: "pointer", background: "#64358c", color: "#ffffff", border: "1px solid #64358c", borderRadius: "0.75rem", padding: "0.9rem 1.1rem", fontWeight: 700 }}>
+      Upload existing video (MP4)
+    </summary>
     <p>Upload a finished MP4 for {brandName}. It will be saved for review.</p>
     <form onSubmit={event => { event.preventDefault(); void submit(event.currentTarget); }}>
       <fieldset disabled={busy}>
