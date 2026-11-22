@@ -6,6 +6,7 @@ import WeeklyCard from "@/components/weekly/WeeklyCard";
 import { finishWeeklyReel } from "@/components/weekly/finish-reel";
 import weekly from "@/components/weekly/weekly.module.css";
 import styles from "./extras.module.css";
+import UploadReel from "./UploadReel";
 
 export default function ExtraWorkspace(){
   const [data,setData]=useState<ExtrasResponse|null>(null),[error,setError]=useState(""),[message,setMessage]=useState("");
@@ -87,6 +88,9 @@ export default function ExtraWorkspace(){
         {(!data.canCreate||unavailable||needsPhotos||insufficient)&&<p role="status">{data.reason|| (unavailable?"This option is not available yet.":needsPhotos?"Choose a business scene, or ask Admin to add three product photos.":`You need ${option.credits} available credits. Your existing posts stay available.`)}</p>}
       </section>
       {(busy||message)&&<section className={weekly.progress} aria-live="polite"><p>{message}</p>{busy&&<><progress value={progress} max={100} aria-label="Creation progress"/><button onClick={()=>controller.current?.abort()}>Pause</button></>}</section>}
+      {data.canManage && brand && <section className={styles.creator}>
+        <UploadReel key={brand.id} brandId={brand.id} brandName={brand.name} onSaved={changed} />
+      </section>}
       <h2>Your extra creations</h2>
       {!data.extras.length&&<p>Your finished ads, reels and presenters will appear here.</p>}
       <div className={weekly.grid}>{data.extras.map(extra=><section key={extra.id} className={styles.saved}>
