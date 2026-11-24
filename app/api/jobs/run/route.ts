@@ -1,3 +1,4 @@
+import { weeklyImageAttemptLimit, weeklyJobTypes } from "@/lib/weekly/preparation";
 import {campaignSetupPhotos,attachSetupPhoto} from "@/lib/campaign/setup-photos";
 import { NextResponse } from "next/server";
 import {generateImage, ImageRejectedError} from "@/lib/ai/image-provider";
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
     });
 
     if (!requestedJob) return NextResponse.json({ error: "JOB_NOT_FOUND" }, { status: 404 });
-    if (requestedJob.status === "queued" && ["CREATE_EVERYTHING", "GENERATE_IMAGE"].includes(requestedJob.type)) requestedQueuedJob = requestedJob;
+    if (requestedJob.status === "queued" && weeklyJobTypes.includes(requestedJob.type)) requestedQueuedJob = requestedJob;
 
     const requestedPayload =
       requestedJob?.payload &&
@@ -88,12 +89,14 @@ export async function POST(req: Request) {
     );
   }
 
+  if (body?.exact === true && !requestedQueuedJob) return NextResponse.json({ status: "idle" });
+
   // Process only the next queued job belonging to this organization.
   // This safely handles CREATE_EVERYTHING first, followed by its
   // GENERATE_IMAGE jobs, without touching another customer's queue.
   // Prioritize campaign creation so new campaigns do not sit behind
   // previously queued image-generation work for the same organization.
-  const currentCampaignImage = requestedCampaignId
+  const currentCampaignImage = !requestedQueuedJob && requestedCampaignId
     ? await prisma.job.findFirst({
         where: {
           organizationId,
@@ -757,7 +760,9 @@ Leave intentional negative space for Rumi Social AI typography.`,
 
     // Resume the same frozen image task after polling, download or layout storage errors.
     // Definitive provider rejection stops; uncertain paid submissions never auto-resubmit.
-    const retryImage=job.type === "GENERATE_IMAGE" && imageRequested && !(e instanceof ImageRejectedError);
+    const weekly = typeof (job.payload as { weeklyPackId?: unknown })?.weeklyPackId === "string";
+    const retryImage = job.type === "GENERATE_IMAGE" && imageRequested && !(e instanceof ImageRejectedError)
+      && (!weekly || job.attempts + 1 < weeklyImageAttemptLimit);
     await prisma.job.update({
       where: { id: job.id },
       data: {
