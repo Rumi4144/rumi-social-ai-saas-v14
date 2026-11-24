@@ -17,10 +17,12 @@ function fixture(options = {}) {
     },
     campaign: { findMany: async q => { assert.equal(q.where.brandId, 'brand'); assert.equal(q.where.brand.organizationId, 'org'); return [{ id: 'campaign' }, { id: 'same-brand' }]; } },
     publishJob: { findFirst: async q => { assert.equal(q.where.organizationId, 'org'); assert.equal(q.where.contentItemId, 'post'); assert.ok(q.where.status.in.includes('verification_pending')); return options.delivery || (reads > 1 && options.raceDelivery) ? { id: 'delivery' } : null; } },
-    job: { findFirst: async q => { assert.equal(q.where.organizationId, 'org'); return options.pendingChange ? { id: 'change' } : null; } },
+    job: { findFirst: async q => { assert.equal(q.where.organizationId, 'org'); if (q.where.type === 'WEEKLY_PACK') return options.pack || null;
+      if (q.where.type === 'GENERATE_IMAGE') return options.generating ? { id: 'image-job' } : null;
+      return options.pendingChange ? { id: 'change' } : null; } },
     mediaAsset: {
       findFirst: async q => { assert.equal(q.where.organizationId, 'org'); if (q.where.id === 'original') { assert.equal(q.where.contentItemId, 'post'); assert.equal(q.where.campaignId, 'campaign'); return options.noCreative ? null : creative; }
-        assert.equal(q.where.id, 'photo'); assert.deepEqual(clean(q.where.OR), [{ campaignId: { in: ['campaign', 'same-brand'] } }, { campaignId: null, metadata: { path: ['brandId'], equals: 'brand' } }]);
+        assert.equal(q.where.id, 'photo'); if (options.pack) { assert.equal(q.where.contentItemId, 'post'); assert.equal(q.where.campaignId, 'campaign'); } assert.deepEqual(clean(q.where.OR), [{ campaignId: { in: ['campaign', 'same-brand'] } }, { campaignId: null, metadata: { path: ['brandId'], equals: 'brand' } }]);
         return options.foreignSource ? null : { id: 'photo', kind: 'product_photo', url: options.badPhoto ? 'data:image/svg+xml;base64,abc' : picture, metadata: { productName: 'Martinez', sourceUrl: 'https://products.test/martinez' } };
       },
       findMany: async q => { assert.equal(q.where.organizationId, 'org'); assert.equal(q.where.OR[1].metadata.equals, 'brand'); return [{ id: 'photo', url: picture, kind: 'product_photo', metadata: { productName: 'Martinez' } }, { id: 'duplicate', url: picture, kind: 'product_photo', metadata: {} }, { id: 'upload', url: 'different', kind: 'product_photo', metadata: { label: 'Uploaded photo' } }]; },
@@ -124,4 +126,20 @@ test('customer can select a photo while a request remains pending, without appro
   await f.replace();
   assert.equal(f.item.status, 'draft');
   assert.equal(f.writes.some(w => w[0] === 'job'), false);
+});
+
+test('a weekly draft missing its design can render a reviewed saved picture in its planned layout', async () => {
+  const pack = {
+    payload: { version: 1, brandId: 'brand', campaignId: 'campaign', weekStart: '2026-11-23', slots: [{ key: 'slot', kind: 'image', layout: 'weekly-orbit' }] },
+    result: { items: [{ contentItemId: 'post', slotKey: 'slot' }] },
+  };
+  const options = { pack, item: { status: 'draft', mediaUrl: null } };
+  const f = fixture(options);
+  const result = await f.replace({ expectedMediaUrl: null });
+  assert.equal(result.mediaUrl, '/api/media/new-2');
+  assert.equal(f.renders[0].designStyle, 'weekly-orbit');
+  assert.equal(f.writes[1][1].metadata.previousCreativeId, null);
+  const generating = fixture({ ...options, generating: true });
+  await assert.rejects(generating.replace({ expectedMediaUrl: null }), /still being generated/);
+  assert.equal(generating.writes.length, 0);
 });

@@ -6,6 +6,7 @@ import { lockedDeliveryStatuses, savedItemMedia } from "@/components/weekly/item
 import { fetchPublicBytes } from "@/lib/reels/public-fetch";
 import { renderSocialSvg, type SocialSvgInput } from "@/lib/render/svg";
 import { pictureRecipe } from "@/lib/render/picture-recipe";
+import { manifestOf } from "@/lib/weekly/plan";
 import { isWeeklyDesign } from "@/lib/render/weekly-layouts";
 import { logoToPngDataUrl, svgToPublishJpeg, weeklyDesignFonts } from "@/lib/render/raster";
 
@@ -17,7 +18,7 @@ type Database = PrismaClient | Prisma.TransactionClient;
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 const photoKinds = ["product_photo", "ai_image", "reel_scene_image"];
 
-export async function editablePicture(db: Database, ctx: Context, id: string, allowPendingPhotoSelection = false) {
+async function pictureSnapshot(db: Database, ctx: Context, id: string, allowPendingPhotoSelection: boolean) {
   const item = await db.contentItem.findFirst({ where: { id, campaign: { brand: { organizationId: ctx.organizationId } } }, include: { campaign: { include: { brand: true } } } });
   if (!item) throw new PictureError("Post not found in this workspace.", 404);
   if (requiresVideo(item.type)) throw new PictureError("Picture replacement is available for image ads. Request a change for a reel.");
@@ -31,14 +32,19 @@ export async function editablePicture(db: Database, ctx: Context, id: string, al
   // Photo selection remains available while Admin reviews a change request.
   // Replacing artwork does not resolve the request or approve the post.
   const reference = savedItemMedia(item.mediaUrl);
-  if (!reference || reference.kind !== "image") throw new PictureError("Wait for the finished design before replacing its picture.");
-  const creative = await db.mediaAsset.findFirst({ where: { id: reference.id, organizationId: ctx.organizationId, campaignId: item.campaignId, contentItemId: id, kind: "social_creative", status: "ready", url: { not: null } } });
+  const creative = reference?.kind === "image" ? await db.mediaAsset.findFirst({ where: { id: reference.id, organizationId: ctx.organizationId, campaignId: item.campaignId, contentItemId: id, kind: "social_creative", status: "ready", url: { not: null } } }) : null;
+  return { item, creative };
+}
+
+export async function editablePicture(db: Database, ctx: Context, id: string, allowPendingPhotoSelection = false) {
+  const { item, creative } = await pictureSnapshot(db, ctx, id, allowPendingPhotoSelection);
+  if (!creative && !savedItemMedia(item.mediaUrl)) throw new PictureError("Wait for the finished design before replacing its picture.");
   if (!creative) throw new PictureError("The finished design is unavailable. Request a change from Admin.");
   return { item, creative };
 }
 
-export async function savedPictureRecipe({ item, creative }: Awaited<ReturnType<typeof editablePicture>>): Promise<SocialSvgInput> {
-  const meta = object(creative.metadata), brand = item.campaign.brand;
+export async function savedPictureRecipe({ item, creative }: Awaited<ReturnType<typeof pictureSnapshot>>): Promise<SocialSvgInput> {
+  const meta = object(creative?.metadata), brand = item.campaign.brand;
   return meta.pictureRecipe || {
     headline: item.headline || "", cta: "Discover More", brand: brand.name,
     format: meta.format || "portrait", designStyle: meta.designStyle || brand.designStyle || "classic",
@@ -56,9 +62,29 @@ async function sourceWhere(ctx: Context, brandId: string): Promise<Prisma.MediaA
   ] };
 }
 
+async function recoverablePicture(db: Database, ctx: Context, id: string) {
+  const snapshot = await pictureSnapshot(db, ctx, id, true);
+  if (snapshot.creative) return { ...snapshot, layout: undefined };
+  const pack = await db.job.findFirst({
+    where: { organizationId: ctx.organizationId, type: "WEEKLY_PACK", payload: { path: ["campaignId"], equals: snapshot.item.campaignId } },
+    select: { payload: true, result: true },
+  });
+  const manifest = manifestOf(pack?.payload);
+  const items = object(pack?.result).items;
+  const mapping = Array.isArray(items) ? items.find(entry => entry?.contentItemId === id) : undefined;
+  const slot = manifest?.slots.find(slot => slot.key === mapping?.slotKey && slot.kind === "image");
+  if (!slot || manifest?.brandId !== snapshot.item.campaign.brandId) throw new PictureError("The finished design is unavailable. Request a change from Admin.");
+  const pending = await db.job.findFirst({
+    where: { organizationId: ctx.organizationId, type: "GENERATE_IMAGE", status: { in: ["queued", "running"] }, payload: { path: ["contentItemId"], equals: id } },
+    select: { id: true },
+  });
+  if (pending) throw new PictureError("This design is still being generated. Refresh to check its progress.");
+  return { ...snapshot, layout: slot.layout };
+}
+
 export async function pictureChoices(ctx: Context, id: string) {
-  const { item } = await editablePicture(prisma, ctx, id, true);
-  const assets = await prisma.mediaAsset.findMany({ where: await sourceWhere(ctx, item.campaign.brandId), orderBy: { createdAt: "desc" }, take: 120, select: { id: true, url: true, kind: true, metadata: true } });
+  const { item, creative } = await recoverablePicture(prisma, ctx, id);
+  const assets = await prisma.mediaAsset.findMany({ where: { ...await sourceWhere(ctx, item.campaign.brandId), ...(!creative ? { campaignId: item.campaignId, contentItemId: id } : {}) }, orderBy: { createdAt: "desc" }, take: 120, select: { id: true, url: true, kind: true, metadata: true } });
   const seen = new Set<string>();
   return assets.filter(row => { if (!row.url || seen.has(row.url)) return false; seen.add(row.url); return true; }).slice(0, 60).map(row => {
     const meta = object(row.metadata);
@@ -85,21 +111,22 @@ export async function normalizePicture(source: Buffer | string) {
   } catch { throw new PictureError("This picture could not be opened. Choose a JPEG, PNG or WebP file.", 400); }
 }
 
-export async function replacePicture(ctx: Context, id: string, input: { expectedMediaUrl: string; assetId?: string; upload?: Buffer }) {
-  const snapshot = await editablePicture(prisma, ctx, id, true), { item, creative } = snapshot;
+export async function replacePicture(ctx: Context, id: string, input: { expectedMediaUrl: string | null; assetId?: string; upload?: Buffer }) {
+  const snapshot = await recoverablePicture(prisma, ctx, id), { item, creative, layout } = snapshot;
   if (item.mediaUrl !== input.expectedMediaUrl) throw new PictureError("This ad changed. Refresh it before choosing another picture.");
-  const source = input.assetId ? await prisma.mediaAsset.findFirst({ where: { ...await sourceWhere(ctx, item.campaign.brandId), id: input.assetId } }) : null;
+  const source = input.assetId ? await prisma.mediaAsset.findFirst({ where: { ...await sourceWhere(ctx, item.campaign.brandId), id: input.assetId, ...(!creative ? { campaignId: item.campaignId, contentItemId: id } : {}) } }) : null;
   if (!input.upload && !source?.url) throw new PictureError("Saved picture not found for this business.", 404);
   const imageUrl = await normalizePicture(input.upload || source!.url!);
-  const meta = object(creative.metadata), brand = item.campaign.brand;
+  const meta = object(creative?.metadata), brand = item.campaign.brand;
   // Older exports did not store a full recipe. Recover their saved format/layout;
   // new exports retain the exact brand settings, wording and supporting images.
   const recipe = await savedPictureRecipe(snapshot);
+  if (layout) recipe.designStyle = layout;
   const rendered = await svgToPublishJpeg(renderSocialSvg({ ...recipe, imageUrl, ...(isWeeklyDesign(recipe.designStyle) ? { designFonts: await weeklyDesignFonts() } : {}) }));
   // Rendering happens before this transaction: failed fetches/exports leave the
   // original artwork and approval intact. Recheck delivery and review races here.
   return prisma.$transaction(async tx => {
-    const current = await editablePicture(tx, ctx, id, true);
+    const current = await recoverablePicture(tx, ctx, id);
     if (current.item.mediaUrl !== item.mediaUrl || current.item.headline !== item.headline || current.item.caption !== item.caption || current.item.status !== item.status) throw new PictureError("This ad changed while preparing the picture. Refresh before trying again.");
     const selected = await tx.mediaAsset.create({ data: {
       organizationId: ctx.organizationId, campaignId: item.campaignId, contentItemId: id,
@@ -109,10 +136,10 @@ export async function replacePicture(ctx: Context, id: string, input: { expected
     const updated = await tx.mediaAsset.create({ data: {
       organizationId: ctx.organizationId, campaignId: item.campaignId, contentItemId: id, kind: "social_creative", provider: "internal-raster", status: "ready",
       url: `data:image/jpeg;base64,${rendered.toString("base64")}`,
-      metadata: { ...meta, pictureRecipe: pictureRecipe(recipe), sourceAssetId: selected.id, previousCreativeId: creative.id, customerReplacedPicture: true },
+      metadata: { ...meta, pictureRecipe: pictureRecipe(recipe), sourceAssetId: selected.id, previousCreativeId: creative?.id || null, customerReplacedPicture: true },
     } });
     await tx.contentItem.update({ where: { id }, data: { mediaUrl: `/api/media/${updated.id}`, status: "draft" } });
-    await tx.auditLog.create({ data: { organizationId: ctx.organizationId, userId: ctx.userId, action: "weekly.picture_replaced", resource: "content_item", resourceId: id, metadata: { previousCreativeId: creative.id, creativeId: updated.id, sourceAssetId: selected.id } } });
+    await tx.auditLog.create({ data: { organizationId: ctx.organizationId, userId: ctx.userId, action: "weekly.picture_replaced", resource: "content_item", resourceId: id, metadata: { previousCreativeId: creative?.id || null, creativeId: updated.id, sourceAssetId: selected.id } } });
     return { mediaUrl: `/api/media/${updated.id}`, status: "draft" };
   }, { isolationLevel: "Serializable" });
 }

@@ -84,9 +84,9 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
         {approved && item.isReady && <button aria-label="Download post" disabled={pending} onClick={() => void download()}><Download size={16} aria-hidden="true" />Download</button>}
         <button aria-label={detailsOpen ? "Hide post details" : "Show post details"} aria-expanded={detailsOpen} onClick={() => setDetailsOpen(!detailsOpen)}><MoreHorizontal size={17} aria-hidden="true" />Details</button>
       </div>
-      {canReplacePicture && <div className={styles.editMedia}>
-        <button disabled={pending || busy} onClick={() => setPictureOpen(true)}><ImagePlus size={14} aria-hidden="true" />Replace picture</button>
-        {(!item.changeRequest || isAdmin) && <button disabled={pending || busy} onClick={() => setDesignOpen(true)}><LayoutTemplate size={14} aria-hidden="true" />Change design</button>}
+      {(canReplacePicture || (canManage && item.kind === "image" && item.status === "draft" && !item.isReady && item.needsAttention && !item.changeRequest)) && <div className={styles.editMedia}>
+        <button disabled={pending || busy} onClick={() => setPictureOpen(true)}><ImagePlus size={14} aria-hidden="true" />{canReplacePicture ? "Replace picture" : "Choose picture"}</button>
+        {canReplacePicture && (!item.changeRequest || isAdmin) && <button disabled={pending || busy} onClick={() => setDesignOpen(true)}><LayoutTemplate size={14} aria-hidden="true" />Change design</button>}
       </div>}
       {canFinish && !finishOpen && <button className={styles.finish} disabled={pending || busy} onClick={() => setFinishOpen(true)}>{reelFeedback?.running ? "Preparing reel…" : item.kind === "ai_video" ? "Finish AI video · up to 120 credits" : "Finish reel · 4 credits"}</button>}
       {canFinish && finishOpen && <section className={styles.reelFeedback} aria-label="Finish reel confirmation">
