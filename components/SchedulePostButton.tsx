@@ -57,6 +57,7 @@ export default function SchedulePostButton({
   const [open, setOpen] = useState(openByDefault);
   const [postNow, setPostNow] = useState(() => allowPostNow && !scheduleInputValue(initialScheduledFor, initialStatus));
   const [queuedNow, setQueuedNow] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const schedulePanelRef = useRef<HTMLDivElement>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [savedConnections, setSavedConnections] = useState<Connection[]>([]);
@@ -163,6 +164,22 @@ export default function SchedulePostButton({
   }, [open, isVideo, connectionRefresh]);
 
   const tikTokSelected=connections.find(connection=>connection.provider==="tiktok"&&selected.includes(connection.id));
+  const firstTikTok = tikTokSelected ?? connections.find(connection => connection.provider === "tiktok");
+  const selectableAccounts = connections.filter(connection =>
+    (connection.provider !== "x" || connection.status === "connected") &&
+    (connection.provider !== "tiktok" || connection.id === firstTikTok?.id)
+  );
+  const allSelected = selectableAccounts.length > 0 && selectableAccounts.every(connection => selected.includes(connection.id));
+  const partiallySelected = !allSelected && selectableAccounts.some(connection => selected.includes(connection.id));
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = partiallySelected;
+  }, [open, partiallySelected, selectableAccounts.length]);
+
+  function toggleAllAccounts() {
+    if (allSelected || (!tikTokSelected && firstTikTok)) setTikTokOptions(null);
+    setSelected(allSelected ? [] : selectableAccounts.map(connection => connection.id));
+  }
+
   const youtubeSelected = connections.some(c => c.provider === "youtube" && selected.includes(c.id));
   const xSelected = connections.some(c => c.provider === "x" && selected.includes(c.id));
   const xCaption = useXCaptionReview(contentItemId, open && xSelected && !completed);
@@ -272,6 +289,17 @@ export default function SchedulePostButton({
               <p>{savedConnections.length ? "This post is already scheduled or posted to all available accounts. See the status above." : "No connected social accounts found."}</p>
             )}
 
+            {selectableAccounts.length > 1 && (
+              <label className={`${styles.check} ${styles.account}`}>
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  disabled={busy || completed || loading}
+                  checked={allSelected}
+                  onChange={toggleAllAccounts}
+                /><strong>Select all accounts</strong>
+              </label>
+            )}
             {connections.map((connection) => (
               <label
                 key={connection.id}
@@ -301,7 +329,7 @@ export default function SchedulePostButton({
 
           {xSelected && !completed && <XCaptionReview state={xCaption} disabled={busy} />}
 
-          {connections.filter(connection => connection.provider === "tiktok").length > 1 && <p>Choose one TikTok account per submission to review its posting settings.</p>}
+          {connections.filter(connection => connection.provider === "tiktok").length > 1 && <p>Select all includes one TikTok account per submission. Choose a different TikTok account if needed.</p>}
           {tikTokSelected&&<TikTokPostOptions key={tikTokSelected.id} connectionId={tikTokSelected.id} contentItemId={contentItemId} assetId={videoAssetId} disabled={busy||completed} onChange={setTikTokOptions}/>}
           {youtubeSelected && <YouTubePostOptions disabled={busy || completed} privacy={privacy} onPrivacyChange={setPrivacy} madeForKids={madeForKids} onMadeForKidsChange={setMadeForKids} synthetic={synthetic} onSyntheticChange={setSynthetic} certified={youtubeCertified} onCertifiedChange={setYoutubeCertified} />}
           {tikTokSelected&&!tikTokOptions&&!completed&&<p role="status">Complete TikTok’s visibility, disclosure and upload permission settings to enable posting.</p>}
