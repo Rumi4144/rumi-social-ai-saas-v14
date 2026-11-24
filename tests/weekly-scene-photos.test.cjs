@@ -35,11 +35,14 @@ function workerFixture(extra = false, illustrativeImage = false) {
   }
   const matches=(row,where)=>Object.entries(where||{}).every(([k,v])=> k==='payload'?v.path.reduce((a,b)=>a?.[b],row.payload)===v.equals : k==='campaign'?true : v&&typeof v==='object'&&'in' in v?v.in.includes(row[k]):row[k]===v);
   const db={
-    job:{findFirst:async({where})=>[...state.jobs.values()].find(row=>matches(row,where))||null,
+    job:{findFirst:async({where})=>{
+      const row=[...state.jobs.values()].find(row=>matches(row,where));
+      return row ? {attempts:0,...row} : null;
+    },
       findMany:async({where})=>[...state.jobs.values()].filter(row=>matches(row,where)),
       create:async({data})=>{if(illustrativeImage&&!data.id)data.id='image-job';assert.ok(data.id);assert.ok(!state.jobs.has(data.id));const row={status:'queued',...data};state.jobs.set(row.id,row);return row;},
       update:async({where,data})=>{const row=state.jobs.get(where.id);Object.assign(row,data);return row;},
-      updateMany:async({where,data})=>{const rows=[...state.jobs.values()].filter(row=>matches(row,where));rows.forEach(row=>Object.assign(row,data));return{count:rows.length};}},
+      updateMany:async({where,data})=>{const rows=[...state.jobs.values()].filter(row=>matches(row,where));rows.forEach(row=>Object.assign(row,data,data.attempts ? {attempts:(row.attempts||0)+data.attempts.increment} : {}));return{count:rows.length};}},
     campaign:{findUnique:async q=>{assert.equal(q.where.brand.organizationId,'org');return campaign;},update:async()=>campaign},
     brand:{updateMany:async({where,data})=>{assert.equal(where.organizationId,'org');assert.equal(where.websiteUrl,business.websiteUrl);Object.assign(business,data);return{count:1};}},
     contentItem:{count:async()=>state.posts.size,deleteMany:async()=>{},create:async({data})=>{const post={id:'post',mediaUrl:null,...data};state.posts.set(post.id,post);return post;},
