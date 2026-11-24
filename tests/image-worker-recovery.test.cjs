@@ -5,6 +5,7 @@ function fixture(){
  class ImageRejectedError extends Error{}
  let reject=false;
  const deps={
+ '@/lib/weekly/preparation':require('./helpers/weekly-load.cjs').load('lib/weekly/preparation.ts'),
  '@/lib/weekly/plan':require('./helpers/weekly-load.cjs').load('lib/weekly/plan.ts'),
  'next/server':{NextResponse:{json:(body,options)=>({body,status:options?.status||200})}},
  '@/lib/prisma':{prisma:{job:{findFirst:async()=>job,updateMany:async q=>{if(job.status!==q.where.status)return {count:0};Object.assign(job,q.data);return{count:1};},update:async q=>{Object.assign(job,q.data);return job;}},contentItem:{findUnique:async()=>({id:'post',type:'post',campaign:{brand:{id:'brand',name:'Master Mind'}}})}}},

@@ -111,9 +111,12 @@ export async function reviewPhoto(input: {organizationId: string; campaignId: st
     }).slice(0, 3);
     // At most four resized images per review. Public fetches use our existing
     // DNS-pinned fetcher; private URLs and arbitrary redirects are rejected.
-    const [image, ...comparisons] = await Promise.all([
-      reviewThumbnail(input.url, 1024), ...peers.map(peer => reviewThumbnail(peer.url!, 512)),
+    const [image, comparisonResults] = await Promise.all([
+      reviewThumbnail(input.url, 1024),
+      Promise.allSettled(peers.map(peer => reviewThumbnail(peer.url!, 512))),
     ]);
+    const comparisons = comparisonResults.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
+    const comparedAssetIds = peers.filter((_, index) => comparisonResults[index].status === 'fulfilled').map(peer => peer.id);
     const model = process.env.OPENAI_PHOTO_REVIEW_MODEL || 'gpt-4.1-mini';
     const client = new OpenAI({apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 30_000});
     const response = await client.responses.create({
@@ -138,7 +141,7 @@ export async function reviewPhoto(input: {organizationId: string; campaignId: st
     });
     if (response.status !== 'completed' || !response.output_text) throw new Error('Review incomplete');
     const verdict = photoVerdict(JSON.parse(response.output_text));
-    result = {status: photoPasses(verdict) ? 'passed' : 'failed', issues: photoIssues(verdict), replacementDirection: verdict.replacementDirection, comparedAssetIds: peers.map(peer => peer.id), model, verdict};
+    result = {status: photoPasses(verdict) ? 'passed' : 'failed', issues: photoIssues(verdict), replacementDirection: verdict.replacementDirection, comparedAssetIds, model, verdict};
   } catch { /* No paid retry or automatic pass when review is unavailable. */ }
   await prisma.job.update({where: {id}, data: {status: 'succeeded', progress: 100, result}});
   return result;

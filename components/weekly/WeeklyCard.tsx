@@ -70,7 +70,7 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
 
   return <article className={styles.post} aria-label={item.headline || "Your next post"} data-testid={`weekly-post-${item.id}`}>
     <div className={styles.media}>
-      {item.mediaKind === "video" && item.previewUrl ? <video src={item.previewUrl} controls preload="metadata" playsInline aria-label={`Preview ${item.headline}`} /> : item.previewUrl ? <button className={styles.imageButton} aria-haspopup="dialog" aria-label={`Enlarge image: ${item.headline}`} onClick={() => preview.current?.showModal()}><img src={item.previewUrl} alt={item.headline || "Post preview"} loading="lazy" /><span className={styles.enlarge}><ZoomIn size={16} aria-hidden="true" /><span>Enlarge</span></span></button> : <div className={styles.placeholder}><strong>{item.kind === "image" ? "Your design is on its way" : "Your video is not finished yet"}</strong><span>Finished media will appear here.</span></div>}
+      {item.mediaKind === "video" && item.previewUrl ? <video src={item.previewUrl} controls preload="metadata" playsInline aria-label={`Preview ${item.headline}`} /> : item.previewUrl ? <button className={styles.imageButton} aria-haspopup="dialog" aria-label={`Enlarge image: ${item.headline}`} onClick={() => preview.current?.showModal()}><img src={item.previewUrl} alt={item.headline || "Post preview"} loading="lazy" /><span className={styles.enlarge}><ZoomIn size={16} aria-hidden="true" /><span>Enlarge</span></span></button> : <div className={styles.placeholder}><strong>{item.kind === "image" ? item.needsAttention ? "Your design needs attention" : "Your design is on its way" : "Your video is not finished yet"}</strong><span>{item.kind === "image" && item.needsAttention ? "Open Details to request a review." : "Finished media will appear here."}</span></div>}
       {item.kind !== "image" && item.mediaKind !== "video" && !item.isReady && <span className={styles.unfinished}>Source photo · video not finished</span>}
     </div>
     <div className={styles.postBody}>
@@ -84,9 +84,9 @@ export default function WeeklyCard({ item, canManage, onChanged, onFinish, busy 
         {approved && item.isReady && <button aria-label="Download post" disabled={pending} onClick={() => void download()}><Download size={16} aria-hidden="true" />Download</button>}
         <button aria-label={detailsOpen ? "Hide post details" : "Show post details"} aria-expanded={detailsOpen} onClick={() => setDetailsOpen(!detailsOpen)}><MoreHorizontal size={17} aria-hidden="true" />Details</button>
       </div>
-      {canReplacePicture && <div className={styles.editMedia}>
-        <button disabled={pending || busy} onClick={() => setPictureOpen(true)}><ImagePlus size={14} aria-hidden="true" />Replace picture</button>
-        {(!item.changeRequest || isAdmin) && <button disabled={pending || busy} onClick={() => setDesignOpen(true)}><LayoutTemplate size={14} aria-hidden="true" />Change design</button>}
+      {(canReplacePicture || (canManage && item.kind === "image" && item.status === "draft" && !item.isReady && item.needsAttention && !item.changeRequest)) && <div className={styles.editMedia}>
+        <button disabled={pending || busy} onClick={() => setPictureOpen(true)}><ImagePlus size={14} aria-hidden="true" />{canReplacePicture ? "Replace picture" : "Choose picture"}</button>
+        {canReplacePicture && (!item.changeRequest || isAdmin) && <button disabled={pending || busy} onClick={() => setDesignOpen(true)}><LayoutTemplate size={14} aria-hidden="true" />Change design</button>}
       </div>}
       {canFinish && !finishOpen && <button className={styles.finish} disabled={pending || busy} onClick={() => setFinishOpen(true)}>{reelFeedback?.running ? "Preparing reel…" : item.kind === "ai_video" ? "Finish AI video · up to 120 credits" : "Finish reel · 4 credits"}</button>}
       {canFinish && finishOpen && <section className={styles.reelFeedback} aria-label="Finish reel confirmation">
