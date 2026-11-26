@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const campaignId = `manual_${brand.id}_${requestId}`;
     const contentItemId = `post_${campaignId}`;
     const bytes = Buffer.from(await media.arrayBuffer());
-    const isVideo = media.type === "video/mp4";
+    const isVideo = media.type === "video/mp4" || /\.mp4$/i.test(media.name);
     let dataUrl: string;
     try {
       if (isVideo) {
