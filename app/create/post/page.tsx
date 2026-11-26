@@ -19,7 +19,7 @@ export default async function NewPostPage() {
     <h1>New Post</h1>
     {workspace.role === "viewer" ? <p>Your role cannot publish posts.</p> :
       !brands.length ? <p><Link href="/brand">Set up your brand</Link> to create a post.</p> :
-      !accounts.length ? <p><Link href="/settings">Connect a social account</Link> to publish a post.</p> :
+      !accounts.length ? <p><Link href="/settings">Connect a social account</Link> to publish a post. <Link href="/settings/youtube">Connect YouTube</Link></p> :
       <NewPost key={workspace.organizationId} brands={brands} accounts={accounts} />}
   </main>;
 }
