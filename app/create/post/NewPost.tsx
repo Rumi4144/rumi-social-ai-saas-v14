@@ -61,28 +61,18 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
     requestId.current ||= crypto.randomUUID();
     form.set("requestId", requestId.current);
     form.set("media", media);
-    if (tikTok) form.set("prepareOnly", "true");
+    if (tikTok && !preparedId) form.set("prepareOnly", "true");
     submitting.current = true;
     setBusy(true);
     setError("");
     try {
-      let contentItemId = preparedId;
-      if (!contentItemId) {
-        const response = await fetch("/api/posts/new", { method: "POST", body: form });
-        const post = await response.json();
-        if (!response.ok || typeof post.contentItemId !== "string") throw new Error(post.error || "Could not save your post.");
-        contentItemId = post.contentItemId;
-        if (tikTok) {
-          setPreparedId(contentItemId);
-          return;
-        }
-      }
-      if (preparedId) {
-        const approval = await fetch(`/api/content-items/${preparedId}`, {
-          method: "PATCH", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "approved" }),
-        });
-        if (!approval.ok) throw new Error("Could not approve the post. Try again.");
+      const response = await fetch("/api/posts/new", { method: "POST", body: form });
+      const post = await response.json();
+      if (!response.ok || typeof post.contentItemId !== "string") throw new Error(post.error || "Could not save your post.");
+      const contentItemId = post.contentItemId;
+      if (tikTok && !preparedId) {
+        setPreparedId(contentItemId);
+        return;
       }
       setSaved(true);
 
