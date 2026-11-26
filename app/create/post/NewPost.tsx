@@ -30,13 +30,13 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
     return () => URL.revokeObjectURL(url);
   }, [media]);
 
-  const isVideo = media?.type === "video/mp4";
+  const isVideo = !!media && (media.type === "video/mp4" || /\.mp4$/i.test(media.name));
   const destinations = accounts.filter(account => {
-    if (account.provider === "youtube") return isVideo;
+    if (account.provider === "youtube") return true;
     if (account.provider === "google_business") return !!media && !isVideo;
     return true;
   });
-  const picks = destinations.filter(account => selected.includes(account.id));
+  const picks = destinations.filter(account => selected.includes(account.id) && (account.provider !== "youtube" || isVideo));
   const includesYouTube = picks.some(account => account.provider === "youtube");
   const captionLimit = picks.some(account => account.provider === "google_business") ? 1500 : 2200;
   const canPublish = Boolean(media && picks.length && caption.trim() && caption.trim().length <= captionLimit && (!includesYouTube || certified));
@@ -123,7 +123,7 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
         }} />
       </label>
       <small>JPG, PNG, WebP, or MP4 up to 3 MB.</small>
-      {preview && (media?.type === "video/mp4"
+      {preview && (isVideo
         ? <video src={preview} controls playsInline style={{ maxWidth: "100%", maxHeight: 360 }} />
         : <img src={preview} alt="Post preview" style={{ maxWidth: "100%", maxHeight: 360, objectFit: "contain" }} />)}
       <label>Caption
@@ -135,12 +135,13 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
       <fieldset>
         <legend>Post to</legend>
         {!destinations.length && <p>{media ? "No connected account supports this file type." : "Choose a photo or video to see available accounts."}</p>}
+        {!accounts.some(account => account.provider === "youtube") && <p><Link href="/settings/youtube">Connect YouTube</Link> to post videos from this workspace.</p>}
         {destinations.map(account => <label key={account.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input type="checkbox" checked={selected.includes(account.id)} onChange={event => {
+          <input type="checkbox" disabled={account.provider === "youtube" && !isVideo} checked={selected.includes(account.id)} onChange={event => {
             const checked = event.target.checked;
             setSelected(previous => checked ? [...previous, account.id] : previous.filter(id => id !== account.id));
           }} style={{ width: "auto" }} />
-          {accountLabel(account)}
+          {accountLabel(account)}{account.provider === "youtube" && !isVideo ? " · Add an MP4 to enable" : ""}
         </label>)}
       </fieldset>
       {caption.trim().length > captionLimit && <p role="alert">Google Business Profile captions can be up to 1,500 characters.</p>}
