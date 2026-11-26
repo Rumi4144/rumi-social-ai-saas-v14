@@ -185,7 +185,7 @@ export default async function Publishing() {
                   />
                 ) : null}
                 {youtubeConnection && item.mediaUrl?.includes("/api/video/media/") ? <PublishingActions contentItemId={item.id} connectionId={youtubeConnection.id} destination={`YouTube · ${youtubeConnection.accountName || "YouTube"}`} existingDelivery={existingDelivery(item.id, youtubeConnection.id)} /> : null}
-                {instagramConnection && item.mediaUrl && !item.mediaUrl.includes("/api/video/media/") ? (
+                {instagramConnection && item.mediaUrl && (item.campaignId.startsWith("manual_") || !item.mediaUrl.includes("/api/video/media/")) ? (
                   <PublishingActions
                     contentItemId={item.id}
                     connectionId={instagramConnection.id}
