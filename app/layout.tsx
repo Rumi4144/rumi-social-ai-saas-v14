@@ -95,6 +95,7 @@ export default async function RootLayout({
               <Link href="/admin/annual-plan">Annual Plan</Link>
               <AdminRequestAlert />
               <Link href="/admin/archive">Published Archive</Link>
+              <Link href="/create/post">New Post</Link>
               <Link href="/create">Create Everything</Link>
               <Link href="/campaigns">Campaigns</Link>
               <Link href="/studio">Creative Studio</Link>
