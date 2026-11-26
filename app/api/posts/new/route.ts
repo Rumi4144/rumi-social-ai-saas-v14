@@ -5,7 +5,7 @@ import { tenantContext } from "@/lib/auth/context";
 import { apiError } from "@/lib/http/errors";
 import { prisma } from "@/lib/prisma";
 import { MAX_CLIP_BYTES } from "@/lib/video/clips";
-import { assertMp4Video } from "@/lib/video/mp4";
+import { assertMp4Video, mp4Duration } from "@/lib/video/mp4";
 
 const fields = z.object({
   brandId: z.string().min(1).max(100),
@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     const contentItemId = `post_${campaignId}`;
     const bytes = Buffer.from(await media.arrayBuffer());
     const isVideo = media.type === "video/mp4";
+    const duration = isVideo ? mp4Duration(bytes) : undefined;
     let dataUrl: string;
     try {
       if (isVideo) {
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
           organizationId: workspace.organizationId, campaignId, contentItemId,
           kind: isVideo ? "campaign_video" : "social_creative",
           provider: "upload", url: dataUrl, status: "ready",
-          metadata: { contentType: isVideo ? "video/mp4" : "image/jpeg" },
+          metadata: { contentType: isVideo ? "video/mp4" : "image/jpeg", ...(duration === undefined ? {} : { duration }) },
         },
       });
       await tx.contentItem.create({
