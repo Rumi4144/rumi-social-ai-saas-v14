@@ -5,7 +5,7 @@ import { tenantContext } from "@/lib/auth/context";
 import { apiError } from "@/lib/http/errors";
 import { prisma } from "@/lib/prisma";
 import { MAX_CLIP_BYTES } from "@/lib/video/clips";
-import { assertMp4Video } from "@/lib/video/mp4";
+import { assertMp4Video, mp4Duration } from "@/lib/video/mp4";
 
 const fields = z.object({
   brandId: z.string().min(1).max(100),
@@ -36,9 +36,11 @@ export async function POST(request: Request) {
     const bytes = Buffer.from(await media.arrayBuffer());
     const isVideo = media.type === "video/mp4" || /\.mp4$/i.test(media.name);
     let dataUrl: string;
+    let duration: number | undefined;
     try {
       if (isVideo) {
         assertMp4Video(bytes);
+        duration = mp4Duration(bytes);
         dataUrl = `data:video/mp4;base64,${bytes.toString("base64")}`;
       } else {
         const image = sharp(bytes, { limitInputPixels: 40_000_000 });
@@ -65,13 +67,13 @@ export async function POST(request: Request) {
           organizationId: workspace.organizationId, campaignId, contentItemId,
           kind: isVideo ? "campaign_video" : "social_creative",
           provider: "upload", url: dataUrl, status: "ready",
-          metadata: { contentType: isVideo ? "video/mp4" : "image/jpeg" },
+          metadata: { contentType: isVideo ? "video/mp4" : "image/jpeg", ...(duration ? { duration } : {}) },
         },
       });
       await tx.contentItem.create({
         data: {
           id: contentItemId, campaignId, caption, platform: "multi",
-          type: isVideo ? "reel_post" : "post", status: "approved",
+          type: isVideo ? "reel_post" : "post", status: form.get("prepareOnly") === "true" ? "draft" : "approved",
           mediaUrl: isVideo ? `/api/video/media/${asset.id}` : `/api/media/${asset.id}`,
         },
       });
