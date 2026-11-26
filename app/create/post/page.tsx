@@ -9,7 +9,7 @@ export default async function NewPostPage() {
   const [brands, accounts] = await Promise.all([
     prisma.brand.findMany({ where: scope, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.socialConnection.findMany({
-      where: { ...scope, status: "connected", provider: { in: ["facebook", "instagram", "youtube", "google_business"] } },
+      where: { ...scope, status: "connected", provider: { in: ["facebook", "instagram", "youtube", "tiktok", "google_business"] } },
       select: { id: true, provider: true, accountName: true },
       orderBy: [{ provider: "asc" }, { accountName: "asc" }],
     }),
