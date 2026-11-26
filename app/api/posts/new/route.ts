@@ -60,7 +60,12 @@ export async function POST(request: Request) {
         create: { id: campaignId, title: caption.slice(0, 100), goal: "Manual social post", brandId },
       });
       const existing = await tx.contentItem.findUnique({ where: { id: contentItemId }, select: { id: true } });
-      if (existing) return;
+      if (existing) {
+        if (form.get("prepareOnly") !== "true") {
+          await tx.contentItem.updateMany({ where: { id: contentItemId, status: "draft" }, data: { status: "approved" } });
+        }
+        return;
+      }
 
       const asset = await tx.mediaAsset.create({
         data: {
