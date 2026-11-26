@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import TikTokPostOptions from "@/components/TikTokPostOptions";
+import type { TikTokPostOptions as TikTokOptions } from "@/lib/tiktok/options";
 import YouTubePostOptions from "@/components/YouTubePostOptions";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
@@ -16,6 +18,8 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
   const [madeForKids, setMadeForKids] = useState(false);
   const [synthetic, setSynthetic] = useState(false);
   const [certified, setCertified] = useState(false);
+  const [preparedId, setPreparedId] = useState("");
+  const [tikTokOptions, setTikTokOptions] = useState<TikTokOptions | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -32,18 +36,19 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
 
   const isVideo = !!media && (media.type === "video/mp4" || /\.mp4$/i.test(media.name));
   const destinations = accounts.filter(account => {
-    if (account.provider === "youtube") return true;
+    if (["youtube", "tiktok"].includes(account.provider)) return true;
     if (account.provider === "google_business") return !!media && !isVideo;
     return true;
   });
-  const picks = destinations.filter(account => selected.includes(account.id) && (account.provider !== "youtube" || isVideo));
+  const picks = destinations.filter(account => selected.includes(account.id) && (!["youtube", "tiktok"].includes(account.provider) || isVideo));
+  const tikTok = picks.find(account => account.provider === "tiktok");
   const includesYouTube = picks.some(account => account.provider === "youtube");
   const captionLimit = picks.some(account => account.provider === "google_business") ? 1500 : 2200;
-  const canPublish = Boolean(media && picks.length && caption.trim() && caption.trim().length <= captionLimit && (!includesYouTube || certified));
+  const canPublish = Boolean(media && picks.length && caption.trim() && caption.trim().length <= captionLimit && (!includesYouTube || certified) && (!tikTok || !preparedId || tikTokOptions));
 
   const accountLabel = (account: Account) => {
     const labels: Record<string, string> = {
-      instagram: "Instagram", facebook: "Facebook", youtube: "YouTube", google_business: "Google Business Profile",
+      instagram: "Instagram", facebook: "Facebook", youtube: "YouTube", tiktok: "TikTok", google_business: "Google Business Profile",
     };
     const platform = labels[account.provider] || account.provider;
     return account.accountName ? platform + " · " + account.accountName : platform;
@@ -56,13 +61,29 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
     requestId.current ||= crypto.randomUUID();
     form.set("requestId", requestId.current);
     form.set("media", media);
+    if (tikTok) form.set("prepareOnly", "true");
     submitting.current = true;
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/posts/new", { method: "POST", body: form });
-      const post = await response.json();
-      if (!response.ok || typeof post.contentItemId !== "string") throw new Error(post.error || "Could not save your post.");
+      let contentItemId = preparedId;
+      if (!contentItemId) {
+        const response = await fetch("/api/posts/new", { method: "POST", body: form });
+        const post = await response.json();
+        if (!response.ok || typeof post.contentItemId !== "string") throw new Error(post.error || "Could not save your post.");
+        contentItemId = post.contentItemId;
+        if (tikTok) {
+          setPreparedId(contentItemId);
+          return;
+        }
+      }
+      if (preparedId) {
+        const approval = await fetch(`/api/content-items/${preparedId}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "approved" }),
+        });
+        if (!approval.ok) throw new Error("Could not approve the post. Try again.");
+      }
       setSaved(true);
 
       for (const { id, provider } of picks) {
@@ -72,7 +93,8 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              contentItemId: post.contentItemId,
+              contentItemId,
+              ...(provider === "tiktok" ? { tiktok: tikTokOptions } : {}),
               socialConnectionId: id,
               ...(provider === "youtube" ? {
                 youtube: { certified, privacy, madeForKids, containsSyntheticMedia: synthetic },
@@ -99,14 +121,14 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
   return <form className="card" onSubmit={publish} style={{ maxWidth: 700 }}>
     <fieldset disabled={busy || saved} style={{ display: "grid", gap: 16, border: 0, padding: 0, margin: 0 }}>
       <label>Brand
-        <select name="brandId" required onChange={() => { requestId.current = null; }}>
+        <select name="brandId" required onChange={() => { requestId.current = null; setPreparedId(""); setTikTokOptions(null); }}>
           {brands.length > 1 && <option value="">Choose a brand</option>}
           {brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
         </select>
       </label>
       <label>Photo or video
         <input type="file" name="media" accept="image/jpeg,image/png,image/webp,video/mp4" required onChange={event => {
-          requestId.current = null;
+          requestId.current = null; setPreparedId(""); setTikTokOptions(null);
           setCertified(false);
           setSelected(previous => previous.filter(id => accounts.some(account =>
             account.id === id && ["facebook", "instagram"].includes(account.provider)
@@ -128,7 +150,7 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
         : <img src={preview} alt="Post preview" style={{ maxWidth: "100%", maxHeight: 360, objectFit: "contain" }} />)}
       <label>Caption
         <textarea name="caption" value={caption} required maxLength={2200} rows={5} onChange={event => {
-          requestId.current = null;
+          requestId.current = null; setPreparedId(""); setTikTokOptions(null);
           setCaption(event.target.value);
         }} />
       </label>
@@ -136,12 +158,14 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
         <legend>Post to</legend>
         {!destinations.length && <p>{media ? "No connected account supports this file type." : "Choose a photo or video to see available accounts."}</p>}
         {!accounts.some(account => account.provider === "youtube") && <p><Link href="/settings/youtube">Connect YouTube</Link> to post videos from this workspace.</p>}
+        {!accounts.some(account => account.provider === "tiktok") && <p><Link href="/settings">Connect TikTok</Link> to post videos from this workspace.</p>}
         {destinations.map(account => <label key={account.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input type="checkbox" disabled={account.provider === "youtube" && !isVideo} checked={selected.includes(account.id)} onChange={event => {
+          <input type="checkbox" disabled={(["youtube", "tiktok"].includes(account.provider) && !isVideo) || (account.provider === "tiktok" && !!tikTok && tikTok.id !== account.id)} checked={selected.includes(account.id)} onChange={event => {
             const checked = event.target.checked;
+            if (account.provider === "tiktok") setTikTokOptions(null);
             setSelected(previous => checked ? [...previous, account.id] : previous.filter(id => id !== account.id));
           }} style={{ width: "auto" }} />
-          {accountLabel(account)}{account.provider === "youtube" && !isVideo ? " · Add an MP4 to enable" : ""}
+          {accountLabel(account)}{["youtube", "tiktok"].includes(account.provider) && !isVideo ? " · Add an MP4 to enable" : ""}
         </label>)}
       </fieldset>
       {caption.trim().length > captionLimit && <p role="alert">Google Business Profile captions can be up to 1,500 characters.</p>}
@@ -152,8 +176,9 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
         synthetic={synthetic} onSyntheticChange={setSynthetic}
         certified={certified} onCertifiedChange={setCertified}
       />}
+      {tikTok && preparedId && <TikTokPostOptions key={tikTok.id} connectionId={tikTok.id} contentItemId={preparedId} disabled={busy || saved} onChange={setTikTokOptions} />}
       <button type="submit" disabled={!canPublish}>
-        {busy ? "Posting…" : "Post Now"}
+        {busy ? "Working…" : tikTok && !preparedId ? "Review TikTok settings" : "Post Now"}
       </button>
     </fieldset>
     {error && <p role="alert">{error}</p>}
