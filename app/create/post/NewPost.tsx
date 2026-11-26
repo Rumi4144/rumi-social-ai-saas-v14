@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import YouTubePostOptions from "@/components/YouTubePostOptions";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 type Account = { id: string; provider: string; accountName: string | null };
@@ -11,6 +12,10 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
   const [preview, setPreview] = useState("");
   const [caption, setCaption] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("private");
+  const [madeForKids, setMadeForKids] = useState(false);
+  const [synthetic, setSynthetic] = useState(false);
+  const [certified, setCertified] = useState(false);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -25,14 +30,28 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
     return () => URL.revokeObjectURL(url);
   }, [media]);
 
+  const isVideo = media?.type === "video/mp4";
+  const destinations = accounts.filter(account => {
+    if (account.provider === "youtube") return isVideo;
+    if (account.provider === "google_business") return !!media && !isVideo;
+    return true;
+  });
+  const picks = destinations.filter(account => selected.includes(account.id));
+  const includesYouTube = picks.some(account => account.provider === "youtube");
+  const captionLimit = picks.some(account => account.provider === "google_business") ? 1500 : 2200;
+  const canPublish = Boolean(media && picks.length && caption.trim() && caption.trim().length <= captionLimit && (!includesYouTube || certified));
+
   const accountLabel = (account: Account) => {
-    const platform = account.provider === "instagram" ? "Instagram" : "Facebook";
+    const labels: Record<string, string> = {
+      instagram: "Instagram", facebook: "Facebook", youtube: "YouTube", google_business: "Google Business Profile",
+    };
+    const platform = labels[account.provider] || account.provider;
     return account.accountName ? platform + " · " + account.accountName : platform;
   };
 
   async function publish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting.current || saved || !media || !selected.length || !caption.trim()) return;
+    if (submitting.current || saved || !media || !canPublish) return;
     const form = new FormData(event.currentTarget);
     requestId.current ||= crypto.randomUUID();
     form.set("requestId", requestId.current);
@@ -46,13 +65,19 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
       if (!response.ok || typeof post.contentItemId !== "string") throw new Error(post.error || "Could not save your post.");
       setSaved(true);
 
-      for (const id of selected) {
+      for (const { id, provider } of picks) {
         let message: string;
         try {
           const publishResponse = await fetch("/api/publishing/now", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contentItemId: post.contentItemId, socialConnectionId: id }),
+            body: JSON.stringify({
+              contentItemId: post.contentItemId,
+              socialConnectionId: id,
+              ...(provider === "youtube" ? {
+                youtube: { certified, privacy, madeForKids, containsSyntheticMedia: synthetic },
+              } : {}),
+            }),
           });
           const delivery = await publishResponse.json();
           message = publishResponse.ok
@@ -82,6 +107,10 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
       <label>Photo or video
         <input type="file" name="media" accept="image/jpeg,image/png,image/webp,video/mp4" required onChange={event => {
           requestId.current = null;
+          setCertified(false);
+          setSelected(previous => previous.filter(id => accounts.some(account =>
+            account.id === id && ["facebook", "instagram"].includes(account.provider)
+          )));
           const file = event.target.files?.[0];
           if (file && file.size > 3 * 1024 * 1024) {
             setError("Choose a photo or MP4 up to 3 MB.");
@@ -105,7 +134,8 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
       </label>
       <fieldset>
         <legend>Post to</legend>
-        {accounts.map(account => <label key={account.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {!destinations.length && <p>{media ? "No connected account supports this file type." : "Choose a photo or video to see available accounts."}</p>}
+        {destinations.map(account => <label key={account.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <input type="checkbox" checked={selected.includes(account.id)} onChange={event => {
             const checked = event.target.checked;
             setSelected(previous => checked ? [...previous, account.id] : previous.filter(id => id !== account.id));
@@ -113,13 +143,21 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
           {accountLabel(account)}
         </label>)}
       </fieldset>
-      <button type="submit" disabled={!media || !caption.trim() || !selected.length}>
+      {caption.trim().length > captionLimit && <p role="alert">Google Business Profile captions can be up to 1,500 characters.</p>}
+      {includesYouTube && <YouTubePostOptions
+        disabled={busy || saved}
+        privacy={privacy} onPrivacyChange={setPrivacy}
+        madeForKids={madeForKids} onMadeForKidsChange={setMadeForKids}
+        synthetic={synthetic} onSyntheticChange={setSynthetic}
+        certified={certified} onCertifiedChange={setCertified}
+      />}
+      <button type="submit" disabled={!canPublish}>
         {busy ? "Posting…" : "Post Now"}
       </button>
     </fieldset>
     {error && <p role="alert">{error}</p>}
     {saved && <div aria-live="polite">
-      <ul>{accounts.filter(account => selected.includes(account.id)).map(account =>
+      <ul>{picks.map(account =>
         <li key={account.id}>{accountLabel(account)} · {results[account.id] || "Waiting for delivery status…"}</li>
       )}</ul>
       <Link href="/publishing">View Publishing</Link>
