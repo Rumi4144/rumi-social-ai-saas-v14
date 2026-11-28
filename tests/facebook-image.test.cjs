@@ -87,3 +87,37 @@ test('An unavailable saved creative never stages a photo or sends a Facebook fee
   assert.equal(result.ok, false);
   assert.equal(result.error, 'FACEBOOK_MEDIA_FETCH_FAILED_404');
 });
+
+test('Facebook keeps an accepted photo receipt when verification lags and never deletes it',async()=>{
+ const methods=[];
+ const api=provider(async(url,init={})=>{
+  url=String(url);methods.push(init.method||'GET');
+  if(url.includes('/me?'))return Response.json({id:'page'});
+  if(url.includes('/api/media/'))return new Response(new Uint8Array([255,216,255,1]),{headers:{'content-type':'image/jpeg'}});
+  if(url.endsWith('/photos'))return Response.json({id:'photo'});
+  if(url.endsWith('/feed'))return Response.json({id:'accepted-post'});
+  if(url.includes('/accepted-post?'))return Response.json({error:{message:'not visible yet'}},{status:503});
+  throw Error('unexpected');
+ });
+ const result=await api.publishToProvider({platform:'facebook',token:'encrypted',externalAccountId:'page',caption:'Approved',mediaUrl:'/api/media/saved'});
+ assert.equal(result.ok,false);assert.equal(result.needsReview,true);assert.equal(result.retryable,false);assert.equal(result.externalId,'accepted-post');assert.equal(methods.includes('DELETE'),false);
+});
+test('Facebook lost public-write responses require review rather than automatic retry',async()=>{
+ const api=provider(async(url)=>String(url).includes('/me?')?Response.json({id:'page'}):Promise.reject(Error('timeout after posting')));
+ const result=await api.publishToProvider({platform:'facebook',token:'encrypted',externalAccountId:'page',caption:'Approved'});
+ assert.equal(result.needsReview,true);assert.equal(result.retryable,false);assert.match(result.error,/avoid a duplicate/);
+});
+test('Instagram lost image-publish response requires review rather than creating another post',async()=>{
+ let writes=0;
+ const api=load('lib/publishing/instagram.ts',{}, {AbortSignal,fetch:async(url)=>{
+  url=String(url);
+  if(url.includes('/me?'))return Response.json({id:'account'});
+  if(url.startsWith('https://images.example'))return new Response(new Uint8Array([255,216,255,1]));
+  if(url.endsWith('/account/media'))return Response.json({id:'container'});
+  if(url.includes('/container?'))return Response.json({status_code:'FINISHED'});
+  if(url.endsWith('/media_publish')){writes++;throw Error('connection lost after send');}
+  throw Error('unexpected');
+ }});
+ const result=await api.publishInstagram({accessToken:'token',accountId:'account',caption:'Approved',mediaUrl:'https://images.example/photo.jpg'});
+ assert.equal(writes,1);assert.equal(result.needsReview,true);assert.equal(result.retryable,false);
+});

@@ -12,30 +12,44 @@
     "prisma:generate": "prisma generate",
     "db:deploy": "prisma migrate deploy",
     "check": "npm run prisma:validate && npm run typecheck",
-    "production:check": "npm run prisma:validate && npm run prisma:generate && npm run typecheck && npm run build"
+    "production:check": "npm run prisma:validate && npm run prisma:generate && npm run typecheck && npm run build",
+    "test": "node --test tests/*.test.cjs",
+    "readiness:check": "node scripts/readiness-check.cjs",
+    "release:check": "npm test && npm run production:check && npm run readiness:check -- --billing"
   },
   "dependencies": {
-    "@prisma/client": "^6.0.0",
+    "@prisma/client": "6.19.3",
     "@resvg/resvg-js": "^2.6.2",
     "@stripe/stripe-js": "^5.0.0",
     "@vercel/blob": "^2.8.0",
     "bcryptjs": "^2.4.3",
     "lucide-react": "^0.468.0",
-    "next": "^15.0.0",
+    "next": "^15.5.29",
     "next-auth": "^5.0.0-beta.25",
-    "openai": "^4.0.0",
-    "prisma": "^6.0.0",
+    "openai": "^4.104.0",
+    "prisma": "6.19.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "resend": "^6.29.0",
     "stripe": "^17.0.0",
     "twitter-text": "^3.1.0",
-    "zod": "^3.23.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "postcss": "^8.5.23",
+    "@vercel/cli-config": {
+      "zod": "$zod"
+    },
+    "deepmerge-ts": "^8.0.0",
+    "effect": "^3.22.1",
+    "openai": {
+      "zod": "$zod"
+    }
   }
 }

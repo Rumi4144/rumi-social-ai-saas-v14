@@ -26,7 +26,7 @@ export async function POST(req: Request) {
       return claim.count === 1 ? { status: 200, error: null } : { status: 409, error: "This preparation step already changed. Refresh its status." };
     });
     if (result.status !== 200) return NextResponse.json(result, { status: result.status });
-    const response = await fetch(`${new URL(req.url).origin}/api/jobs/run`, { method: "POST", headers: { "content-type": "application/json", "x-worker-secret": process.env.WORKER_SECRET }, body: JSON.stringify({ organizationId: p.organizationId, jobId: p.jobId }), cache: "no-store" });
+    const response = await fetch(`${new URL(req.url).origin}/api/jobs/run`, { method: "POST", headers: { "content-type": "application/json", "x-worker-secret": process.env.WORKER_SECRET }, body: JSON.stringify({ organizationId: p.organizationId, jobId: p.jobId, exact: true }), cache: "no-store" });
     return NextResponse.json(await response.json(), { status: response.status, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return apiError(error, "Could not resume this preparation step. Check its latest status before retrying."); }
 }

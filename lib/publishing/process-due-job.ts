@@ -1,10 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { publishToProvider } from "@/lib/publishing/providers";
+import { approvedContentStatuses } from "@/lib/publishing/eligibility";
 import { requiresVideo } from "@/lib/campaign/content-plan";
 
 export async function processDuePublishJob() {
   // A terminated X worker resumes its durable upload/receipt, never a second public write.
   await prisma.publishJob.updateMany({ where: { platform: "x", status: "publishing", updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) } }, data: { status: "retry", scheduledFor: new Date(), attempts: 0 } });
+  // Only X has a resumable receipt for every write. Do not blindly retry other
+  // providers after a terminated worker: the external post may already exist.
+  await prisma.publishJob.updateMany({
+    where: { platform: { not: "x" }, status: "publishing", updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) } },
+    data: { status: "verification_pending", lastError: "Publishing was interrupted. Check the existing post before retrying to avoid a duplicate." },
+  });
   const job = await prisma.publishJob.findFirst({
     where: {
       status: { in: ["scheduled", "retry"] },
@@ -32,11 +39,11 @@ export async function processDuePublishJob() {
     where: { id: job.socialConnectionId },
   });
 
-  const item = await prisma.contentItem.findUnique({
-    where: { id: job.contentItemId },
+  const item = await prisma.contentItem.findFirst({
+    where: { id: job.contentItemId, campaign: { brand: { organizationId: job.organizationId } } },
   });
 
-  if (!connection || !item || connection.organizationId !== job.organizationId || (item.mediaUrl?.includes("/api/video/media/") && !["approved", "scheduled", "published"].includes(item.status))) {
+  if (!connection || !item || connection.organizationId !== job.organizationId || !approvedContentStatuses.includes(item.status)) {
     await prisma.publishJob.update({
       where: { id: job.id },
       data: {
@@ -81,7 +88,9 @@ export async function processDuePublishJob() {
     );
   }
 
-  const result = await publishToProvider({
+  let result: Awaited<ReturnType<typeof publishToProvider>>;
+  try {
+  result = await publishToProvider({
     platform: job.platform,
     token: connection.encryptedToken || "",
     externalAccountId: connection.externalId || "",
@@ -91,17 +100,28 @@ export async function processDuePublishJob() {
     contentItemId: item.id,
     publishJobId: job.id,
   });
+  } catch {
+    const error = "Publishing could not be confirmed. Check the existing post before retrying to avoid a duplicate.";
+    await prisma.publishJob.update({ where: { id: job.id }, data: { status: "verification_pending", lastError: error } });
+    return { status: "verification_pending" as const, jobId: job.id, attempt, error };
+  }
 
   await prisma.publishAttempt.create({
     data: {
       publishJobId: job.id,
       attempt,
-      status: result.ok ? "succeeded" : "failed",
+      status: result.needsReview ? "verification_pending" : result.pending ? "processing" : result.ok ? "succeeded" : "failed",
       responseCode: result.code,
       externalId: result.externalId,
       error: result.error,
     },
   });
+
+  if (result.needsReview) {
+    const error = result.error || "Delivery needs review. Check the existing post before retrying.";
+    await prisma.publishJob.update({ where: { id: job.id }, data: { status: "verification_pending", externalPostId: result.externalId, lastError: error } });
+    return { status: "verification_pending" as const, jobId: job.id, attempt, error };
+  }
 
   if (result.pending) {
     // Status checks do not consume upload attempts or submit another video.

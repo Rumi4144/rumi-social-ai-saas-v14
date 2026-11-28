@@ -11,6 +11,7 @@ import { facebookImageUrl } from "./facebook-image";
 export type PublishResult = {
   ok: boolean;
   pending?: boolean;
+  needsReview?: boolean;
   externalId?: string;
   code?: number;
   error?: string;
@@ -57,6 +58,8 @@ export async function publishToProvider(input: {
     return { ok: false, error: `${input.platform.toUpperCase()}_PROVIDER_NOT_CONFIGURED` };
   }
 
+  let publicWriteAttempted = false;
+  let confirmedPostId: string | undefined;
   try {
     const stored = JSON.parse(decrypted) as { pageAccessToken?: string; pageId?: string };
     const pageAccessToken = stored.pageAccessToken;
@@ -80,12 +83,14 @@ export async function publishToProvider(input: {
     // Text-only posts are straightforward Page feed posts.
     if (!input.mediaUrl) {
       const body = new URLSearchParams({ message: input.caption || "", access_token: pageAccessToken });
+      publicWriteAttempted = true;
       const { response, result } = await facebookJson(
         `https://graph.facebook.com/v23.0/${pageId}/feed`,
         { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }
       );
       if (!response.ok) return { ok: false, code: response.status, error: result?.error?.message || "FACEBOOK_FEED_PUBLISH_FAILED" };
-      return { ok: true, code: response.status, externalId: result?.id ? String(result.id) : undefined };
+      if (!result?.id) return { ok: false, needsReview: true, retryable: false, error: "Facebook did not confirm a post reference. Check your Page before retrying." };
+      return { ok: true, code: response.status, externalId: String(result.id) };
     }
 
     // Fetch the final raster creative from Rumi Social AI.
@@ -119,6 +124,7 @@ export async function publishToProvider(input: {
     feedBody.set("attached_media[0]", JSON.stringify({ media_fbid: photoId }));
     feedBody.set("access_token", pageAccessToken);
 
+    publicWriteAttempted = true;
     const feed = await facebookJson(
       `https://graph.facebook.com/v23.0/${pageId}/feed`,
       { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: feedBody }
@@ -130,10 +136,13 @@ export async function publishToProvider(input: {
       JSON.stringify({ pageId, photoId, postId })
     );
 
-    if (!feed.response.ok || !postId) {
+    if (feed.response.ok && !postId) return { ok: false, needsReview: true, retryable: false, error: "Facebook did not confirm a post reference. Check your Page before retrying." };
+    if (!feed.response.ok) {
       await facebookJson(`https://graph.facebook.com/v23.0/${photoId}?access_token=${encodeURIComponent(pageAccessToken)}`, { method: "DELETE" }).catch(() => null);
       return { ok: false, code: feed.response.status, error: feed.result?.error?.message || "FACEBOOK_FEED_ATTACH_FAILED" };
     }
+
+    confirmedPostId = postId;
 
     // Verify the exact object Meta just returned instead of requiring the
     // Page /feed collection to reflect it immediately. The collection can lag.
@@ -169,18 +178,20 @@ export async function publishToProvider(input: {
       !permalink ||
       !hasAttachment
     ) {
-      await facebookJson(`https://graph.facebook.com/v23.0/${postId}?access_token=${encodeURIComponent(pageAccessToken)}`, { method: "DELETE" }).catch(() => null);
-      await facebookJson(`https://graph.facebook.com/v23.0/${photoId}?access_token=${encodeURIComponent(pageAccessToken)}`, { method: "DELETE" }).catch(() => null);
+      // Keep Meta's accepted post and receipt. Verification can lag; deleting
+      // and re-uploading here risks both lost posts and duplicate public writes.
       return {
-        ok: false,
+        ok: false, needsReview: true, retryable: false, externalId: postId,
         code: verify.response.status || 409,
-        error: verify.result?.error?.message || "FACEBOOK_POST_VERIFICATION_FAILED",
+        error: "Facebook accepted this post, but its visibility could not be confirmed. Check the existing Page post before retrying.",
       };
     }
 
     return { ok: true, code: feed.response.status, externalId: postId };
   } catch (error) {
     console.error("Facebook provider failed", error);
-    return { ok: false, error: error instanceof Error ? error.message : "FACEBOOK_PROVIDER_FAILED" };
+    return publicWriteAttempted
+      ? { ok: false, needsReview: true, retryable: false, externalId: confirmedPostId, error: "Facebook publishing could not be confirmed. Check your Page before retrying to avoid a duplicate." }
+      : { ok: false, error: "Facebook could not prepare this post. Check the connection and media before retrying." };
   }
 }

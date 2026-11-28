@@ -8,7 +8,7 @@ export const campaignDraftSchema = z.object({
   appliedTopics:z.array(z.string()),mixTopics:z.boolean(),selectedTopics:z.array(z.string()).nullable(),
   quantities:z.object({post:z.number().int().min(0).max(30),reel_post:z.number().int().min(0).max(30),story_post:z.number().int().min(0).max(30),presenter_post:z.number().int().min(0).max(30)}),
   includeSpecialDays:z.boolean(),excludedSpecialDays:z.array(z.string()),customSpecialDays:z.array(z.object({date,label:z.string()})),
-  campaignStartDate:date,dailyPlatforms:z.record(z.array(z.string())),
+  campaignStartDate:date,dailyPlatforms:z.record(z.string(),z.array(z.string())),
   photoSource:z.enum(["website","ai","none","saved","upload"]),photos:z.array(campaignPhoto).max(20),
   productUrl:text,productTitle:text,websiteImages:z.array(z.string()).max(60),selectedImages:z.array(z.string()).max(60),photoReceipt:text,
   createdCampaign:z.string().optional()
