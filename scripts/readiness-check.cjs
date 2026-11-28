@@ -10,7 +10,7 @@ const source = fs.readFileSync(path.join(__dirname, '../lib/operations/readiness
 vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { module: moduleState, exports: moduleState.exports, URL, Set });
 const { configurationChecks, missingTables } = moduleState.exports;
 async function main() {
-  const checks = configurationChecks(process.env, process.argv.includes('--billing'));
+  const checks = configurationChecks(process.env, process.argv.includes('--billing'), process.argv.includes('--signup'));
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
   if (failed.length) {
     console.error('Production configuration needs attention: ' + failed.join(', '));

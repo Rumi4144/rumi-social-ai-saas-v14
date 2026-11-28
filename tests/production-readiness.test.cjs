@@ -23,6 +23,17 @@ test('production readiness rejects missing cron, placeholder/shared secrets and 
   }
   assert.equal(readiness.configurationChecks(valid(), true).STRIPE_SECRET_KEY, false);
 });
+test('public signup preflight requires the challenge pair and verification email delivery configuration', () => {
+  const missing = readiness.configurationChecks(valid(), false, true);
+  assert.equal(missing.TURNSTILE_SITE_KEY, false);
+  assert.equal(missing.TURNSTILE_SECRET_KEY, false);
+  assert.equal(missing.RESEND_API_KEY, false);
+  assert.equal(missing.EMAIL_FROM, false);
+  const env = { ...valid(), TURNSTILE_SITE_KEY: 'site-test', TURNSTILE_SECRET_KEY: 'secret-test', RESEND_API_KEY: 'resend-test', RESEND_FROM_EMAIL: 'Rumi <hello@rumi.test>' };
+  assert.ok(Object.values(readiness.configurationChecks(env, false, true)).every(Boolean));
+  env.RESEND_FROM_EMAIL += '\nUnexpected-header: value';
+  assert.equal(readiness.configurationChecks(env, false, true).EMAIL_FROM, false);
+});
 test('required table checks match every Prisma model, detecting an empty/partial restore', () => {
   const models = [...fs.readFileSync('prisma/schema.prisma', 'utf8').matchAll(/^model\s+(\w+)\s+\{/gm)].map(match => match[1]);
   assert.deepEqual([...readiness.REQUIRED_TABLES].sort(), models.sort());

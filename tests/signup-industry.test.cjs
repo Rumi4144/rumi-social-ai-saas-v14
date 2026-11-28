@@ -1,55 +1,34 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const ts = require('typescript');
-const root = path.resolve(__dirname, '..');
-function load(file, mocks = {}, cache = new Map()) {
-  file = path.resolve(root, file);
-  if (cache.has(file)) return cache.get(file).exports;
-  const module = { exports: {} }; cache.set(file, module);
-  const requireFile = name => {
-    if (name in mocks) return mocks[name];
-    if (name.startsWith('@/') || name.startsWith('.')) {
-      const base = name.startsWith('@/') ? path.join(root, name.slice(2)) : path.resolve(path.dirname(file), name);
-      return load(base.endsWith('.ts') ? base : `${base}.ts`, mocks, cache);
-    }
-    return require(name);
-  };
-  const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
-  vm.runInNewContext(js, { module, exports: module.exports, require: requireFile, process, Buffer, URL, console, fetch: mocks.__fetch || fetch, AbortSignal, FormData, Blob, Response, Uint8Array, Headers, ReadableStream, setTimeout, clearTimeout }, { filename: file });
-  return module.exports;
-}
+const { fixture, request } = require('./helpers/signup-fixture.cjs');
 
-const json=(body,options={})=>({body,status:options.status||200});
-const input={email:'new@example.com',name:'New Customer',password:'valid-password',organization:'New Business',industry:'Health & Wellness'};
-const req=(extra={})=>new Request('https://app.test/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...input,...extra})});
-test('all ten signup industries persist to the new brand inside the registration transaction',async()=>{
- const {INDUSTRIES}=load('lib/industries.ts');assert.equal(INDUSTRIES.length,10);
- for(const industry of INDUSTRIES){let brand;const prisma={$transaction:async fn=>fn({user:{create:async()=>({id:'user'})},organization:{create:async()=>({id:'org'})},brand:{create:async q=>{brand=q.data}},membership:{create:async()=>({})},subscription:{create:async()=>({})}})};
- const api=load('app/api/auth/register/route.ts',{'next/server':{NextResponse:{json}},'@/lib/prisma':{prisma},bcryptjs:{hash:async()=> 'hashed'}});
- const result=await api.POST(req({industry}));assert.equal(result.status,201);assert.equal(brand.industry,industry);assert.equal(brand.organizationId,'org');
- }
+test('all ten signup industries persist only after email verification creates the new brand', async () => {
+  const f = fixture(), { INDUSTRIES } = f.load('lib/industries.ts');
+  assert.equal(INDUSTRIES.length, 10);
+  for (const [index, industry] of INDUSTRIES.entries()) {
+    const api = f.load('app/api/auth/register/route.ts');
+    const response = await api.POST(request({ industry, email: `new${index}@example.com` }));
+    assert.equal(response.status, 202); assert.equal(f.state().brands.length, index);
+    const verify = f.load('app/api/auth/verify-email/route.ts');
+    assert.equal((await verify.POST(request({ token: f.token() }, '/api/auth/verify-email'))).status, 200);
+    assert.equal(f.state().brands[index].industry, industry);
+    assert.equal(f.state().brands[index].organizationId, f.state().organizations[index].id);
+  }
 });
-test('unknown or missing signup industry is rejected before creating an account',async()=>{
- const api=load('app/api/auth/register/route.ts',{'next/server':{NextResponse:{json}},'@/lib/prisma':{prisma:{$transaction:()=>{throw Error('must not create')}}},bcryptjs:{hash:async()=> 'hashed'}});
- assert.equal((await api.POST(req({industry:'Unknown'}))).status,400);assert.equal((await api.POST(req({industry:undefined}))).status,400);
+test('unknown or missing signup industry is rejected before sending email or creating an account', async () => {
+  const f = fixture(), api = f.load('app/api/auth/register/route.ts');
+  assert.equal((await api.POST(request({ industry: 'Unknown' }))).status, 400);
+  assert.equal((await api.POST(request({ industry: undefined }))).status, 400);
+  assert.equal(f.sent.length, 0); assert.equal(f.state().jobs.size, 0);
 });
-
-test('protected signup rejects a missing or invalid challenge before creating a workspace',async()=>{
- let transactions=0;
- const api=load('app/api/auth/register/route.ts',{
-  'next/server':{NextResponse:{json}},
-  '@/lib/prisma':{prisma:{$transaction:async()=>{transactions++;return {slug:'verified'};}}},
-  '@/lib/turnstile':{signupProtection:()=>({mode:'protected',siteKey:'public-test',secret:'private-test'}),
-   verifySignupChallenge:async(_secret,token)=>token==='approved'},
-  bcryptjs:{hash:async()=> 'hashed'},
- });
- assert.equal((await api.POST(req())).status,400);
- assert.equal((await api.POST(req({challenge:'bad'}))).status,400);
- assert.equal(transactions,0);
- assert.equal((await api.POST(req({challenge:'approved'}))).status,201);
- assert.equal(transactions,1);
- assert.equal((await api.GET()).body.secret,undefined);
+test('protected signup rejects missing or invalid challenge before storing a pending registration', async () => {
+  const f = fixture(), api = f.load('app/api/auth/register/route.ts', {
+    '@/lib/turnstile': { signupProtection: () => ({ mode: 'protected', siteKey: 'public-test', secret: 'private-test' }), verifySignupChallenge: async (_secret, token) => token === 'approved' },
+  });
+  assert.equal((await api.POST(request())).status, 400);
+  assert.equal((await api.POST(request({ challenge: 'bad' }))).status, 400);
+  assert.equal(f.state().jobs.size, 0);
+  assert.equal((await api.POST(request({ challenge: 'approved' }))).status, 202);
+  assert.equal(f.state().jobs.size, 1); assert.equal(f.state().users.size, 0);
+  assert.equal((await api.GET()).body.secret, undefined);
 });
