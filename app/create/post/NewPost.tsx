@@ -107,7 +107,7 @@ export default function NewPost({ brands, accounts }: { brands: Brand[]; account
           });
           const delivery = await publishResponse.json();
           message = publishResponse.ok
-            ? delivery.pending ? "Submitted. Check Publishing for delivery status." : "Published."
+            ? delivery.pending ? delivery.message || "Submitted. Check Publishing for delivery status." : "Published."
             : typeof delivery.error === "string" ? delivery.error : "Publishing failed. Check Publishing for details.";
         } catch {
           message = "Delivery could not be confirmed. Check Publishing before retrying.";

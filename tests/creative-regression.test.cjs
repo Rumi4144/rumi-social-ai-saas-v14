@@ -124,7 +124,7 @@ test('scheduled video uses the selected clip and is claimed once before publishi
   const prisma = {
     publishJob: { findFirst: async () => job, updateMany: async () => ({ count: claimed ? 1 : 0 }), update: async q => { updated = q.data; } },
     socialConnection: { findUnique: async () => ({ organizationId: 'own', status: 'connected', encryptedToken: 'test', externalId: 'page' }) },
-    contentItem: { findUnique: async () => ({ id: 'post', status: itemStatus, caption: 'Caption', mediaUrl: '/api/video/media/clip' }), update: async () => ({}) },
+    contentItem: { findFirst: async () => ({ id: 'post', status: itemStatus, caption: 'Caption', mediaUrl: '/api/video/media/clip' }), update: async () => ({}) },
     publishAttempt: { create: async () => ({}) },
   };
   const mod = load('lib/publishing/process-due-job.ts', { '@/lib/prisma': { prisma }, '@/lib/publishing/providers': { publishToProvider: async args => { calls++; assert.equal(args.mediaUrl, '/api/video/media/clip'); assert.equal(args.organizationId, 'own'); assert.equal(args.publishJobId, 'publish'); return { ok: true, externalId: 'fb-video' }; } } });
@@ -152,7 +152,7 @@ test('worker will not send a previously queued post after its account is disconn
   const prisma = {
     publishJob: { findFirst: async () => ({ id: 'job', organizationId: 'own', socialConnectionId: 'ig', contentItemId: 'post', platform: 'instagram', status: 'retry', attempts: 1 }), updateMany: async () => ({ count: 1 }), update: async q => { updated = q.data; } },
     socialConnection: { findUnique: async () => ({ organizationId: 'own', status: 'disconnected', encryptedToken: null }) },
-    contentItem: { findUnique: async () => ({ id: 'post', status: 'approved', mediaUrl: '/api/media/photo' }) },
+    contentItem: { findFirst: async () => ({ id: 'post', status: 'approved', mediaUrl: '/api/media/photo' }) },
   };
   const mod = load('lib/publishing/process-due-job.ts', { '@/lib/prisma': { prisma }, '@/lib/publishing/providers': { publishToProvider: async () => { calls++; } } });
   assert.equal((await mod.processDuePublishJob()).status, 'failed'); assert.equal(calls, 0);
@@ -179,7 +179,7 @@ test('Facebook processing and encoding failure never count as a playable video o
 
 test('worker defers a Facebook processing check without spending upload attempts',async()=>{
  let saved;
- const prisma={publishJob:{findFirst:async()=>({id:'job',organizationId:'own',socialConnectionId:'connection',contentItemId:'post',platform:'facebook',status:'retry',attempts:1}),updateMany:async()=>({count:1}),update:async q=>{saved=q.data;}},socialConnection:{findUnique:async()=>({organizationId:'own',status:'connected'})},contentItem:{findUnique:async()=>({id:'post',status:'scheduled',mediaUrl:'/api/video/media/clip'})},publishAttempt:{create:async()=>({})}};
+ const prisma={publishJob:{findFirst:async()=>({id:'job',organizationId:'own',socialConnectionId:'connection',contentItemId:'post',platform:'facebook',status:'retry',attempts:1}),updateMany:async()=>({count:1}),update:async q=>{saved=q.data;}},socialConnection:{findUnique:async()=>({organizationId:'own',status:'connected'})},contentItem:{findFirst:async()=>({id:'post',status:'scheduled',mediaUrl:'/api/video/media/clip'})},publishAttempt:{create:async()=>({})}};
  const mod=load('lib/publishing/process-due-job.ts',{'@/lib/prisma':{prisma},'@/lib/publishing/providers':{publishToProvider:async()=>({ok:false,pending:true,externalId:'123',error:'Processing'})}});
  assert.equal((await mod.processDuePublishJob()).status,'processing');assert.equal(saved.attempts,1);assert.equal(saved.externalPostId,'123');assert.equal(saved.status,'retry');assert.ok(saved.scheduledFor.getTime()>Date.now()+240000);
 });
@@ -282,4 +282,30 @@ test('campaign writing advances visual history for every requested slot, includi
  const categories=Array.from(prompt.matchAll(/^Slot slot-\d+, Day \d+: (\w+) —/gm),match=>match[1]);
  assert.equal(categories.length,14);assert.ok(categories.every((category,i)=>i===0||category!==categories[i-1]));
  assert.equal(new Set(categories).size,5);assert.match(prompt,/primary subject, observable action, specific setting, and camera distance/);
+});
+
+
+test('scheduled image cannot bypass approval and cannot load another workspace content',async()=>{
+ for(const state of ['draft','foreign']){
+  let calls=0,saved;
+  const prisma={publishJob:{findFirst:async()=>({id:'job',organizationId:'own',socialConnectionId:'conn',contentItemId:'post',platform:'instagram',status:'scheduled',attempts:0}),updateMany:async()=>({count:1}),update:async q=>{saved=q.data;}},socialConnection:{findUnique:async()=>({organizationId:'own',status:'connected'})},contentItem:{findFirst:async q=>{assert.equal(q.where.campaign.brand.organizationId,'own');return state==='foreign'?null:{id:'post',status:'draft',mediaUrl:'/api/media/image'};}}};
+  const api=load('lib/publishing/process-due-job.ts',{'@/lib/prisma':{prisma},'@/lib/publishing/providers':{publishToProvider:async()=>{calls++;}}});
+  assert.equal((await api.processDuePublishJob()).status,'failed');assert.equal(saved.status,'failed');assert.equal(calls,0);
+ }
+});
+test('an unconfirmed scheduled provider exception requires review instead of sending again',async()=>{
+ let saved,calls=0;
+ const job={id:'job',organizationId:'own',socialConnectionId:'conn',contentItemId:'post',platform:'youtube',status:'scheduled',attempts:0};
+ const prisma={publishJob:{findFirst:async()=>job.status==='scheduled'?job:null,updateMany:async()=>({count:1}),update:async q=>{saved=q.data;Object.assign(job,q.data);}},socialConnection:{findUnique:async()=>({organizationId:'own',status:'connected'})},contentItem:{findFirst:async()=>({id:'post',status:'approved',mediaUrl:'/api/video/media/clip'})}};
+ const api=load('lib/publishing/process-due-job.ts',{'@/lib/prisma':{prisma},'@/lib/publishing/providers':{publishToProvider:async()=>{calls++;throw Error('network interrupted');}}});
+ assert.equal((await api.processDuePublishJob()).status,'verification_pending');assert.equal(saved.status,'verification_pending');
+ assert.equal((await api.processDuePublishJob()).status,'idle');assert.equal(calls,1);
+});
+test('accepted processing checks retain the receipt and do not exhaust upload attempts',async()=>{
+ let saved,attemptRecord;
+ const prisma={publishJob:{findFirst:async()=>({id:'job',organizationId:'own',socialConnectionId:'conn',contentItemId:'post',platform:'instagram',status:'retry',attempts:3}),updateMany:async()=>({count:1}),update:async q=>{saved=q.data;}},socialConnection:{findUnique:async()=>({organizationId:'own',status:'connected'})},contentItem:{findFirst:async()=>({id:'post',status:'scheduled',mediaUrl:'/api/video/media/clip'})},publishAttempt:{create:async q=>{attemptRecord=q.data;}}};
+ const api=load('lib/publishing/process-due-job.ts',{'@/lib/prisma':{prisma},'@/lib/publishing/providers':{publishToProvider:async()=>({ok:false,pending:true,externalId:'container'})}});
+ for(let i=0;i<6;i++){
+  assert.equal((await api.processDuePublishJob()).status,'processing');assert.equal(saved.attempts,3);assert.equal(saved.externalPostId,'container');assert.equal(attemptRecord.status,'processing');
+ }
 });

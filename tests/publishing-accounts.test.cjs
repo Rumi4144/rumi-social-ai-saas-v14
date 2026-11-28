@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm'), ts = require('typescript');
 const root = path.resolve(__dirname, '..');
 
-function fixture() {
+function fixture(options = {}) {
   const ctx = { organizationId: 'org', role: 'owner' }, calls = [], jobs = [], settings = [];
   const item = { id: 'post', type: 'reel', status: 'approved', mediaUrl: '/api/video/media/reel', headline: 'Rumi reel', caption: 'Selected caption', campaign: { title: 'Rumi', brand: { organizationId: 'org' } } };
   const connections = [{ id: 'x', provider: 'x', externalId: 'x-account' }, { id: 'youtube', provider: 'youtube', externalId: 'yt-channel' }].map(c => ({ ...c, organizationId: 'org', status: 'connected', accountName: 'Rumi Guitars' }));
@@ -43,7 +43,7 @@ function fixture() {
     '@/lib/x/publishing': { prepareXPost: async () => ({ fingerprint: 'snapshot' }), XPublishError: Error },
     '@/lib/tiktok/prepare': { prepareTikTokSettings: async () => { throw Error('Unexpected TikTok'); } },
     '@/lib/publishing/google-business': { googleBusinessPost: () => {} },
-    '@/lib/publishing/providers': { publishToProvider: async input => { calls.push(input); return { ok: true, externalId: input.platform === 'x' ? '123456' : 'yt-video' }; } },
+    '@/lib/publishing/providers': { publishToProvider: async input => { calls.push(input); if(options.throwProvider)throw Error("unconfirmed external request"); if(options.result)return options.result; return { ok: true, externalId: input.platform === 'x' ? '123456' : 'yt-video' }; } },
     './PublishingActions': { __esModule: true, default: props => react.createElement('div', { 'data-destination': props.connectionId, 'data-delivery': props.existingDelivery?.status || 'available' }) },
     './YouTubeUpload': { __esModule: true, default: () => null },
   };
@@ -147,4 +147,20 @@ test('refreshing Publishing retains a reel posted to X with YouTube still availa
   assert.match(html, /data-destination="youtube" data-delivery="published"/);
   f.item.status = 'draft'; html = render(await f.load('app/publishing/page.tsx').default());
   assert.ok(!html.includes('data-destination='));
+});
+
+
+test('an interrupted immediate publish is reserved for review and cannot be submitted twice',async()=>{
+ const f=fixture({throwProvider:true});
+ const first=await f.run('now');assert.equal(first.status,202);
+ const body=await first.json();assert.equal(body.pending,true);assert.equal(body.ok,false);
+ assert.equal(f.jobs[0].status,'verification_pending');assert.equal(f.item.status,'approved');
+ const second=await f.run('now');assert.equal(second.status,202);
+ assert.equal(f.calls.length,1);assert.equal(f.jobs.length,1);
+});
+
+test('a provider accepted receipt needing review stays reserved and visible without resending',async()=>{
+ const f=fixture({result:{ok:false,needsReview:true,externalId:'accepted-post',error:'Check the existing post.'}});
+ assert.equal((await f.run('now')).status,202);assert.equal(f.jobs[0].status,'verification_pending');assert.equal(f.jobs[0].externalPostId,'accepted-post');
+ assert.equal((await f.run('now')).status,202);assert.equal(f.calls.length,1);
 });

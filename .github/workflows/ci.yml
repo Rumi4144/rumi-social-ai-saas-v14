@@ -27,6 +27,11 @@ jobs:
       - run: npm ci
       - run: npx prisma validate
       - run: npx prisma generate
+      # Disposable CI PostgreSQL only: never run db push on the live Neon database.
+      - run: npx prisma db push --skip-generate
+      - run: node --test tests/database-credit.integration.cjs
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rumi
       - run: npm run typecheck
       - run: npm run build
   reels-browser:

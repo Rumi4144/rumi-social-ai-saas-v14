@@ -1,2 +1,24 @@
-import {NextResponse} from "next/server";import {prisma} from "@/lib/prisma";
-export async function GET(){let db=false;try{await prisma.$queryRaw`SELECT 1`;db=true}catch{}const checks={database:db,auth:Boolean(process.env.AUTH_SECRET),openai:Boolean(process.env.OPENAI_API_KEY),stripe:Boolean(process.env.STRIPE_SECRET_KEY&&process.env.STRIPE_WEBHOOK_SECRET),runway:Boolean(process.env.RUNWAY_PRODUCTION_API_KEY||process.env.RUNWAY_API_KEY),encryption:Boolean(process.env.TOKEN_ENCRYPTION_KEY),worker:Boolean(process.env.WORKER_SECRET)};return NextResponse.json({service:"Rumi Social AI",version:"14.0.0",features:{campaignYouTube:true,youtubeVisibility:true,presenterFromPost:true},status:db?"operational":"degraded",checks})}
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { configurationChecks, missingTables, readinessResult } from "@/lib/operations/readiness";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+export async function GET() {
+  let database = false, schema = false;
+  try {
+    // SELECT 1 alone also succeeds against an empty or incompletely restored DB.
+    const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+      SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = current_schema()
+    `;
+    database = true;
+    schema = missingTables(tables).length === 0;
+  } catch { /* Never return connection strings or database errors publicly. */ }
+  const result = readinessResult(configurationChecks(process.env), database, schema);
+  return NextResponse.json({
+    service: "Rumi Social AI", version: "14.0.0",
+    features: { campaignYouTube: true, youtubeVisibility: true, presenterFromPost: true },
+    status: result.ready ? "operational" : "degraded", checks: result.checks,
+  }, { status: result.ready ? 200 : 503, headers: { "Cache-Control": "no-store" } });
+}

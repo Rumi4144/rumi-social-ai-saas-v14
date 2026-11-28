@@ -128,7 +128,9 @@ export async function POST(req: Request) {
     return job;
     });
 
-    const result = await publishToProvider({
+    let result: Awaited<ReturnType<typeof publishToProvider>>;
+    try {
+    result = await publishToProvider({
       platform: connection.provider,
       token: connection.encryptedToken || "",
       externalAccountId: connection.externalId || "",
@@ -138,17 +140,28 @@ export async function POST(req: Request) {
       contentItemId: item.id,
       publishJobId: job.id,
     });
+    } catch {
+      const message = "Publishing could not be confirmed. Check the existing post before retrying to avoid a duplicate.";
+      await prisma.publishJob.update({ where: { id: job.id }, data: { status: "verification_pending", lastError: message } });
+      return NextResponse.json({ ok: false, pending: true, jobId: job.id, message }, { status: 202 });
+    }
 
     await prisma.publishAttempt.create({
       data: {
         publishJobId: job.id,
         attempt: 1,
-        status: result.ok ? "succeeded" : "failed",
+        status: result.needsReview ? "verification_pending" : result.pending ? "processing" : result.ok ? "succeeded" : "failed",
         responseCode: result.code,
         externalId: result.externalId,
         error: result.error,
       },
     });
+
+    if (result.needsReview) {
+      const message = result.error || "Delivery needs review. Check the existing post before retrying.";
+      await prisma.publishJob.update({ where: { id: job.id }, data: { status: "verification_pending", externalPostId: result.externalId, lastError: message } });
+      return NextResponse.json({ ok: false, pending: true, jobId: job.id, message }, { status: 202 });
+    }
 
     if (result.pending) {
       const retryAt = new Date(Date.now() + 5 * 60 * 1000);

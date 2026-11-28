@@ -18,6 +18,7 @@ export async function publishInstagram(input: {
       headers: { Authorization: `Bearer ${input.accessToken}`, ...(method === "POST" ? { "Content-Type": "application/x-www-form-urlencoded" } : {}) },
       ...(method === "POST" ? { body: query } : {}),
       cache: "no-store",
+      signal: AbortSignal.timeout(10000),
     });
     const data = await response.json();
     return { response, data };
@@ -26,6 +27,7 @@ export async function publishInstagram(input: {
     ok: false, code: result.response.status, error: result.data?.error?.message || fallback,
   });
 
+  let publicWriteAttempted = false;
   try {
     const identity = await api("me", { fields: "id,username" });
     if (!identity.response.ok) return failure(identity, "INSTAGRAM_IDENTITY_FAILED");
@@ -38,7 +40,7 @@ export async function publishInstagram(input: {
       imageUrl.pathname = imageUrl.pathname.replace(/^\/api\/media\/([^/]+)(?:\/publish)?$/, "/api/media/$1/publish");
     }
     if (imageUrl.protocol !== "https:") return { ok: false, error: "Instagram requires a public HTTPS image URL." };
-    const image = await fetch(imageUrl, { cache: "no-store" });
+    const image = await fetch(imageUrl, { cache: "no-store", signal: AbortSignal.timeout(10000) });
     if (!image.ok) return { ok: false, code: image.status, error: "INSTAGRAM_IMAGE_UNAVAILABLE" };
     const bytes = new Uint8Array(await image.arrayBuffer());
     if (bytes.length > 8 * 1024 * 1024) return { ok: false, error: "Instagram images must be at most 8 MB." };
@@ -64,9 +66,11 @@ export async function publishInstagram(input: {
     }
     if (!ready) return { ok: false, error: "INSTAGRAM_IMAGE_PROCESSING_TIMEOUT" };
 
+    publicWriteAttempted = true;
     const published = await api(`${input.accountId}/media_publish`, { creation_id: containerId }, "POST");
     const mediaId = published.data?.id ? String(published.data.id) : "";
-    if (!published.response.ok || !mediaId) return failure(published, "INSTAGRAM_PUBLISH_FAILED");
+    if (!published.response.ok) return failure(published, "INSTAGRAM_PUBLISH_FAILED");
+    if (!mediaId) return { ok: false, needsReview: true, retryable: false, error: "Instagram did not confirm a post reference. Check your account before retrying." };
     console.log("INSTAGRAM_PUBLISHED", JSON.stringify({ accountId: input.accountId, containerId, mediaId }));
 
     // A confirmed publish must stay successful even if the subsequent read fails;
@@ -79,6 +83,8 @@ export async function publishInstagram(input: {
     }
     return { ok: true, code: published.response.status, externalId: mediaId };
   } catch {
-    return { ok: false, error: "INSTAGRAM_PROVIDER_REQUEST_FAILED" };
+    return publicWriteAttempted
+      ? { ok: false, needsReview: true, retryable: false, error: "Instagram publishing could not be confirmed. Check your account before retrying to avoid a duplicate." }
+      : { ok: false, error: "INSTAGRAM_PROVIDER_REQUEST_FAILED" };
   }
 }

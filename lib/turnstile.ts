@@ -4,7 +4,7 @@ export function signupProtection(){
  const siteKey=process.env.TURNSTILE_SITE_KEY?.trim();
  const secret=process.env.TURNSTILE_SECRET_KEY?.trim();
  if(siteKey&&secret)return {mode:'protected' as const,siteKey,secret};
- if(siteKey||secret||process.env.VERCEL_ENV==='production')return {mode:'unavailable' as const};
+ if(siteKey||secret||process.env.VERCEL_ENV==='production'||process.env.NODE_ENV==='production')return {mode:'unavailable' as const};
  return {mode:'local' as const};
 }
 
