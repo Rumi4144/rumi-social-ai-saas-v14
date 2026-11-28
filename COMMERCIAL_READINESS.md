@@ -10,9 +10,11 @@ release commercially ready until the checks below have recorded outcomes.
 - `npm run production:check`: Prisma schema/client validation, TypeScript and Next production build.
 - `npm run readiness:check`: **read-only** production configuration and required database-table check.
 - `npm run readiness:check -- --billing`: also require the four subscription price IDs and Stripe webhook credentials.
-- `npm run release:check`: the preceding tests, build and paid-service preflight together.
+- `npm run readiness:check -- --signup`: also require public signup challenge keys and verification-email delivery configuration.
+- `npm run release:check`: tests, build, paid-service and public-signup preflight together.
 
-CI additionally initializes its disposable PostgreSQL service and runs
+CI additionally applies the reviewed baseline migration to its disposable
+PostgreSQL service, checks that the resulting schema matches Prisma, and runs
 `tests/database-credit.integration.cjs` against it, checking real concurrent
 credit grants, replayed purchases and overdraft prevention. To run that test
 locally, explicitly supply `TEST_DATABASE_URL` for a disposable database; it
@@ -54,25 +56,39 @@ price amounts match the in-app catalog, webhook signatures succeed, replayed
 paid events grant credits once, and a real subscription cancellation preserves
 saved content. Use Stripe test mode and a staging workspace before live charges.
 Verify password-reset email delivery and signup abuse controls with the configured
-email/Turnstile providers. Account email verification remains a separate release
-requirement; Turnstile does not verify ownership of an email address.
+email/Turnstile providers. New public signups receive a 30-minute verification link. A pending registration
+uses the existing Job table; no user, workspace or trial credits are created
+until an explicit same-origin confirmation POST claims that link atomically.
+GET requests and mail scanners cannot consume it. Existing accounts retain
+access. Resend delivery and a verified sender must be configured; otherwise new
+signup fails closed. Turnstile remains a separate bot-protection requirement.
 
 ## Database initialization and recovery
 
-There is currently **no committed Prisma migration history**. Consequently,
-`npm run db:deploy` (`prisma migrate deploy`) alone cannot initialize an empty
-database. Do not interpret its success as proof that tables exist, and do not
-use `prisma db push` against the existing Neon production database as a release
-shortcut.
+The initial baseline is committed at
+`prisma/migrations/20261128000000_initial_baseline/migration.sql`. It was
+produced from the existing `prisma/schema.prisma` with Prisma's empty-to-schema
+diff, then reviewed for tables, indexes and foreign keys. It represents the
+existing schema, not a change to existing customer data. CI must apply it to an
+empty disposable database and verify that the resulting schema matches Prisma.
 
-Before introducing migrations, obtain and verify a recoverable Neon backup or
-branch, compare the real schema with `prisma/schema.prisma`, and create/review a
-baseline migration in source control. Apply it to a new disposable database and
-run the application regression suite. For an existing database, mark a baseline
-as applied only after proving its schema already matches; review any differences
-as explicit migrations. Then test deployment and rollback/restore on staging.
-The readiness table check detects an empty/partial restore, but it does not
-replace that schema comparison or a restore drill.
+For a **new empty database**, run `npm run db:deploy`, then the read-only
+preflight before starting customer work. Commit any future schema change as an
+explicit reviewed migration and test it on staging first.
+
+For an **existing Neon production database**, do not blindly execute the initial
+baseline or use `prisma db push` as a shortcut. First obtain and verify a
+recoverable backup/Neon branch, then compare the actual application schema,
+indexes and constraints against this baseline. Only after they match may an
+operator mark `20261128000000_initial_baseline` as applied using Prisma's
+baseline adoption procedure. Review any differences explicitly before adoption.
+Without that reviewed adoption, `prisma migrate deploy` can refuse a nonempty
+database with P3005; do not bypass this guard. No production baseline adoption,
+resolve or migration has been performed by this change.
+
+Test deployment and rollback/restore on staging. The readiness table check
+detects an empty/partial restore, but does not replace the schema comparison,
+baseline adoption review or restore drill.
 
 ## Launch acceptance evidence
 
@@ -105,8 +121,35 @@ adapted; Prisma/client remain aligned at 6.19.3.
 
 Local browser suites could not launch: the available Chromium wrapper has no
 browser binary, and the Playwright browser download was unavailable. Local
-PostgreSQL is also unavailable; the real credit-concurrency integration test is
-configured for the disposable CI database and has not been claimed as passed.
+PostgreSQL is also unavailable. Subsequent GitHub CI for commit `20a4f6e`
+passed both validation and the browser job, including the real disposable-DB
+credit-concurrency test ([run 46102031240](https://github.com/Rumi4144/rumi-social-ai-saas-v14/actions/runs/46102031240)).
+That CI used the original temporary `db push` setup. The new committed baseline
+and signup additions require a fresh CI run using `migrate deploy` before release.
 The no-credentials preflight correctly exits nonzero instead of certifying an
 unconfigured deployment. No production migration, purchase or social post was
 performed during this validation.
+
+## Read-only production observations — 2026-11-27
+
+The existing live health response reported database/auth/generation/encryption/
+worker configuration present, but **Stripe configuration false**. This means the
+live release has not passed paid-service preflight; code changes do not supply
+the missing credentials. Its health response predates the stricter readiness
+checks in this branch, so those booleans are not a current preflight pass.
+
+Public signup reported protected mode, and the signed-out homepage displayed
+sign-in/start-free navigation without a customer workspace sidebar. These are
+useful read-only checks, not proof of all cross-workspace authorization paths.
+No live publishing mutation, purchase, token rotation, migration or baseline
+adoption was performed as part of these observations.
+
+## First production rollout
+
+PR #11 was merged as `65261fbb` and Vercel reported successful production
+deployments. Read-only `/api/health` returned HTTP 200 with all core
+configuration, database and schema checks true. The explicitly approved empty
+request to `/api/publishing/retry` returned HTTP 401 UNAUTHENTICATED; it did not
+create or retry a social post. The public signed-out homepage showed only public
+navigation. The subsequent email-verification and migration-baseline changes
+require their own green CI and deployment verification.

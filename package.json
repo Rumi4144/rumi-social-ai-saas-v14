@@ -15,7 +15,7 @@
     "production:check": "npm run prisma:validate && npm run prisma:generate && npm run typecheck && npm run build",
     "test": "node --test tests/*.test.cjs",
     "readiness:check": "node scripts/readiness-check.cjs",
-    "release:check": "npm test && npm run production:check && npm run readiness:check -- --billing"
+    "release:check": "npm test && npm run production:check && npm run readiness:check -- --billing --signup"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

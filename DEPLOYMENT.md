@@ -1,15 +1,25 @@
-# Rumi Social AI V12 — Deployment Checklist
-1. Provision PostgreSQL and set DATABASE_URL.
-2. Generate strong AUTH_SECRET, WORKER_SECRET, ADMIN_SECRET and TOKEN_ENCRYPTION_KEY.
-3. Configure NEXT_PUBLIC_APP_URL to the production HTTPS origin.
-4. Configure OpenAI, Stripe and Runway keys only on the server.
-5. Configure trusted Stripe Price IDs and webhook endpoint.
-6. Run `npm install`, `npx prisma generate`, `npx prisma migrate deploy`, `npm run build`.
-7. Create a trusted background worker/cron for AI, video and publishing queues.
-8. Replace SVG data URLs with S3/R2-compatible object storage before meaningful scale.
-9. Implement and review official social-provider OAuth/publishing adapters before enabling Publish.
-10. Add transactional email for verification, password reset, invitations and approval links.
-11. Add error monitoring, structured logs, uptime checks and backups.
-12. Complete Terms, Privacy, acceptable-use, deletion/export, tax and support policies.
-13. Run tenant-isolation, billing-webhook, retry/idempotency and provider-token security tests.
-14. Keep /api/health behind operational monitoring if infrastructure detail is considered sensitive.
+# Rumi Social AI deployment
+
+The release checks and outstanding live acceptance evidence are maintained in
+[COMMERCIAL_READINESS.md](COMMERCIAL_READINESS.md).
+
+1. Configure the intended HTTPS app origin, PostgreSQL connection, distinct
+   auth/encryption/worker/cron secrets, storage and enabled provider credentials.
+   Public signup additionally requires Turnstile and verified-sender email
+   delivery. Use `.env.example` for names; never deploy its placeholder values.
+2. Run `npm ci`, `npm test` and `npm run production:check`.
+3. On a **new empty database**, apply the committed baseline with
+   `npm run db:deploy`. For an **existing production database**, first follow the
+   backup, schema comparison and reviewed baseline-adoption procedure in the
+   runbook. Do not blindly apply the baseline or use `db push` on production.
+4. Run `npm run readiness:check -- --billing --signup` with the deployment's
+   environment. This is read-only and does not print secret values.
+5. Deploy to staging, verify the Vercel schedules execute with `CRON_SECRET`, and
+   record real generation, recovery, billing, email and enabled-platform
+   publication outcomes before a wider launch.
+6. Verify production `/api/health`, monitoring alerts and restore readiness.
+
+Building or deploying does not execute migrations automatically. Existing
+`TOKEN_ENCRYPTION_KEY` values must not be rotated without a re-encryption or
+provider-reconnection plan. TikTok Direct Post audit approval is external and
+must be verified independently of account connection.

@@ -9,7 +9,7 @@ export const REQUIRED_TABLES = [
 
 const secretNames = ["AUTH_SECRET", "TOKEN_ENCRYPTION_KEY", "WORKER_SECRET", "CRON_SECRET"] as const;
 const placeholder = /change[-_ ]?me|replace[-_ ]?with|not[-_ ]?for[-_ ]?production|your[-_ ]?(secret|key)/i;
-export function configurationChecks(env: ReadinessEnvironment, billing = false) {
+export function configurationChecks(env: ReadinessEnvironment, billing = false, signup = false) {
   const checks: Record<string, boolean> = {};
   for (const name of secretNames) {
     const value = env[name]?.trim() || "";
@@ -30,6 +30,12 @@ export function configurationChecks(env: ReadinessEnvironment, billing = false) 
   if (billing) {
     for (const name of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_STARTER_PRICE_ID", "STRIPE_CREATOR_PRICE_ID", "STRIPE_BUSINESS_PRICE_ID", "STRIPE_AGENCY_PRICE_ID"])
       checks[name] = Boolean(env[name]?.trim()) && !placeholder.test(env[name]!);
+  }
+  if (signup) {
+    for (const name of ["TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY", "RESEND_API_KEY"])
+      checks[name] = Boolean(env[name]?.trim()) && !placeholder.test(env[name]!);
+    const sender = (env.RESEND_FROM_EMAIL || env.EMAIL_FROM || env.MAIL_FROM || "").trim();
+    checks.EMAIL_FROM = Boolean(sender) && !/[\r\n]/.test(sender) && !placeholder.test(sender);
   }
   return checks;
 }
